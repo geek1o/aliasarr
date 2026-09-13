@@ -151,5 +151,49 @@ class TestRefreshShowMetadataWithOverviewLanguage(unittest.TestCase):
             self.assertEqual(mock_show.overview, "New English overview")
 
 
+class TestLanguageCodeNormalization(unittest.TestCase):
+    def test_ukrainian_not_mapped_to_english(self):
+        from app.services.metadata import normalize_metadata_lang_code
+        self.assertEqual(normalize_metadata_lang_code("uk"), "uk")
+        self.assertEqual(normalize_metadata_lang_code("ukr"), "uk")
+        self.assertEqual(normalize_metadata_lang_code("ukrainian"), "uk")
+        self.assertEqual(normalize_metadata_lang_code("UA"), "uk")
+        self.assertNotEqual(normalize_metadata_lang_code("uk"), "en")
+
+    def test_arabic_not_mapped_to_spanish(self):
+        from app.services.metadata import normalize_metadata_lang_code
+        self.assertEqual(normalize_metadata_lang_code("ar"), "ar")
+        self.assertEqual(normalize_metadata_lang_code("ara"), "ar")
+        self.assertEqual(normalize_metadata_lang_code("arabic"), "ar")
+        # Country AR is Argentina -> Spanish
+        self.assertEqual(normalize_metadata_lang_code("AR"), "es")
+
+    def test_country_codes_mapped_correctly(self):
+        from app.services.metadata import normalize_metadata_lang_code
+        self.assertEqual(normalize_metadata_lang_code("GB"), "en")
+        self.assertEqual(normalize_metadata_lang_code("US"), "en")
+        self.assertEqual(normalize_metadata_lang_code("RU"), "ru")
+        self.assertEqual(normalize_metadata_lang_code("JP"), "ja")
+
+    def test_overview_fallback_with_ukrainian_and_english(self):
+        from app.services.metadata import select_overview
+        overviews = {
+            "en": "Doug and Griff are inseparable childhood friends...",
+            "ru": "Даг и Грифф — неразлучные друзья с детства...",
+            "uk": "Даг і Гріфф — нерозлучні друзі з дитинства...",
+        }
+        # When Japanese is preferred but missing, fall back to English (not Ukrainian)
+        res_ja = select_overview(overviews, original_overview="Doug and Griff...", preferred_lang="ja")
+        self.assertEqual(res_ja, "Doug and Griff are inseparable childhood friends...")
+
+        # When Russian is preferred, select Russian
+        res_ru = select_overview(overviews, original_overview="Doug and Griff...", preferred_lang="ru")
+        self.assertEqual(res_ru, "Даг и Грифф — неразлучные друзья с детства...")
+
+        # When Ukrainian is preferred, select Ukrainian
+        res_uk = select_overview(overviews, original_overview="Doug and Griff...", preferred_lang="uk")
+        self.assertEqual(res_uk, "Даг і Гріфф — нерозлучні друзі з дитинства...")
+
+
 if __name__ == "__main__":
     unittest.main()

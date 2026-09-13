@@ -204,7 +204,7 @@ def is_latin_text(text: str) -> bool:
 
 
 COUNTRY_TO_LANG_MAP: dict[str, str] = {
-    "US": "en", "GB": "en", "UK": "en", "CA": "en", "AU": "en", "NZ": "en", "IE": "en",
+    "US": "en", "GB": "en", "CA": "en", "AU": "en", "NZ": "en", "IE": "en",
     "RU": "ru", "SU": "ru", "BY": "ru", "KZ": "ru", "UA": "uk",
     "JP": "ja", "KR": "ko", "CN": "zh", "TW": "zh", "HK": "zh",
     "FR": "fr", "DE": "de", "IT": "it", "ES": "es", "PT": "pt", "BR": "pt",
@@ -214,14 +214,42 @@ COUNTRY_TO_LANG_MAP: dict[str, str] = {
     "CL": "es", "CO": "es", "PE": "es", "RO": "ro", "BG": "bg", "RS": "sr",
 }
 
-LANGUAGE_NAME_TO_CODE: dict[str, str] = {
-    "english": "en", "russian": "ru", "japanese": "ja", "korean": "ko", "chinese": "zh",
-    "french": "fr", "german": "de", "italian": "it", "spanish": "es", "portuguese": "pt",
-    "hungarian": "hu", "polish": "pl", "czech": "cs", "turkish": "tr", "azerbaijani": "az",
-    "indonesian": "id", "dutch": "nl", "swedish": "sv", "norwegian": "no", "danish": "da",
-    "finnish": "fi", "greek": "el", "hebrew": "he", "hindi": "hi", "thai": "th",
-    "vietnamese": "vi", "ukrainian": "uk", "arabic": "ar",
+# Стандартные 2- и 3-буквенные ISO-коды языков (ISO 639-1 / 639-2 / 639-3) и их словесные названия.
+# Языковые коды имеют абсолютный приоритет над кодами стран ISO-3166
+# (например: 'uk' — украинский язык, а не UK/Великобритания; 'ar' — арабский язык, а не AR/Аргентина).
+LANGUAGE_CODE_NORM_MAP: dict[str, str] = {
+    # 2-буквенные ISO 639-1
+    "en": "en", "ru": "ru", "uk": "uk", "ja": "ja", "ko": "ko", "zh": "zh",
+    "fr": "fr", "de": "de", "it": "it", "es": "es", "pt": "pt", "hu": "hu",
+    "pl": "pl", "cs": "cs", "tr": "tr", "az": "az", "id": "id", "nl": "nl",
+    "sv": "sv", "no": "no", "da": "da", "fi": "fi", "el": "el", "he": "he",
+    "hi": "hi", "th": "th", "vi": "vi", "ar": "ar", "ro": "ro", "bg": "bg",
+    "sr": "sr", "hr": "hr", "sk": "sk", "sl": "sl", "et": "et", "lv": "lv",
+    "lt": "lt", "fa": "fa", "ka": "ka", "hy": "hy", "be": "be", "kk": "kk",
+    "uz": "uz",
+    # 3-буквенные ISO 639-2 / 639-3
+    "eng": "en", "rus": "ru", "ukr": "uk", "jpn": "ja", "kor": "ko", "zho": "zh", "chi": "zh",
+    "fra": "fr", "fre": "fr", "deu": "de", "ger": "de", "ita": "it", "spa": "es",
+    "por": "pt", "hun": "hu", "pol": "pl", "ces": "cs", "cze": "cs", "tur": "tr",
+    "aze": "az", "ind": "id", "nld": "nl", "dut": "nl", "swe": "sv", "nor": "no",
+    "dan": "da", "fin": "fi", "ell": "el", "gre": "el", "heb": "he", "hin": "hi",
+    "tha": "th", "vie": "vi", "ara": "ar", "ron": "ro", "rum": "ro", "bul": "bg",
+    "srp": "sr", "hrv": "hr", "slk": "sk", "slo": "sk", "slv": "sl", "est": "et",
+    "lav": "lv", "lit": "lt", "fas": "fa", "per": "fa", "kat": "ka", "geo": "ka",
+    "hye": "hy", "arm": "hy", "bel": "be", "kaz": "kk", "uzb": "uz",
+    # Английские названия языков
+    "english": "en", "russian": "ru", "ukrainian": "uk", "japanese": "ja", "korean": "ko",
+    "chinese": "zh", "french": "fr", "german": "de", "italian": "it", "spanish": "es",
+    "portuguese": "pt", "hungarian": "hu", "polish": "pl", "czech": "cs", "turkish": "tr",
+    "azerbaijani": "az", "indonesian": "id", "dutch": "nl", "swedish": "sv", "norwegian": "no",
+    "danish": "da", "finnish": "fi", "greek": "el", "hebrew": "he", "hindi": "hi",
+    "thai": "th", "vietnamese": "vi", "arabic": "ar", "romanian": "ro", "bulgarian": "bg",
+    "serbian": "sr", "croatian": "hr", "slovak": "sk", "slovenian": "sl", "estonian": "et",
+    "latvian": "lv", "lithuanian": "lt", "persian": "fa", "georgian": "ka", "armenian": "hy",
+    "belarusian": "be", "kazakh": "kk", "uzbek": "uz",
 }
+
+LANGUAGE_NAME_TO_CODE = LANGUAGE_CODE_NORM_MAP
 
 
 def normalize_metadata_lang_code(raw_val: Any) -> str:
@@ -229,15 +257,33 @@ def normalize_metadata_lang_code(raw_val: Any) -> str:
     if not raw_val:
         return ""
     if isinstance(raw_val, dict):
-        raw_val = raw_val.get("name") or raw_val.get("code") or raw_val.get("iso_639_1") or raw_val.get("iso_3166_1") or ""
-    s = str(raw_val).strip().lower().split("-")[0].split("_")[0]
+        if raw_val.get("iso_639_1") or raw_val.get("language"):
+            raw_val = raw_val.get("iso_639_1") or raw_val.get("language")
+        else:
+            raw_val = raw_val.get("iso_3166_1") or raw_val.get("country") or raw_val.get("code") or raw_val.get("name") or ""
+    raw_str = str(raw_val).strip()
+    if not raw_str:
+        return ""
+
+    # 1. Если передана 2-буквенная заглавная страна (ISO 3166-1, e.g. "US", "RU", "UA", "GB", "AR", "MX")
+    # исключая ошибочный псевдокод "UK", который в языковых метаданных является украинским языком uk
+    if len(raw_str) == 2 and raw_str.isupper() and raw_str != "UK":
+        if raw_str in COUNTRY_TO_LANG_MAP:
+            return COUNTRY_TO_LANG_MAP[raw_str]
+
+    s = raw_str.lower().split("-")[0].split("_")[0]
     if not s:
         return ""
-    if s in LANGUAGE_NAME_TO_CODE:
-        return LANGUAGE_NAME_TO_CODE[s]
+
+    # 2. Проверяем языковые коды и названия языков (ISO 639-1 / 639-2 / 639-3)
+    if s in LANGUAGE_CODE_NORM_MAP:
+        return LANGUAGE_CODE_NORM_MAP[s]
+
+    # 3. Резервный поиск по странам
     upper_c = s.upper()
-    if upper_c in COUNTRY_TO_LANG_MAP:
+    if upper_c != "UK" and upper_c in COUNTRY_TO_LANG_MAP:
         return COUNTRY_TO_LANG_MAP[upper_c]
+
     return s
 
 
@@ -786,6 +832,8 @@ class TMDBClient(BaseMetadataClient):
 
         # Извлекаем названия и описания из переводов TMDB строго для разрешенных языков
         overviews_by_lang: dict[str, str] = {}
+        if data.get("overview") and str(data.get("overview")).strip():
+            overviews_by_lang["en"] = str(data.get("overview")).strip()
         tr_raw = data.get("translations")
         tr_list = tr_raw.get("translations", []) if isinstance(tr_raw, dict) else (tr_raw if isinstance(tr_raw, list) else [])
         for tr in tr_list:
@@ -1051,6 +1099,8 @@ class TMDBClient(BaseMetadataClient):
         ru_title = None
         # Извлекаем русское и английское название и описания из переводов TMDB
         overviews_by_lang: dict[str, str] = {}
+        if show_data.get("overview") and str(show_data.get("overview")).strip():
+            overviews_by_lang["en"] = str(show_data.get("overview")).strip()
         for tr in (show_data.get("translations") or {}).get("translations", []):
             if not isinstance(tr, dict):
                 continue
@@ -1876,6 +1926,8 @@ class RadarrClient(BaseMetadataClient):
 
                 # Собираем переводы (Translations) и описания на разрешенных языках
                 overviews_by_lang: dict[str, str] = {}
+                if data.get("overview") and str(data.get("overview")).strip():
+                    overviews_by_lang["en"] = str(data.get("overview")).strip()
                 for tr in (data.get("translations", []) or []):
                     if isinstance(tr, dict):
                         tr_title = tr.get("title") or tr.get("name")
