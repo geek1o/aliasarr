@@ -411,6 +411,11 @@ def update_settings(
     if payload.metadata_overview_language is not None:
         val = str(payload.metadata_overview_language).strip().lower()
         settings.metadata_overview_language = val or "ru"
+        try:
+            from app.services.metadata import _COLLECTION_DETAILS_CACHE
+            _COLLECTION_DETAILS_CACHE.clear()
+        except Exception:
+            pass
 
     if payload.session_timeout_minutes is not None:
         if payload.session_timeout_minutes < 5:

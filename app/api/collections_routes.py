@@ -179,6 +179,29 @@ async def get_collection_detail(
         except Exception:
             raw_parts = []
 
+    if not raw_parts and coll.tmdb_collection_id:
+        try:
+            from app.services.metadata import RadarrClient
+            from app.services.settings_service import get_or_create_settings
+            settings = get_or_create_settings(db)
+            overview_lang = getattr(settings, "metadata_overview_language", "ru") or "ru"
+            client = RadarrClient(overview_language=overview_lang)
+            c_det = await client.get_collection_details(coll.tmdb_collection_id)
+            if c_det and c_det.get("parts"):
+                import json
+                raw_parts = c_det["parts"]
+                coll.parts_count = len(raw_parts)
+                coll.parts_cache = json.dumps(raw_parts)
+                if c_det.get("overview") and not coll.overview:
+                    coll.overview = c_det.get("overview")
+                if c_det.get("poster_url") and not coll.poster_url:
+                    coll.poster_url = c_det.get("poster_url")
+                coll.last_metadata_refresh_at = dt.datetime.utcnow()
+                db.add(coll)
+                db.commit()
+        except Exception as e:
+            logger.debug("Failed on-demand fetch of collection parts for %s: %s", coll.id, e)
+
     changed_shows = False
     if raw_parts:
         for part in raw_parts:
@@ -234,13 +257,17 @@ async def get_collection_detail(
                 ep = db.query(Episode).filter(Episode.show_id == matched_show.id).first()
                 show_st = ep.status if ep else "wanted"
 
+            part_ov = part.get("overview")
+            if not part_ov and matched_show and matched_show.overview:
+                part_ov = matched_show.overview
+
             franchise_parts.append(
                 FranchisePart(
                     tmdb_id=tmdb_id or 0,
-                    title=part.get("title") or "",
+                    title=part.get("title") or (matched_show.title if matched_show else "") or "",
                     year=part.get("year"),
                     release_date=part.get("release_date"),
-                    overview=part.get("overview"),
+                    overview=part_ov,
                     poster_url=part.get("poster_url"),
                     rating=part.get("rating"),
                     in_library=in_lib,
@@ -329,11 +356,15 @@ async def refresh_collection(
         raise HTTPException(400, "Коллекция не привязана к TMDb Collection ID")
 
     from app.services.metadata import RadarrClient
+    from app.services.settings_service import get_or_create_settings
     import json
 
-    client = RadarrClient()
+    settings = get_or_create_settings(db)
+    overview_lang = getattr(settings, "metadata_overview_language", "ru") or "ru"
+
+    client = RadarrClient(overview_language=overview_lang)
     try:
-        data = await client.get_collection_details(coll.tmdb_collection_id)
+        data = await client.get_collection_details(coll.tmdb_collection_id, bypass_cache=True)
     except Exception as e:
         raise HTTPException(502, f"Не удалось получить свежие данные саги из TMDb: {e}")
 
@@ -482,7 +513,9 @@ async def import_missing_collection_movies(
     from app.services.postprocess import get_show_default_path
     from app.services.organizer import clean_show_title_and_year
 
-    client = RadarrClient()
+    settings = get_or_create_settings(db)
+    overview_lang = getattr(settings, "metadata_overview_language", "ru") or "ru"
+    client = RadarrClient(overview_language=overview_lang)
     parts_list = []
     try:
         data = await client.get_collection_details(coll.tmdb_collection_id)

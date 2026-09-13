@@ -997,49 +997,98 @@ class TMDBClient(BaseMetadataClient):
             trailer_url=trailer_url_val,
         )
 
-    async def get_collection_details(self, tmdb_collection_id: int | str) -> dict:
+    async def get_collection_details(
+        self,
+        tmdb_collection_id: int | str,
+        lang: Optional[str] = None,
+        bypass_cache: bool = False,
+    ) -> dict:
         """Получить полный список фильмов киноколлекции/саги из TMDb API (с кешированием на 24ч и таймаутом 6с)."""
-        cache_key = str(tmdb_collection_id)
+        chosen_lang = (lang or self.overview_language or "ru").strip().lower()
+        norm_lang = normalize_metadata_lang_code(chosen_lang) or "ru"
+        if norm_lang in ("ru", "rus"):
+            target_lang = "ru-RU"
+        elif norm_lang in ("en", "eng"):
+            target_lang = "en-US"
+        elif norm_lang == "original":
+            target_lang = "en-US"
+        elif len(norm_lang) == 2:
+            target_lang = f"{norm_lang}-{norm_lang.upper()}"
+        else:
+            target_lang = norm_lang
+
+        cache_key = f"{tmdb_collection_id}_{target_lang}"
         now = time.time()
-        cached = _COLLECTION_DETAILS_CACHE.get(cache_key)
-        if cached and (now - cached[0]) < 86400:
-            return cached[1]
+        if not bypass_cache:
+            cached = _COLLECTION_DETAILS_CACHE.get(cache_key)
+            if cached and (now - cached[0]) < 86400:
+                return cached[1]
 
         async with httpx.AsyncClient(timeout=6) as client:
             resp = await client.get(
                 f"{self.BASE_URL}/collection/{tmdb_collection_id}",
-                params={"language": "en-US"},
+                params={"language": target_lang},
                 headers=self._headers(),
             )
             resp.raise_for_status()
             data = resp.json()
+
+        # Fallback на английский язык, если в TMDb отсутствует локализованное описание саги
+        c_overview = (data.get("overview") or "").strip()
+        fallback_data = None
+        if target_lang != "en-US" and not c_overview:
+            try:
+                async with httpx.AsyncClient(timeout=6) as client:
+                    f_resp = await client.get(
+                        f"{self.BASE_URL}/collection/{tmdb_collection_id}",
+                        params={"language": "en-US"},
+                        headers=self._headers(),
+                    )
+                    if f_resp.status_code == 200:
+                        fallback_data = f_resp.json()
+            except Exception as ex:
+                logger.debug("TMDb collection fallback fetch failed: %s", ex)
+
+        fallback_parts_map = {}
+        fallback_overview = None
+        if fallback_data and isinstance(fallback_data, dict):
+            fallback_overview = (fallback_data.get("overview") or "").strip() or None
+            for fp in fallback_data.get("parts", []):
+                if isinstance(fp, dict) and fp.get("id"):
+                    fallback_parts_map[fp["id"]] = fp
 
         parts = []
         for p in data.get("parts", []):
             if not isinstance(p, dict):
                 continue
             p_id = p.get("id")
-            p_title = p.get("title") or p.get("original_title") or ""
-            p_rel = p.get("release_date") or ""
+            fb_part = fallback_parts_map.get(p_id) if fallback_parts_map else None
+
+            p_title = p.get("title") or p.get("original_title") or (fb_part.get("title") if fb_part else None) or ""
+            p_rel = p.get("release_date") or (fb_part.get("release_date") if fb_part else "") or ""
             p_year = int(p_rel[:4]) if p_rel and len(p_rel) >= 4 and p_rel[:4].isdigit() else None
-            poster = p.get("poster_path")
+            poster = p.get("poster_path") or (fb_part.get("poster_path") if fb_part else None)
+            p_ov = (p.get("overview") or "").strip()
+            if not p_ov and fb_part:
+                p_ov = (fb_part.get("overview") or "").strip()
+
             parts.append({
                 "tmdb_id": p_id,
                 "title": p_title,
                 "year": p_year,
                 "release_date": p_rel[:10] if p_rel else None,
-                "overview": p.get("overview"),
+                "overview": p_ov or None,
                 "poster_url": f"{self.IMAGE_BASE}{poster}" if poster else None,
-                "rating": p.get("vote_average"),
+                "rating": p.get("vote_average") or (fb_part.get("vote_average") if fb_part else None),
             })
         parts.sort(key=lambda x: x.get("release_date") or "9999")
 
-        c_poster = data.get("poster_path")
-        c_backdrop = data.get("backdrop_path")
+        c_poster = data.get("poster_path") or (fallback_data.get("poster_path") if fallback_data else None)
+        c_backdrop = data.get("backdrop_path") or (fallback_data.get("backdrop_path") if fallback_data else None)
         result = {
             "id": data.get("id"),
-            "name": data.get("name"),
-            "overview": data.get("overview"),
+            "name": data.get("name") or (fallback_data.get("name") if fallback_data else None),
+            "overview": c_overview or fallback_overview,
             "poster_url": f"{self.IMAGE_BASE}{c_poster}" if c_poster else None,
             "backdrop_url": f"{self.IMAGE_BASE}{c_backdrop}" if c_backdrop else None,
             "parts": parts,
@@ -2010,10 +2059,24 @@ class RadarrClient(BaseMetadataClient):
         tmdb = TMDBClient(api_key=self.RADARR_TMDB_TOKEN, alias_languages=self.alias_languages, overview_language=self.overview_language)
         return await tmdb._get_movie_details(clean_id)
 
-    async def get_collection_details(self, tmdb_collection_id: int | str) -> dict:
+    async def get_collection_details(
+        self,
+        tmdb_collection_id: int | str,
+        lang: Optional[str] = None,
+        bypass_cache: bool = False,
+    ) -> dict:
         """Получить киноколлекцию через TMDb API с сервисным токеном Radarr."""
-        tmdb = TMDBClient(api_key=self.RADARR_TMDB_TOKEN, alias_languages=self.alias_languages, overview_language=self.overview_language)
-        return await tmdb.get_collection_details(tmdb_collection_id)
+        chosen_lang = lang or self.overview_language
+        tmdb = TMDBClient(
+            api_key=self.RADARR_TMDB_TOKEN,
+            alias_languages=self.alias_languages,
+            overview_language=chosen_lang,
+        )
+        return await tmdb.get_collection_details(
+            tmdb_collection_id,
+            lang=chosen_lang,
+            bypass_cache=bypass_cache,
+        )
 
 
 def _tvdb_3_letter_code(lang: str) -> str:
@@ -3194,7 +3257,7 @@ async def refresh_show_metadata(db, show) -> dict:
                             coll.parts_count = len(c_det["parts"])
                             coll.parts_cache = json.dumps(c_det["parts"])
                             coll.last_metadata_refresh_at = dt.datetime.utcnow()
-                            if not coll.overview and c_det.get("overview"):
+                            if c_det.get("overview"):
                                 coll.overview = c_det.get("overview")
                             if c_det.get("poster_url"):
                                 coll.poster_source_url = c_det.get("poster_url")
@@ -3649,7 +3712,12 @@ async def refresh_all_collections_metadata(db, force: bool = False) -> dict:
     if not candidates:
         return {"total": len(colls), "updated": 0}
 
-    client = RadarrClient()
+    from app.models.db import AppSettings
+    app_settings = db.query(AppSettings).filter(getattr(AppSettings, "id", None) == 1).first()
+    overview_lang = getattr(app_settings, "metadata_overview_language", "ru") if app_settings else "ru"
+    overview_lang = overview_lang or "ru"
+
+    client = RadarrClient(overview_language=overview_lang)
     updated = 0
     from app.database import SessionLocal
     for coll in candidates:
@@ -3658,7 +3726,7 @@ async def refresh_all_collections_metadata(db, force: bool = False) -> dict:
             db_coll = s_db.get(MovieCollection, coll.id)
             if not db_coll or not db_coll.tmdb_collection_id:
                 continue
-            c_det = await client.get_collection_details(db_coll.tmdb_collection_id)
+            c_det = await client.get_collection_details(db_coll.tmdb_collection_id, bypass_cache=force)
             if c_det and c_det.get("parts"):
                 db_coll.parts_count = len(c_det["parts"])
                 db_coll.parts_cache = json.dumps(c_det["parts"])

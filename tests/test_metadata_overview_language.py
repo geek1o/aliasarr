@@ -311,5 +311,227 @@ class TestTVDetailsAndSkyHookEnrichment(unittest.TestCase):
             self.assertIn("Экспансия", details.aliases)
 
 
+class TestCollectionDetailsOverviewLanguage(unittest.TestCase):
+    def setUp(self):
+        from app.services.metadata import _COLLECTION_DETAILS_CACHE
+        _COLLECTION_DETAILS_CACHE.clear()
+
+    def test_collection_details_requests_russian_language(self):
+        from app.services.metadata import TMDBClient
+
+        client = TMDBClient(overview_language="ru")
+        fake_resp = MagicMock()
+        fake_resp.status_code = 200
+        fake_resp.raise_for_status = MagicMock()
+        fake_resp.json.return_value = {
+            "id": 1001,
+            "name": "Гарри Поттер (Коллекция)",
+            "overview": "История юного волшебника Гарри Поттера...",
+            "parts": [
+                {
+                    "id": 101,
+                    "title": "Гарри Поттер и философский камень",
+                    "overview": "Одиннадцатилетний мальчик-сирота...",
+                    "release_date": "2001-11-16",
+                }
+            ],
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=fake_resp)
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        mock_httpx = MagicMock()
+        mock_httpx.AsyncClient.return_value = mock_client
+
+        with patch("app.services.metadata.httpx", mock_httpx):
+            res = asyncio.run(client.get_collection_details(1001))
+            self.assertEqual(res["name"], "Гарри Поттер (Коллекция)")
+            self.assertEqual(res["overview"], "История юного волшебника Гарри Поттера...")
+            self.assertEqual(res["parts"][0]["title"], "Гарри Поттер и философский камень")
+            self.assertEqual(res["parts"][0]["overview"], "Одиннадцатилетний мальчик-сирота...")
+
+            # Verify that TMDb was queried with language=ru-RU
+            mock_client.get.assert_called_once()
+            call_kwargs = mock_client.get.call_args[1]
+            self.assertEqual(call_kwargs.get("params", {}).get("language"), "ru-RU")
+
+    def test_collection_details_requests_english_language(self):
+        from app.services.metadata import TMDBClient
+
+        client = TMDBClient(overview_language="en")
+        fake_resp = MagicMock()
+        fake_resp.status_code = 200
+        fake_resp.raise_for_status = MagicMock()
+        fake_resp.json.return_value = {
+            "id": 1001,
+            "name": "Harry Potter Collection",
+            "overview": "The story of a young wizard...",
+            "parts": [
+                {
+                    "id": 101,
+                    "title": "Harry Potter and the Philosopher's Stone",
+                    "overview": "An eleven-year-old orphan...",
+                    "release_date": "2001-11-16",
+                }
+            ],
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=fake_resp)
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        mock_httpx = MagicMock()
+        mock_httpx.AsyncClient.return_value = mock_client
+
+        with patch("app.services.metadata.httpx", mock_httpx):
+            res = asyncio.run(client.get_collection_details(1001))
+            self.assertEqual(res["name"], "Harry Potter Collection")
+            mock_client.get.assert_called_once()
+            call_kwargs = mock_client.get.call_args[1]
+            self.assertEqual(call_kwargs.get("params", {}).get("language"), "en-US")
+
+    def test_collection_details_fallback_to_english_when_russian_missing(self):
+        from app.services.metadata import TMDBClient
+
+        client = TMDBClient(overview_language="ru")
+
+        ru_resp = MagicMock()
+        ru_resp.status_code = 200
+        ru_resp.raise_for_status = MagicMock()
+        ru_resp.json.return_value = {
+            "id": 2002,
+            "name": "Редкая сага",
+            "overview": "",  # Пустой синопсис в русском TMDb
+            "parts": [
+                {
+                    "id": 201,
+                    "title": "Часть 1",
+                    "overview": "",
+                    "release_date": "2020-01-01",
+                }
+            ],
+        }
+
+        en_resp = MagicMock()
+        en_resp.status_code = 200
+        en_resp.raise_for_status = MagicMock()
+        en_resp.json.return_value = {
+            "id": 2002,
+            "name": "Rare Saga",
+            "overview": "English saga overview fallback",
+            "parts": [
+                {
+                    "id": 201,
+                    "title": "Part 1",
+                    "overview": "English part 1 overview",
+                    "release_date": "2020-01-01",
+                }
+            ],
+        }
+
+        mock_client = AsyncMock()
+        async def mock_get(url, **kwargs):
+            lang = kwargs.get("params", {}).get("language")
+            if lang == "ru-RU":
+                return ru_resp
+            elif lang == "en-US":
+                return en_resp
+            return ru_resp
+
+        mock_client.get = mock_get
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        mock_httpx = MagicMock()
+        mock_httpx.AsyncClient.return_value = mock_client
+
+        with patch("app.services.metadata.httpx", mock_httpx):
+            res = asyncio.run(client.get_collection_details(2002))
+            self.assertEqual(res["name"], "Редкая сага")
+            # Should have fallen back to English overview
+            self.assertEqual(res["overview"], "English saga overview fallback")
+            self.assertEqual(res["parts"][0]["overview"], "English part 1 overview")
+
+    def test_collection_cache_partitioned_by_language_and_bypass(self):
+        from app.services.metadata import TMDBClient, _COLLECTION_DETAILS_CACHE
+
+        _COLLECTION_DETAILS_CACHE.clear()
+        client_ru = TMDBClient(overview_language="ru")
+        client_en = TMDBClient(overview_language="en")
+
+        resp_ru = MagicMock()
+        resp_ru.status_code = 200
+        resp_ru.raise_for_status = MagicMock()
+        resp_ru.json.return_value = {
+            "id": 3003,
+            "name": "Русская сага",
+            "overview": "Русское описание",
+            "parts": [],
+        }
+
+        resp_en = MagicMock()
+        resp_en.status_code = 200
+        resp_en.raise_for_status = MagicMock()
+        resp_en.json.return_value = {
+            "id": 3003,
+            "name": "English Saga",
+            "overview": "English overview",
+            "parts": [],
+        }
+
+        mock_client = AsyncMock()
+        async def mock_get(url, **kwargs):
+            lang = kwargs.get("params", {}).get("language")
+            return resp_ru if lang == "ru-RU" else resp_en
+
+        mock_client.get = mock_get
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        mock_httpx = MagicMock()
+        mock_httpx.AsyncClient.return_value = mock_client
+
+        with patch("app.services.metadata.httpx", mock_httpx):
+            res_ru = asyncio.run(client_ru.get_collection_details(3003))
+            self.assertEqual(res_ru["overview"], "Русское описание")
+            self.assertIn("3003_ru-RU", _COLLECTION_DETAILS_CACHE)
+
+            res_en = asyncio.run(client_en.get_collection_details(3003))
+            self.assertEqual(res_en["overview"], "English overview")
+            self.assertIn("3003_en-US", _COLLECTION_DETAILS_CACHE)
+
+    def test_radarr_client_forwards_overview_language_to_collection_details(self):
+        from app.services.metadata import RadarrClient
+
+        client = RadarrClient(overview_language="ru")
+        fake_resp = MagicMock()
+        fake_resp.status_code = 200
+        fake_resp.raise_for_status = MagicMock()
+        fake_resp.json.return_value = {
+            "id": 4004,
+            "name": "Сага Радарр",
+            "overview": "Описание",
+            "parts": [],
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=fake_resp)
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        mock_httpx = MagicMock()
+        mock_httpx.AsyncClient.return_value = mock_client
+
+        with patch("app.services.metadata.httpx", mock_httpx):
+            res = asyncio.run(client.get_collection_details(4004))
+            self.assertEqual(res["name"], "Сага Радарр")
+            mock_client.get.assert_called_once()
+            call_kwargs = mock_client.get.call_args[1]
+            self.assertEqual(call_kwargs.get("params", {}).get("language"), "ru-RU")
+
+
 if __name__ == "__main__":
     unittest.main()
