@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="dark" data-design="classic">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
@@ -20,6 +20,8 @@
       document.documentElement.setAttribute("data-scrollbar", scrollbar);
       var lang = localStorage.getItem("aliasarr_lang") || "ru";
       document.documentElement.setAttribute("lang", lang);
+      document.documentElement.setAttribute("data-lang", lang);
+      document.title = lang === "en" ? "Wiki & Documentation — Aliasarr" : "Wiki & Документация — Aliasarr";
 
       var themeColors = {
         dark: { bg: "%230f1048", shadow: "%232a197c", fg: "%236838f7" },
@@ -157,10 +159,11 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-wrap: nowrap;
   }
   .wiki-search-box {
     position: relative;
-    width: 280px;
+    width: 260px;
   }
   .wiki-search-box input {
     width: 100%;
@@ -187,6 +190,7 @@
     color: var(--text-muted);
     width: 15px;
     height: 15px;
+    pointer-events: none;
   }
   .wiki-action-btn {
     height: 36px;
@@ -203,11 +207,18 @@
     cursor: pointer;
     text-decoration: none;
     transition: all 0.2s ease;
+    white-space: nowrap;
   }
   .wiki-action-btn:hover {
     border-color: var(--teal, #00F0FF);
     color: var(--teal, #00F0FF);
     transform: translateY(-1px);
+  }
+  .wiki-action-btn i,
+  .wiki-action-btn svg {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
   }
 
   /* Main Layout */
@@ -247,11 +258,17 @@
     align-items: center;
     gap: 6px;
   }
+  .wiki-toc-group-label i,
+  .wiki-toc-group-label svg {
+    width: 13px;
+    height: 13px;
+    color: var(--teal, #00F0FF);
+  }
   .wiki-toc-link {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 7px 10px;
+    gap: 10px;
+    padding: 8px 10px;
     font-size: 13px;
     color: var(--text-muted);
     text-decoration: none;
@@ -270,11 +287,23 @@
     border-left-color: var(--teal, #00F0FF);
     font-weight: 600;
   }
-  .wiki-toc-ico {
-    width: 14px;
-    height: 14px;
+  .wiki-toc-ico,
+  .wiki-toc-link i,
+  .wiki-toc-link svg {
+    width: 15px;
+    height: 15px;
     flex-shrink: 0;
-    opacity: 0.8;
+    color: var(--text-muted);
+    transition: color 0.15s ease, transform 0.15s ease;
+  }
+  .wiki-toc-link:hover i,
+  .wiki-toc-link:hover svg {
+    color: var(--teal, #00F0FF);
+    transform: scale(1.12);
+  }
+  .wiki-toc-link.active i,
+  .wiki-toc-link.active svg {
+    color: var(--teal, #00F0FF);
   }
 
   .wiki-main {
@@ -324,7 +353,7 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 12px;
+    padding: 6px 14px;
     border-radius: 999px;
     font-size: 12px;
     font-weight: 600;
@@ -338,6 +367,11 @@
     border-color: var(--teal, #00F0FF);
     color: var(--teal, #00F0FF);
     transform: translateY(-1px);
+  }
+  .wiki-quick-pill i,
+  .wiki-quick-pill svg {
+    width: 13px;
+    height: 13px;
   }
 
   /* Section Styles */
@@ -362,19 +396,28 @@
   .wiki-section-header-left {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
   }
+
+  /* Section Icon: matches Aliasarr .settings-card-icon-badge */
   .wiki-section-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    background: rgba(0, 240, 255, 0.1);
-    border: 1px solid rgba(0, 240, 255, 0.25);
+    width: 42px;
+    height: 42px;
+    border-radius: 11px;
+    background: linear-gradient(135deg, rgba(0, 245, 212, 0.16) 0%, rgba(108, 62, 248, 0.16) 100%);
+    border: 1px solid rgba(0, 245, 212, 0.3);
     color: var(--teal, #00F0FF);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    box-shadow: 0 0 14px rgba(0, 245, 212, 0.12);
+  }
+  .wiki-section-icon svg,
+  .wiki-section-icon i {
+    width: 22px;
+    height: 22px;
+    display: block;
   }
   .wiki-section-title {
     font-family: var(--font-display);
@@ -657,6 +700,12 @@
 </style>
 </head>
 <body data-lang="ru">
+<script>
+  try {
+    var savedLang = localStorage.getItem('aliasarr_lang') || 'ru';
+    document.body.setAttribute('data-lang', savedLang);
+  } catch(e) {}
+</script>
 
 <!-- TOP HEADER -->
 <header class="wiki-header">
@@ -688,10 +737,19 @@
         <i data-lucide="globe"></i>
         <span id="wiki-lang-label">RU</span>
       </button>
-      <button class="wiki-action-btn" onclick="cycleWikiTheme()" title="Сменить тему оформления">
-        <i data-lucide="sun-moon"></i>
+      <button class="wiki-action-btn" onclick="cycleWikiTheme()" title="Сменить тему оформления / Switch Theme" id="wiki-theme-btn">
+        <i data-lucide="moon" id="wiki-theme-icon"></i>
+        <span class="lang-ru" id="wiki-theme-label-ru">Тема</span>
+        <span class="lang-en" id="wiki-theme-label-en">Theme</span>
       </button>
-      <a href="/" class="wiki-action-btn" title="Вернуться в приложение">
+      <button class="wiki-action-btn" onclick="toggleWikiDesign()" title="Сменить стиль оформления / Switch Design" id="wiki-design-btn">
+        <i data-lucide="layout-template"></i>
+        <span id="wiki-design-label">
+          <span class="lang-ru" id="wiki-design-label-ru">Классика</span>
+          <span class="lang-en" id="wiki-design-label-en">Classic</span>
+        </span>
+      </button>
+      <a href="/" class="wiki-action-btn" title="Вернуться в приложение / Open App">
         <i data-lucide="arrow-left"></i>
         <span class="lang-ru">В приложение</span>
         <span class="lang-en">Open App</span>
@@ -705,7 +763,7 @@
   <aside class="wiki-sidebar">
     <div class="wiki-toc-group">
       <div class="wiki-toc-group-label">
-        <i data-lucide="layers" style="width:13px;height:13px;"></i>
+        <i data-lucide="layers"></i>
         <span class="lang-ru">Обзор и Старт</span>
         <span class="lang-en">Overview &amp; Start</span>
       </div>
@@ -728,7 +786,7 @@
 
     <div class="wiki-toc-group">
       <div class="wiki-toc-group-label">
-        <i data-lucide="hash" style="width:13px;height:13px;"></i>
+        <i data-lucide="hash"></i>
         <span class="lang-ru">Алиасы и Сопоставление</span>
         <span class="lang-en">Aliases &amp; Matching</span>
       </div>
@@ -746,7 +804,7 @@
 
     <div class="wiki-toc-group">
       <div class="wiki-toc-group-label">
-        <i data-lucide="cpu" style="width:13px;height:13px;"></i>
+        <i data-lucide="cpu"></i>
         <span class="lang-ru">Парсер и Фильтрация</span>
         <span class="lang-en">Parser &amp; Filtering</span>
       </div>
@@ -764,7 +822,7 @@
 
     <div class="wiki-toc-group">
       <div class="wiki-toc-group-label">
-        <i data-lucide="film" style="width:13px;height:13px;"></i>
+        <i data-lucide="film"></i>
         <span class="lang-ru">Фильмы и Коллекции</span>
         <span class="lang-en">Movies &amp; Collections</span>
       </div>
@@ -782,7 +840,7 @@
 
     <div class="wiki-toc-group">
       <div class="wiki-toc-group-label">
-        <i data-lucide="hard-drive" style="width:13px;height:13px;"></i>
+        <i data-lucide="hard-drive"></i>
         <span class="lang-ru">Хранилище и Файлы</span>
         <span class="lang-en">Storage &amp; Files</span>
       </div>
@@ -800,7 +858,7 @@
 
     <div class="wiki-toc-group">
       <div class="wiki-toc-group-label">
-        <i data-lucide="network" style="width:13px;height:13px;"></i>
+        <i data-lucide="network"></i>
         <span class="lang-ru">Трекеры и Клиенты</span>
         <span class="lang-en">Trackers &amp; Clients</span>
       </div>
@@ -818,7 +876,7 @@
 
     <div class="wiki-toc-group">
       <div class="wiki-toc-group-label">
-        <i data-lucide="sliders" style="width:13px;height:13px;"></i>
+        <i data-lucide="sliders"></i>
         <span class="lang-ru">Качество и Апгрейды</span>
         <span class="lang-en">Quality &amp; Upgrades</span>
       </div>
@@ -846,7 +904,7 @@
 
     <div class="wiki-toc-group">
       <div class="wiki-toc-group-label">
-        <i data-lucide="shield" style="width:13px;height:13px;"></i>
+        <i data-lucide="shield"></i>
         <span class="lang-ru">Безопасность и API</span>
         <span class="lang-en">Security &amp; API</span>
       </div>
@@ -897,11 +955,11 @@
         <span class="lang-en">Comprehensive engineering manual for Aliasarr: Scoped Aliases mathematics, cour episode offsets, lossless multi-part movie merger, Hardlinks storage architecture, 3-tier quality upgrades, tracker parsing algorithms, and full configuration reference.</span>
       </p>
       <div class="wiki-quick-pills">
-        <a href="#section-quickstart" class="wiki-quick-pill"><i data-lucide="play-circle" style="width:13px;height:13px;"></i><span class="lang-ru">Быстрый старт (Docker)</span><span class="lang-en">Quickstart</span></a>
-        <a href="#section-scoped-aliases" class="wiki-quick-pill"><i data-lucide="globe" style="width:13px;height:13px;"></i><span class="lang-ru">Scoped Aliases &amp; Offset</span><span class="lang-en">Scoped Aliases</span></a>
-        <a href="#section-movie-merger" class="wiki-quick-pill"><i data-lucide="layers" style="width:13px;height:13px;"></i><span class="lang-ru">Склейка фильмов (CD1+CD2)</span><span class="lang-en">Lossless Merger</span></a>
-        <a href="#section-hardlinks" class="wiki-quick-pill"><i data-lucide="file-symlink" style="width:13px;height:13px;"></i><span class="lang-ru">Жесткие ссылки (Hardlinks)</span><span class="lang-en">Hardlinks</span></a>
-        <a href="#section-quality-upgrades" class="wiki-quick-pill"><i data-lucide="arrow-up-circle" style="width:13px;height:13px;"></i><span class="lang-ru">3-уровневые апгрейды</span><span class="lang-en">Quality Upgrades</span></a>
+        <a href="#section-quickstart" class="wiki-quick-pill"><i data-lucide="play-circle"></i><span class="lang-ru">Быстрый старт (Docker)</span><span class="lang-en">Quickstart</span></a>
+        <a href="#section-scoped-aliases" class="wiki-quick-pill"><i data-lucide="globe"></i><span class="lang-ru">Scoped Aliases &amp; Offset</span><span class="lang-en">Scoped Aliases</span></a>
+        <a href="#section-movie-merger" class="wiki-quick-pill"><i data-lucide="layers"></i><span class="lang-ru">Склейка фильмов (CD1+CD2)</span><span class="lang-en">Lossless Merger</span></a>
+        <a href="#section-hardlinks" class="wiki-quick-pill"><i data-lucide="file-symlink"></i><span class="lang-ru">Жесткие ссылки (Hardlinks)</span><span class="lang-en">Hardlinks</span></a>
+        <a href="#section-quality-upgrades" class="wiki-quick-pill"><i data-lucide="arrow-up-circle"></i><span class="lang-ru">3-уровневые апгрейды</span><span class="lang-en">Quality Upgrades</span></a>
       </div>
     </div>
 
@@ -931,7 +989,7 @@
             <div class="wiki-subcard-title">
               <i data-lucide="alert-triangle" style="width:16px;height:16px;color:#f59e0b;"></i>
               <span class="lang-ru">Проблемы зарубежных решений (Sonarr / Radarr)</span>
-              <span class="lang-en">Limitations of Sonarr &amp; Radarr</span>
+              <span class="lang-en">Limitations of Legacy Solutions (Sonarr / Radarr)</span>
             </div>
             <ul style="padding-left:18px;margin:0;font-size:13px;color:var(--text-muted);line-height:1.6;">
               <li><span class="lang-ru"><strong>Разрыв процессов:</strong> необходимость развертывания и параллельного обслуживания двух независимых тяжелых стеков (Sonarr для ТВ и Radarr для кино).</span><span class="lang-en"><strong>Split ecosystem:</strong> requiring two separate heavyweight services for TV and movies.</span></li>
@@ -1000,93 +1058,93 @@
             <tbody>
               <tr>
                 <td><strong><span class="lang-ru">Единый комбайн (Фильмы + Сериалы + Аниме)</span><span class="lang-en">All-in-One Engine (Movies + TV + Anime)</span></strong></td>
-                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> Да (единый сервис)</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Только сериалы</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Только фильмы</span></td>
+                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> <span class="lang-ru">Да (в одном сервисе)</span><span class="lang-en">Yes (all-in-one)</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Только сериалы</span><span class="lang-en">TV shows only</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Только фильмы</span><span class="lang-en">Movies only</span></span></td>
               </tr>
               <tr>
                 <td><strong><span class="lang-ru">Мультиязычные алиасы (RU, EN, JP, кандзи)</span><span class="lang-en">Multilingual Aliases (RU, EN, JP, Kanji)</span></strong></td>
-                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> Нативно (разделители /, |)</span></td>
-                <td><span class="table-badge-warn"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> Ограниченно</span></td>
-                <td><span class="table-badge-warn"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> Ограниченно</span></td>
+                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> <span class="lang-ru">Нативно (разделители /, |)</span><span class="lang-en">Native (delimiters /, |)</span></span></td>
+                <td><span class="table-badge-warn"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> <span class="lang-ru">Ограниченно</span><span class="lang-en">Limited</span></span></td>
+                <td><span class="table-badge-warn"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> <span class="lang-ru">Ограниченно</span><span class="lang-en">Limited</span></span></td>
               </tr>
               <tr>
                 <td><strong><span class="lang-ru">Scoped Aliases (+Offset смещение для куров)</span><span class="lang-en">Scoped Aliases &amp; Cour Offsets</span></strong></td>
-                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> Встроенные формулы</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Нет</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Не применимо</span></td>
+                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> <span class="lang-ru">Встроенные формулы</span><span class="lang-en">Built-in formulas</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Нет</span><span class="lang-en">No</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Не применимо</span><span class="lang-en">Not applicable</span></span></td>
               </tr>
               <tr>
                 <td><strong><span class="lang-ru">Разделитель сезонов (Split-Cour / Part 1, 2)</span><span class="lang-en">Split-Cour Visual Manager</span></strong></td>
-                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> Нативный редактор</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Нет</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Не применимо</span></td>
+                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> <span class="lang-ru">Нативный редактор</span><span class="lang-en">Native manager</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Нет</span><span class="lang-en">No</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Не применимо</span><span class="lang-en">Not applicable</span></span></td>
               </tr>
               <tr>
                 <td><strong><span class="lang-ru">Lossless Movie Merger (Склейка CD1+CD2)</span><span class="lang-en">Lossless Movie Merger (CD1 + CD2)</span></strong></td>
-                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> Автопоток (mkvmerge/ffmpeg)</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Нет</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Ручная склейка</span></td>
+                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> <span class="lang-ru">Автопоток (mkvmerge/ffmpeg)</span><span class="lang-en">Auto-stream (mkvmerge/ffmpeg)</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Нет</span><span class="lang-en">No</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Ручная склейка</span><span class="lang-en">Manual join required</span></span></td>
               </tr>
               <tr>
                 <td><strong><span class="lang-ru">Киноколлекции и саги TMDb (Импорт в 1 клик)</span><span class="lang-en">TMDb Movie Sagas &amp; Franchises</span></strong></td>
-                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> Хронология и пакетный импорт</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Нет</span></td>
-                <td><span class="table-badge-warn"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> Базовые списки</span></td>
+                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> <span class="lang-ru">Хронология и пакетный импорт</span><span class="lang-en">Timeline &amp; 1-click import</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Нет</span><span class="lang-en">No</span></span></td>
+                <td><span class="table-badge-warn"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> <span class="lang-ru">Базовые списки</span><span class="lang-en">Basic lists only</span></span></td>
               </tr>
               <tr>
                 <td><strong><span class="lang-ru">Парсинг отечественных трекеров («01-08 из 12»)</span><span class="lang-en">Domestic Tracker Syntax Parsing</span></strong></td>
-                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> 100% покрытие паттернов</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Сбоит</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Сбоит</span></td>
+                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> <span class="lang-ru">100% покрытие паттернов</span><span class="lang-en">100% tracker pattern support</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Часто сбоит</span><span class="lang-en">Frequently fails</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Часто сбоит</span><span class="lang-en">Frequently fails</span></span></td>
               </tr>
               <tr>
                 <td><strong><span class="lang-ru">Слежение за обновляемыми темами RuTracker</span><span class="lang-en">Tracked Ongoing Topics (RuTracker)</span></strong></td>
-                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> Селективная докачка по topic_guid</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Нет</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Нет</span></td>
+                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> <span class="lang-ru">Селективная докачка по topic_guid</span><span class="lang-en">Selective update via topic_guid</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Нет</span><span class="lang-en">No</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Нет</span><span class="lang-en">No</span></span></td>
               </tr>
               <tr>
                 <td><strong><span class="lang-ru">Защита от даунгрейда (MediaProbe inspection)</span><span class="lang-en">Downgrade Guard (Physical Probe)</span></strong></td>
-                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> Анализ реальных файлов</span></td>
-                <td><span class="table-badge-warn"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> Только по заголовку</span></td>
-                <td><span class="table-badge-warn"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> Только по заголовку</span></td>
+                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> <span class="lang-ru">Анализ реальных файлов</span><span class="lang-en">Real file probe inspection</span></span></td>
+                <td><span class="table-badge-warn"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> <span class="lang-ru">Только по заголовку</span><span class="lang-en">Header name only</span></span></td>
+                <td><span class="table-badge-warn"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> <span class="lang-ru">Только по заголовку</span><span class="lang-en">Header name only</span></span></td>
               </tr>
               <tr>
                 <td><strong><span class="lang-ru">Управление сидированием по трекерам (Ratio/Time)</span><span class="lang-en">Per-Tracker Seeding Rules</span></strong></td>
-                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> Индивидуально для трекера</span></td>
-                <td><span class="table-badge-warn"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> Ограниченно</span></td>
-                <td><span class="table-badge-warn"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> Ограниченно</span></td>
+                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> <span class="lang-ru">Индивидуально для трекера</span><span class="lang-en">Individual per tracker</span></span></td>
+                <td><span class="table-badge-warn"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> <span class="lang-ru">Ограниченно</span><span class="lang-en">Limited</span></span></td>
+                <td><span class="table-badge-warn"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> <span class="lang-ru">Ограниченно</span><span class="lang-en">Limited</span></span></td>
               </tr>
               <tr>
                 <td><strong><span class="lang-ru">Встроенный Pure-Python Media Inspector</span><span class="lang-en">Pure-Python Media Inspector</span></strong></td>
-                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> Без внешних утилит</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Требует ffprobe</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Требует ffprobe</span></td>
+                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> <span class="lang-ru">Без внешних утилит</span><span class="lang-en">Zero external tools</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Требует ffprobe</span><span class="lang-en">Requires ffprobe binary</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Требует ffprobe</span><span class="lang-en">Requires ffprobe binary</span></span></td>
               </tr>
               <tr>
                 <td><strong><span class="lang-ru">2FA TOTP и ролевой доступ (RBAC)</span><span class="lang-en">2FA TOTP &amp; RBAC Security</span></strong></td>
-                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> Нативно в интерфейсе</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Нет</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Нет</span></td>
+                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> <span class="lang-ru">Нативно в интерфейсе</span><span class="lang-en">Native in UI</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Нет</span><span class="lang-en">No</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Нет</span><span class="lang-en">No</span></span></td>
               </tr>
               <tr>
                 <td><strong><span class="lang-ru">Автономный SSL с автопродлением на 100 лет</span><span class="lang-en">Autonomous 100-Year SSL Auto-Renew</span></strong></td>
-                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> Встроенный генератор</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Нет</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Нет</span></td>
+                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> <span class="lang-ru">Встроенный генератор</span><span class="lang-en">Built-in generator</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Нет</span><span class="lang-en">No</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Нет</span><span class="lang-en">No</span></span></td>
               </tr>
               <tr>
                 <td><strong><span class="lang-ru">Интерфейс без NodeJS-сборщиков (Vanilla JS)</span><span class="lang-en">Zero-Build Vanilla JS Interface</span></strong></td>
-                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> 0 мс сборки, мгновенный старт</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Тяжелый Webpack</span></td>
-                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> Тяжелый Webpack</span></td>
+                <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> <span class="lang-ru">0 мс сборки, мгновенный старт</span><span class="lang-en">0 ms build, instant startup</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Тяжелый Webpack</span><span class="lang-en">Heavy Webpack bundle</span></span></td>
+                <td><span class="table-badge-no"><i data-lucide="x" style="width:12px;height:12px;"></i> <span class="lang-ru">Тяжелый Webpack</span><span class="lang-en">Heavy Webpack bundle</span></span></td>
               </tr>
               <tr>
                 <td><strong><span class="lang-ru">Медиасерверный экспорт шрифтов и субтитров</span><span class="lang-en">Font &amp; Companion Files Protection</span></strong></td>
                 <td><span class="table-badge-yes"><i data-lucide="check" style="width:12px;height:12px;"></i> .plexignore / .embyignore</span></td>
-                <td><span class="table-badge-warn"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> Без изоляции шрифтов</span></td>
-                <td><span class="table-badge-warn"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> Без изоляции шрифтов</span></td>
+                <td><span class="table-badge-warn"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> <span class="lang-ru">Без изоляции шрифтов</span><span class="lang-en">No font isolation</span></span></td>
+                <td><span class="table-badge-warn"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> <span class="lang-ru">Без изоляции шрифтов</span><span class="lang-en">No font isolation</span></span></td>
               </tr>
             </tbody>
           </table>
@@ -1127,7 +1185,7 @@
         <div class="code-block-wrapper">
           <div class="code-block-header">
             <span>docker-compose.yml</span>
-            <button class="btn-copy-code" onclick="copyCode(this)"><i data-lucide="copy" style="width:12px;height:12px;"></i> Скопировать</button>
+            <button class="btn-copy-code" onclick="copyCode(this)"><i data-lucide="copy" style="width:12px;height:12px;"></i> <span class="lang-ru">Скопировать</span><span class="lang-en">Copy</span></button>
           </div>
           <pre><code>version: "3.8"
 
@@ -1137,17 +1195,17 @@ services:
     container_name: aliasarr
     restart: unless-stopped
     ports:
-      - "8989:8989"   # Основной HTTP интерфейс и REST API
-      - "9898:9898"   # HTTPS порт (при включении SSL)
+      - "8989:8989"   # HTTP Web UI & REST API
+      - "9898:9898"   # HTTPS (when SSL enabled)
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=Europe/Moscow
       # - DATABASE_URL=sqlite:////config/aliasarr.db
     volumes:
-      - ./config:/config                  # База данных, конфигурация и бэкапы
-      - /mnt/storage:/data                # Единая файловая система для Hardlinks
-      # Внутри /mnt/storage:
+      - ./config:/config                  # Database, configs and backups
+      - /mnt/storage:/data                # Single root filesystem for Hardlinks
+      # Inside /mnt/storage:
       # /mnt/storage/downloads -> /data/downloads
       # /mnt/storage/media     -> /data/media
 
@@ -1165,13 +1223,13 @@ services:
       - TZ=Europe/Moscow
     volumes:
       - ./qbittorrent/config:/config
-      - /mnt/storage:/data                # Тот же самый том для мгновенного линкования</code></pre>
+      - /mnt/storage:/data                # Shared single root volume for instant linking</code></pre>
         </div>
 
         <div class="code-block-wrapper">
           <div class="code-block-header">
             <span>Terminal</span>
-            <button class="btn-copy-code" onclick="copyCode(this)"><i data-lucide="copy" style="width:12px;height:12px;"></i> Скопировать</button>
+            <button class="btn-copy-code" onclick="copyCode(this)"><i data-lucide="copy" style="width:12px;height:12px;"></i> <span class="lang-ru">Скопировать</span><span class="lang-en">Copy</span></button>
           </div>
           <pre><code>docker compose up -d</code></pre>
         </div>
@@ -1184,7 +1242,7 @@ services:
         <div class="code-block-wrapper">
           <div class="code-block-header">
             <span>Terminal</span>
-            <button class="btn-copy-code" onclick="copyCode(this)"><i data-lucide="copy" style="width:12px;height:12px;"></i> Скопировать</button>
+            <button class="btn-copy-code" onclick="copyCode(this)"><i data-lucide="copy" style="width:12px;height:12px;"></i> <span class="lang-ru">Скопировать</span><span class="lang-en">Copy</span></button>
           </div>
           <pre><code>docker run -d   --name=aliasarr   --restart=unless-stopped   -p 8989:8989   -p 9898:9898   -e PUID=1000   -e PGID=1000   -e TZ=Europe/Moscow   -v $(pwd)/config:/config   -v /mnt/storage:/data   ghcr.io/lqwestl/aliasarr:latest</code></pre>
         </div>
@@ -1270,7 +1328,7 @@ services:
             </div>
             <p class="wiki-subcard-text">
               <span class="lang-ru">При добавлении тайтла с составным заголовком (например: <code>Космический Денди / Space Dandy | 宇宙ダンディ</code>) Aliasarr автоматически разбивает строку по разделителям <code>/</code>, <code>|</code>, <code>;</code> и создает независимые алиасы для каждого языка, выставляя языковые бейджи (<code>RU</code>, <code>EN</code>, <code>JP</code>).</span>
-              <span class="lang-en">When importing multi-part titles (e.g., <code>Space Dandy / Космический Денди | 宇宙ダンディ</code>), Aliasarr splits strings by <code>/</code>, <code>|</code>, <code>;</code> and generates separate search aliases per language tag (<code>RU</code>, <code>EN</code>, <code>JP</code>).</span>
+              <span class="lang-en">When importing multi-part titles (e.g., <code>Space Dandy / Kosmicheskiy Dendi | Uchuu Dandy</code>), Aliasarr splits strings by <code>/</code>, <code>|</code>, <code>;</code> and generates separate search aliases per language tag (<code>RU</code>, <code>EN</code>, <code>JP</code>).</span>
             </p>
           </div>
 
@@ -1319,8 +1377,8 @@ services:
         </p>
 
         <div class="math-formula-box">
-          <div>Номер серии в карточке = Номер серии в раздаче + Offset</div>
-          <div style="font-size:12px;opacity:0.85;margin-top:6px;">Offset = Стартовый номер серии в карточке - Стартовый номер серии в раздаче</div>
+          <div><span class="lang-ru">Номер серии в карточке = Номер серии в раздаче + Offset</span><span class="lang-en">Episode in Library = Episode on Tracker + Offset</span></div>
+          <div style="font-size:12px;opacity:0.85;margin-top:6px;"><span class="lang-ru">Offset = Стартовый номер серии в карточке - Стартовый номер серии в раздаче</span><span class="lang-en">Offset = Starting Episode in Library - Starting Episode on Tracker</span></div>
         </div>
 
         <div class="wiki-table-wrap">
@@ -1338,22 +1396,22 @@ services:
             </thead>
             <tbody>
               <tr>
-                <td><strong>Space Dandy (ТВ-1)</strong></td>
+                <td><strong>Space Dandy <span class="lang-ru">(ТВ-1)</span><span class="lang-en">(TV-1)</span></strong></td>
                 <td>1–13</td>
                 <td>01–13</td>
                 <td><code>1</code></td>
                 <td>1 – 13</td>
                 <td><strong>0</strong></td>
-                <td>Файл <code>01.mkv</code> + 0 &rarr; <strong>S01E01.mkv</strong></td>
+                <td><span class="lang-ru">Файл <code>01.mkv</code> + 0 &rarr; <strong>S01E01.mkv</strong></span><span class="lang-en">File <code>01.mkv</code> + 0 &rarr; <strong>S01E01.mkv</strong></span></td>
               </tr>
               <tr>
-                <td><strong>Space Dandy (ТВ-2)</strong></td>
+                <td><strong>Space Dandy <span class="lang-ru">(ТВ-2)</span><span class="lang-en">(TV-2)</span></strong></td>
                 <td>14–26</td>
                 <td>01–13</td>
                 <td><code>1</code></td>
                 <td>14 – 26</td>
                 <td><strong>+13</strong></td>
-                <td>Файл <code>01.mkv</code> + 13 &rarr; <strong>S01E14.mkv</strong><br>Файл <code>13.mkv</code> + 13 &rarr; <strong>S01E26.mkv</strong></td>
+                <td><span class="lang-ru">Файл <code>01.mkv</code> + 13 &rarr; <strong>S01E14.mkv</strong><br>Файл <code>13.mkv</code> + 13 &rarr; <strong>S01E26.mkv</strong></span><span class="lang-en">File <code>01.mkv</code> + 13 &rarr; <strong>S01E14.mkv</strong><br>File <code>13.mkv</code> + 13 &rarr; <strong>S01E26.mkv</strong></span></td>
               </tr>
               <tr>
                 <td><strong>Mushoku Tensei (Part 2)</strong></td>
@@ -1362,7 +1420,7 @@ services:
                 <td><code>1</code></td>
                 <td>12 – 23</td>
                 <td><strong>+11</strong></td>
-                <td>Файл <code>01.mkv</code> + 11 &rarr; <strong>S01E12.mkv</strong></td>
+                <td><span class="lang-ru">Файл <code>01.mkv</code> + 11 &rarr; <strong>S01E12.mkv</strong></span><span class="lang-en">File <code>01.mkv</code> + 11 &rarr; <strong>S01E12.mkv</strong></span></td>
               </tr>
               <tr>
                 <td><strong>Bleach: TYBW (Part 2)</strong></td>
@@ -1371,7 +1429,7 @@ services:
                 <td><code>1</code></td>
                 <td>14 – 26</td>
                 <td><strong>+13</strong></td>
-                <td>Файл <code>01.mkv</code> + 13 &rarr; <strong>S01E14.mkv</strong></td>
+                <td><span class="lang-ru">Файл <code>01.mkv</code> + 13 &rarr; <strong>S01E14.mkv</strong></span><span class="lang-en">File <code>01.mkv</code> + 13 &rarr; <strong>S01E14.mkv</strong></span></td>
               </tr>
               <tr>
                 <td><strong>Spy x Family (Part 2)</strong></td>
@@ -1380,7 +1438,7 @@ services:
                 <td><code>1</code></td>
                 <td>13 – 25</td>
                 <td><strong>+12</strong></td>
-                <td>Файл <code>01.mkv</code> + 12 &rarr; <strong>S01E13.mkv</strong></td>
+                <td><span class="lang-ru">Файл <code>01.mkv</code> + 12 &rarr; <strong>S01E13.mkv</strong></span><span class="lang-en">File <code>01.mkv</code> + 12 &rarr; <strong>S01E13.mkv</strong></span></td>
               </tr>
             </tbody>
           </table>
@@ -1395,7 +1453,7 @@ services:
           <li><span class="lang-ru">В строке ввода алиаса введите название части: например, <code>Space Dandy TV-2</code>.</span><span class="lang-en">In the alias input field, type the cour title: e.g., <code>Space Dandy TV-2</code>.</span></li>
           <li><span class="lang-ru">Нажмите иконку параметров с ползунками для открытия расширенной панели:</span><span class="lang-en">Click the sliders icon to expand advanced parameters:</span>
             <ul style="margin:4px 0;">
-              <li><span class="lang-ru"><strong>Сезон:</strong> укажите <code>1</code> (фактический сезон карточки).</span><span class="lang-en"><strong>Season:</strong> specify <code>1</code>.</span></li>
+              <li><span class="lang-ru"><strong>Сезон:</strong> укажите <code>1</code> (фактический сезон карточки).</span><span class="lang-en"><strong>Season:</strong> specify <code>1</code> (actual show season).</span></li>
               <li><span class="lang-ru"><strong>Серия с:</strong> укажите <code>14</code>.</span><span class="lang-en"><strong>Episode From:</strong> <code>14</code>.</span></li>
               <li><span class="lang-ru"><strong>Серия по:</strong> укажите <code>26</code>.</span><span class="lang-en"><strong>Episode To:</strong> <code>26</code>.</span></li>
               <li><span class="lang-ru"><strong>+Offset:</strong> укажите <code>13</code>.</span><span class="lang-en"><strong>+Offset:</strong> <code>13</code>.</span></li>
@@ -1410,20 +1468,20 @@ services:
         </h3>
         <div class="wiki-grid-2">
           <div class="wiki-card">
-            <div style="font-weight:700;color:var(--teal);margin-bottom:6px;">1. Селективный опрос трекеров</div>
-            <p style="font-size:13px;color:var(--text-muted);margin:0;">Когда вам нужны серии 14–26, фоновый сервис отправляет в индексаторы точный запрос <code>Space Dandy TV-2</code>, избегая ложных раздач первого кура.</p>
+            <div style="font-weight:700;color:var(--teal);margin-bottom:6px;"><span class="lang-ru">1. Селективный опрос трекеров</span><span class="lang-en">1. Selective Tracker Query</span></div>
+            <p style="font-size:13px;color:var(--text-muted);margin:0;"><span class="lang-ru">Когда вам нужны серии 14–26, фоновый сервис отправляет в индексаторы точный запрос <code>Space Dandy TV-2</code>, избегая ложных раздач первого кура.</span><span class="lang-en">When searching for episodes 14–26, the background scheduler queries indexers specifically with 'Space Dandy TV-2', avoiding false hits from Cour 1.</span></p>
           </div>
           <div class="wiki-card">
-            <div style="font-weight:700;color:var(--teal);margin-bottom:6px;">2. Защита от дублирования сезонов</div>
-            <p style="font-size:13px;color:var(--text-muted);margin:0;">Даже если в заголовке раздачи написано «2nd Season», привязка <code>season_number = 1</code> предотвращает ошибочное создание 2-го сезона в медиатеке.</p>
+            <div style="font-weight:700;color:var(--teal);margin-bottom:6px;"><span class="lang-ru">2. Защита от дублирования сезонов</span><span class="lang-en">2. Season Overwrite Shield</span></div>
+            <p style="font-size:13px;color:var(--text-muted);margin:0;"><span class="lang-ru">Даже если в заголовке раздачи написано «2nd Season», привязка <code>season_number = 1</code> предотвращает ошибочное создание 2-го сезона в медиатеке.</span><span class="lang-en">Even if a tracker release says '2nd Season', the scope binding season_number = 1 maps it strictly to Season 1, preventing false season creation.</span></p>
           </div>
           <div class="wiki-card">
-            <div style="font-weight:700;color:var(--teal);margin-bottom:6px;">3. Селективное скачивание файлов</div>
-            <p style="font-size:13px;color:var(--text-muted);margin:0;">Если в торренте раздаются серии 01–13, а вам нужны только 15 и 16, клиент загрузит <strong>только файлы 02.mkv и 03.mkv</strong>, экономя трафик и диск.</p>
+            <div style="font-weight:700;color:var(--teal);margin-bottom:6px;"><span class="lang-ru">3. Селективное скачивание файлов</span><span class="lang-en">3. Selective File Downloading</span></div>
+            <p style="font-size:13px;color:var(--text-muted);margin:0;"><span class="lang-ru">Если в торренте раздаются серии 01–13, а вам нужны только 15 и 16, клиент загрузит <strong>только файлы 02.mkv и 03.mkv</strong>, экономя трафик и диск.</span><span class="lang-en">If a torrent pack contains episodes 01–13 and you only need 15 and 16, the engine downloads only files 02.mkv and 03.mkv, saving bandwidth and disk space.</span></p>
           </div>
           <div class="wiki-card">
-            <div style="font-weight:700;color:var(--teal);margin-bottom:6px;">4. Атомарный хардлинк со сдвигом</div>
-            <p style="font-size:13px;color:var(--text-muted);margin:0;">При импорте файл <code>02.mkv</code> получает смещение +13 и связывается в медиатеке как <code>Season 01/Space Dandy - S01E15.mkv</code>.</p>
+            <div style="font-weight:700;color:var(--teal);margin-bottom:6px;"><span class="lang-ru">4. Атомарный хардлинк со сдвигом</span><span class="lang-en">4. Atomic Hardlink with Offset</span></div>
+            <p style="font-size:13px;color:var(--text-muted);margin:0;"><span class="lang-ru">При импорте файл <code>02.mkv</code> получает смещение +13 и связывается в медиатеке как <code>Season 01/Space Dandy - S01E15.mkv</code>.</span><span class="lang-en">Upon import, file 02.mkv receives an offset of +13 and is atomically linked as Season 01/Space Dandy - S01E15.mkv.</span></p>
           </div>
         </div>
       </div>
@@ -1458,7 +1516,8 @@ services:
               <span class="lang-en">Episode Patterns</span>
             </div>
             <p class="wiki-subcard-text">
-              <code>S01E05</code>, <code>1x05</code>, <code>[01-12]</code>, <code>Серии 1-8 из 12</code>, <code>Сезон 2 (1-12)</code>, <code>Сезон II</code> (римские цифры), <code>ТВ-1</code>, <code>2nd Season</code>, <code>Part 1 / Part 2</code>.
+              <span class="lang-ru"><code>S01E05</code>, <code>1x05</code>, <code>[01-12]</code>, <code>Серии 1-8 из 12</code>, <code>Сезон 2 (1-12)</code>, <code>Сезон II</code> (римские цифры), <code>ТВ-1</code>, <code>2nd Season</code>, <code>Part 1 / Part 2</code>.</span>
+              <span class="lang-en"><code>S01E05</code>, <code>1x05</code>, <code>[01-12]</code>, <code>Episodes 1-8 of 12</code>, <code>Season 2 (1-12)</code>, <code>Season II</code> (Roman numerals), <code>TV-1</code>, <code>2nd Season</code>, <code>Part 1 / Part 2</code>.</span>
             </p>
           </div>
 
@@ -1469,7 +1528,8 @@ services:
               <span class="lang-en">Dubbing Studios</span>
             </div>
             <p class="wiki-subcard-text">
-              LostFilm, HDRezka, Red Head Sound (RHS), Кубик в Кубе, AniLibria, AniMedia, SHIZA Project, Studio Band, Пифагор, Невафильм, NewComers, AlexFilm, TVShows.
+              <span class="lang-ru">LostFilm, HDRezka, Red Head Sound (RHS), Кубик в Кубе, AniLibria, AniMedia, SHIZA Project, Studio Band, Пифагор, Невафильм, NewComers, AlexFilm, TVShows.</span>
+              <span class="lang-en">LostFilm, HDRezka, Red Head Sound (RHS), Kubik v Kube, AniLibria, AniMedia, SHIZA Project, Studio Band, Pifagor, Nevafilm, NewComers, AlexFilm, TVShows.</span>
             </p>
           </div>
 
@@ -1480,7 +1540,8 @@ services:
               <span class="lang-en">Language Tags</span>
             </div>
             <p class="wiki-subcard-text">
-              <code>RU</code> (Русский дубляж/МВО), <code>EN</code> (Оригинальная дорожка), <code>JP</code> (Японский оригинал), <code>MULTI</code> (Многоголосый), <code>DUAL</code> (Двухголосый), <code>SUB</code> (Субтитры).
+              <span class="lang-ru"><code>RU</code> (Русский дубляж/МВО), <code>EN</code> (Оригинальная дорожка), <code>JP</code> (Японский оригинал), <code>MULTI</code> (Многоголосый), <code>DUAL</code> (Двухголосый), <code>SUB</code> (Субтитры).</span>
+              <span class="lang-en"><code>RU</code> (Russian Dub/MVO), <code>EN</code> (Original English Track), <code>JP</code> (Japanese Original), <code>MULTI</code> (Multi-Audio), <code>DUAL</code> (Dual Audio), <code>SUB</code> (Subtitles).</span>
             </p>
           </div>
         </div>
@@ -1491,9 +1552,12 @@ services:
             <span class="lang-en">Complex Tracker Header Parsing Examples:</span>
           </div>
           <ul style="padding-left:18px;margin:0;font-size:13px;color:var(--text-muted);line-height:1.7;">
-            <li><code>Сверхъестественное / Supernatural / Сезон 15 / Серии: 1-20 из 20 (LostFilm) [2020, WEB-DL 1080p]</code> &rarr; <strong>S15, Full Season (E01-E20), LostFilm, WEB-DL 1080p, RU</strong></li>
-            <li><code>Магическая битва 2 сезон / Jujutsu Kaisen 2nd Season [01-23 из 23] [AniLibria] [WEBRip 1080p]</code> &rarr; <strong>S02, Full Season (E01-E23), AniLibria, WEBRip 1080p, RU/JP</strong></li>
-            <li><code>Властелин колец: Братство Кольца / The Lord of the Rings: The Fellowship of the Ring (2001) SEE [Remux 2160p DoVi HDR]</code> &rarr; <strong>Movie (2001), Special Extended Edition, 4K Remux, Dolby Vision</strong></li>
+            <li class="lang-ru"><code>Сверхъестественное / Supernatural / Сезон 15 / Серии: 1-20 из 20 (LostFilm) [2020, WEB-DL 1080p]</code> &rarr; <strong>S15, Full Season (E01-E20), LostFilm, WEB-DL 1080p, RU</strong></li>
+            <li class="lang-en"><code>Supernatural / Season 15 / Episodes: 1-20 of 20 (LostFilm) [2020, WEB-DL 1080p]</code> &rarr; <strong>S15, Full Season (E01-E20), LostFilm, WEB-DL 1080p, RU</strong></li>
+            <li class="lang-ru"><code>Магическая битва 2 сезон / Jujutsu Kaisen 2nd Season [01-23 из 23] [AniLibria] [WEBRip 1080p]</code> &rarr; <strong>S02, Full Season (E01-E23), AniLibria, WEBRip 1080p, RU/JP</strong></li>
+            <li class="lang-en"><code>Jujutsu Kaisen 2nd Season [01-23 of 23] [AniLibria] [WEBRip 1080p]</code> &rarr; <strong>S02, Full Season (E01-E23), AniLibria, WEBRip 1080p, RU/JP</strong></li>
+            <li class="lang-ru"><code>Властелин колец: Братство Кольца / The Lord of the Rings: The Fellowship of the Ring (2001) SEE [Remux 2160p DoVi HDR]</code> &rarr; <strong>Movie (2001), Special Extended Edition, 4K Remux, Dolby Vision</strong></li>
+            <li class="lang-en"><code>The Lord of the Rings: The Fellowship of the Ring (2001) SEE [Remux 2160p DoVi HDR]</code> &rarr; <strong>Movie (2001), Special Extended Edition, 4K Remux, Dolby Vision</strong></li>
           </ul>
         </div>
       </div>
@@ -1528,10 +1592,10 @@ services:
               <span class="lang-en">Strictly Blocked Non-Video Content</span>
             </div>
             <ul style="padding-left:18px;margin:0;font-size:13px;color:var(--text-muted);line-height:1.65;">
-              <li><strong>Манга, ранобэ и комиксы:</strong> шаблоны <code>[тома 1-12]</code>, <code>[главы 1-100]</code>, <code>manga</code>, <code>light novel</code>, <code>LN</code>, <code>manhwa</code>, расширения <code>.cbr</code>, <code>.cbz</code>, <code>.pdf</code>, <code>.epub</code>, <code>.fb2</code>.</li>
-              <li><strong>Саундтреки и музыка:</strong> <code>OST</code>, <code>Soundtrack</code>, <code>FLAC</code>, <code>MP3 Album</code>, <code>Discography</code> (без сопровождающего видео).</li>
-              <li><strong>Артбуки и сканы:</strong> <code>Scans</code>, <code>Artbook</code>, <code>Raw Scans</code>.</li>
-              <li><strong>Сырые образы дисков:</strong> <code>.iso</code>, <code>BDMV</code> (в профилях, ориентированных на MKV/MP4 контейнеры).</li>
+              <li><span class="lang-ru"><strong>Манга, ранобэ и комиксы:</strong> шаблоны <code>[тома 1-12]</code>, <code>[главы 1-100]</code>, <code>manga</code>, <code>light novel</code>, <code>LN</code>, <code>manhwa</code>, расширения <code>.cbr</code>, <code>.cbz</code>, <code>.pdf</code>, <code>.epub</code>, <code>.fb2</code>.</span><span class="lang-en"><strong>Manga, Light Novels &amp; Comics:</strong> tokens like <code>[vols 1-12]</code>, <code>[chapters 1-100]</code>, <code>manga</code>, <code>light novel</code>, <code>LN</code>, <code>manhwa</code>, extensions <code>.cbr</code>, <code>.cbz</code>, <code>.pdf</code>, <code>.epub</code>, <code>.fb2</code>.</span></li>
+              <li><span class="lang-ru"><strong>Саундтреки и музыка:</strong> <code>OST</code>, <code>Soundtrack</code>, <code>FLAC</code>, <code>MP3 Album</code>, <code>Discography</code> (без сопровождающего видео).</span><span class="lang-en"><strong>Soundtracks &amp; Music:</strong> <code>OST</code>, <code>Soundtrack</code>, <code>FLAC</code>, <code>MP3 Album</code>, <code>Discography</code> (when lacking accompanied video).</span></li>
+              <li><span class="lang-ru"><strong>Артбуки и сканы:</strong> <code>Scans</code>, <code>Artbook</code>, <code>Raw Scans</code>.</span><span class="lang-en"><strong>Artbooks &amp; Scans:</strong> <code>Scans</code>, <code>Artbook</code>, <code>Raw Scans</code>.</span></li>
+              <li><span class="lang-ru"><strong>Сырые образы дисков:</strong> <code>.iso</code>, <code>BDMV</code> (в профилях, ориентированных на MKV/MP4 контейнеры).</span><span class="lang-en"><strong>Raw Disc Images:</strong> <code>.iso</code>, <code>BDMV</code> (in video profiles targeting standalone MKV/MP4 containers).</span></li>
             </ul>
           </div>
 
@@ -1542,9 +1606,9 @@ services:
               <span class="lang-en">Spin-off &amp; Dorama False-Positive Shield</span>
             </div>
             <ul style="padding-left:18px;margin:0;font-size:13px;color:var(--text-muted);line-height:1.65;">
-              <li><strong>Проверка года выпуска:</strong> сопоставление года релиза в раздаче с годом тайтла в карточке (&plusmn;1 год допустимого сдвига).</li>
-              <li><strong>Изоляция игрового кино (Live-Action):</strong> при поиске аниме отсекаются дорамы и киноадаптации с живыми актерами (токены <code>Dorama</code>, <code>Live Action</code>).</li>
-              <li><strong>Отсев промо-материалов:</strong> блокировка одиночных раздач с трейлерами, тизерами (PV/CM) и рекапами (Recap).</li>
+              <li><span class="lang-ru"><strong>Проверка года выпуска:</strong> сопоставление года релиза в раздаче с годом тайтла в карточке (&plusmn;1 год допустимого сдвига).</span><span class="lang-en"><strong>Release Year Validation:</strong> cross-checking release year against database title year (&plusmn;1 year allowed drift).</span></li>
+              <li><span class="lang-ru"><strong>Изоляция игрового кино (Live-Action):</strong> при поиске аниме отсекаются дорамы и киноадаптации с живыми актерами (токены <code>Dorama</code>, <code>Live Action</code>).</span><span class="lang-en"><strong>Live-Action Isolation:</strong> anime queries filter out live-action doramas and film adaptations (tokens <code>Dorama</code>, <code>Live Action</code>).</span></li>
+              <li><span class="lang-ru"><strong>Отсев промо-материалов:</strong> блокировка одиночных раздач с трейлерами, тизерами (PV/CM) и рекапами (Recap).</span><span class="lang-en"><strong>Promo Shield:</strong> rejects standalone torrents featuring only trailers, PV/CM clips, or recap episodes.</span></li>
             </ul>
           </div>
         </div>
@@ -1604,7 +1668,7 @@ services:
             <span class="lang-ru">Киноколлекции TMDb Sagas (Пакетный импорт в 1 клик)</span>
             <span class="lang-en">TMDb Sagas &amp; Franchises (1-Click Batch Import)</span>
           </div>
-          <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 12px 0;">
+          <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0;">
             <span class="lang-ru">Раздел <strong>«Коллекции»</strong> автоматически связывает добавленные фильмы с их официальными франшизами (<em>«Властелин колец»</em>, <em>«Гарри Поттер»</em>, <em>«Дюна»</em>, <em>«Чужой»</em>). Карточка саги выстраивает части по хронологии сюжета и годам выхода. Кнопка <strong>«Импортировать недостающие фильмы»</strong> в один клик ставит на мониторинг и автопоиск всю недостающую фильмографию франшизы.</span>
             <span class="lang-en">The <strong>"Collections"</strong> section connects imported movies with official franchises (<em>"The Lord of the Rings"</em>, <em>"Harry Potter"</em>, <em>"Dune"</em>, <em>"Alien"</em>). Sagas present timeline progress and include a <strong>"Import Missing Movies"</strong> button to monitor and grab the entire saga in 1 click.</span>
           </p>
@@ -1641,7 +1705,8 @@ services:
               <span class="lang-en">1. Auto-Detection</span>
             </div>
             <p class="wiki-subcard-text">
-              Модуль постимпорта анализирует структуру торрента и выявляет маркеры <code>CD1/CD2</code>, <code>cd1/cd2</code>, <code>part1/part2</code>, <code>disc1/disc2</code>.
+              <span class="lang-ru">Модуль постимпорта анализирует структуру торрента и выявляет маркеры <code>CD1/CD2</code>, <code>part1/part2</code>, <code>disc1/disc2</code>.</span>
+              <span class="lang-en">Postprocessing analyzes torrent folder layout and flags tokens like <code>CD1/CD2</code>, <code>part1/part2</code>, <code>disc1/disc2</code>.</span>
             </p>
           </div>
 
@@ -1652,7 +1717,8 @@ services:
               <span class="lang-en">2. Lossless Concat</span>
             </div>
             <p class="wiki-subcard-text">
-              Выполняется через <code>mkvmerge</code> (приоритет) либо <code>ffmpeg -f concat -c copy</code>. Все дорожки звука, субтитры и тайминги сохраняются без пережатия.
+              <span class="lang-ru">Выполняется через <code>mkvmerge</code> (приоритет) либо <code>ffmpeg -f concat -c copy</code>. Все дорожки звука, субтитры и тайминги сохраняются без пережатия.</span>
+              <span class="lang-en">Executed via <code>mkvmerge</code> (preferred) or <code>ffmpeg -f concat -c copy</code>. All audio tracks, subtitles, and chapters are joined bit-for-bit.</span>
             </p>
           </div>
 
@@ -1663,7 +1729,8 @@ services:
               <span class="lang-en">3. Seeding-Safe</span>
             </div>
             <p class="wiki-subcard-text">
-              Исходные файлы в <code>/data/downloads</code> читаются строго в режиме <strong>Read-Only</strong>. Хэш торрента не изменяется, раздача в клиенте не останавливается.
+              <span class="lang-ru">Исходные файлы в <code>/data/downloads</code> читаются строго в режиме <strong>Read-Only</strong>. Хэш торрента не изменяется, раздача в клиенте не останавливается.</span>
+              <span class="lang-en">Source files in <code>/data/downloads</code> are read strictly in <strong>Read-Only</strong> mode. Torrent hash is unaltered; seeding continues uninterrupted.</span>
             </p>
           </div>
         </div>
@@ -1706,7 +1773,8 @@ services:
               <span class="lang-en">What is a Hardlink at the Filesystem Level?</span>
             </div>
             <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0;">
-              В ОС Linux/UNIX файл состоит из двух сущностей: <strong>Inode</strong> (физические блоки данных и метаданные на накопителе) и <strong>Directory Entry</strong> (имя файла в конкретной папке). Создание жесткой ссылки — это просто запись второго имени, указывающего на тот же самый Inode.
+              <span class="lang-ru">В ОС Linux/UNIX файл состоит из двух сущностей: <strong>Inode</strong> (физические блоки данных и метаданные на накопителе) и <strong>Directory Entry</strong> (имя файла в конкретной папке). Создание жесткой ссылки — это просто запись второго имени, указывающего на тот же самый Inode.</span>
+              <span class="lang-en">Under Linux/UNIX, a file consists of two entities: an <strong>Inode</strong> (physical disk data blocks and attributes) and a <strong>Directory Entry</strong> (filename in a directory). Creating a hardlink simply writes a secondary directory entry pointing to the identical Inode.</span>
             </p>
           </div>
 
@@ -1716,10 +1784,10 @@ services:
               <span class="lang-en">Direct Benefits for Media Libraries</span>
             </div>
             <ul style="padding-left:18px;margin:0;font-size:13px;color:var(--text-muted);line-height:1.6;">
-              <li><strong>0 байт дублирования:</strong> файл 70 ГБ 4K Remux занимает ровно те же 70 ГБ, а не 140 ГБ.</li>
-              <li><strong>0 миллисекунд импорт:</strong> создание ссылки атомарно и занимает доли миллисекунды.</li>
-              <li><strong>0 нагрузки на I/O:</strong> диски не перезаписывают гигабайты данных.</li>
-              <li><strong>Безопасное удаление:</strong> удаление файла из загрузок уменьшает счетчик ссылок с 2 до 1, медиатека остается нетронутой.</li>
+              <li><span class="lang-ru"><strong>0 байт дублирования:</strong> файл 70 ГБ 4K Remux занимает ровно те же 70 ГБ, а не 140 ГБ.</span><span class="lang-en"><strong>0 bytes duplicate overhead:</strong> a 70 GB 4K Remux takes exactly 70 GB, never 140 GB.</span></li>
+              <li><span class="lang-ru"><strong>0 миллисекунд импорт:</strong> создание ссылки атомарно и занимает доли миллисекунды.</span><span class="lang-en"><strong>0 ms import speed:</strong> link creation is an atomic filesystem table update.</span></li>
+              <li><span class="lang-ru"><strong>0 нагрузки на I/O:</strong> диски не перезаписывают гигабайты данных.</span><span class="lang-en"><strong>0 disk I/O strain:</strong> drives avoid churning gigabytes of identical data blocks.</span></li>
+              <li><span class="lang-ru"><strong>Безопасное удаление:</strong> удаление файла из загрузок уменьшает счетчик ссылок с 2 до 1, медиатека остается нетронутой.</span><span class="lang-en"><strong>Safe deletion:</strong> removing torrent files merely decreases Inode link count from 2 to 1.</span></li>
             </ul>
           </div>
         </div>
@@ -1732,15 +1800,15 @@ services:
         <div class="code-block-wrapper">
           <div class="code-block-header"><span>Storage Architecture</span></div>
           <pre><code>                  ┌───────────────────────────────┐
-                  │   Физические данные на диске  │
-                  │   (Inode #482910, размер 8 GB)│
+                  │   Physical Data Blocks (Disk) │
+                  │   (Inode #482910, Size: 8 GB) │
                   └───────────────┬───────────────┘
                                   │
                  ┌────────────────┴────────────────┐
                  ▼                                 ▼
 ┌─────────────────────────────────┐ ┌─────────────────────────────────┐
 │ /data/downloads/Show.S01E01.mkv │ │ /data/media/Show/S01E01.mkv     │
-│ (Используется торрент-клиентом) │ │ (Используется Plex / Jellyfin)  │
+│ (Active Seeding in qBit/Transm) │ │ (Read-only by Plex / Jellyfin)  │
 └─────────────────────────────────┘ └─────────────────────────────────┘</code></pre>
         </div>
 
@@ -1783,7 +1851,8 @@ services:
               <span class="lang-en">Subtitles</span>
             </div>
             <p class="wiki-subcard-text">
-              Форматы <code>.srt</code>, <code>.ass</code>, <code>.ssa</code>, <code>.vtt</code>. Автоматически переименовываются в соответствии с именем видеофайла (например, <code>Show - S01E01.ru.ass</code>).
+              <span class="lang-ru">Форматы <code>.srt</code>, <code>.ass</code>, <code>.ssa</code>, <code>.vtt</code>. Автоматически переименовываются в соответствии с именем видеофайла (например, <code>Show - S01E01.ru.ass</code>).</span>
+              <span class="lang-en">Formats <code>.srt</code>, <code>.ass</code>, <code>.ssa</code>, <code>.vtt</code>. Automatically matched and renamed alongside video files (e.g., <code>Show - S01E01.en.ass</code>).</span>
             </p>
           </div>
 
@@ -1794,7 +1863,8 @@ services:
               <span class="lang-en">External Audio</span>
             </div>
             <p class="wiki-subcard-text">
-              Форматы <code>.mka</code>, <code>.ac3</code>, <code>.flac</code>, <code>.dts</code>. Переносятся рядом с видеофайлом с сохранением языкового суффикса.
+              <span class="lang-ru">Форматы <code>.mka</code>, <code>.ac3</code>, <code>.flac</code>, <code>.dts</code>. Переносятся рядом с видеофайлом с сохранением языкового суффикса.</span>
+              <span class="lang-en">Formats <code>.mka</code>, <code>.ac3</code>, <code>.flac</code>, <code>.dts</code>. Linked alongside video files preserving appropriate language suffixes.</span>
             </p>
           </div>
 
@@ -1805,7 +1875,8 @@ services:
               <span class="lang-en">Fonts (.otf / .ttf)</span>
             </div>
             <p class="wiki-subcard-text">
-              Папка <code>Fonts/</code> переносится в сезон с автоматической генерацией файлов <code>.plexignore</code> и <code>.embyignore</code>, исключающих ложное сканирование медиасерверами.
+              <span class="lang-ru">Папка <code>Fonts/</code> переносится в сезон с автоматической генерацией файлов <code>.plexignore</code> и <code>.embyignore</code>, исключающих ложное сканирование медиасерверами.</span>
+              <span class="lang-en">The <code>Fonts/</code> directory is linked with automatic <code>.plexignore</code> and <code>.embyignore</code> generation to prevent false media scanner detection.</span>
             </p>
           </div>
         </div>
@@ -1817,7 +1888,8 @@ services:
             <span class="lang-en">Garbage Video File Filtering</span>
           </div>
           <p style="font-size:13px;color:var(--text-muted);margin:0;line-height:1.6;">
-            При инспекции директории торрента модуль постимпорта отсекает файлы опенингов (OP), эндингов (ED), видео-сэмплы (sample), промо-ролики (PV), тизеры (CM) и трейлеры, предотвращая их ложный импорт в качестве номерных серий сезона.
+            <span class="lang-ru">При инспекции директории торрента модуль постимпорта отсекает файлы опенингов (OP), эндингов (ED), видео-сэмплы (sample), промо-ролики (PV), тизеры (CM) и трейлеры, предотвращая их ложный импорт в качестве номерных серий сезона.</span>
+            <span class="lang-en">During postprocess folder inspection, the engine rejects opening tracks (OP), ending credits (ED), video samples, promotional clips (PV), commercial teasers (CM), and trailers, keeping season listings clean.</span>
           </p>
         </div>
       </div>
@@ -1852,7 +1924,8 @@ services:
               <span class="lang-en">Anti-Ban Per-Host Rate Limiting</span>
             </div>
             <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0;">
-              Каждый хост индексатора имеет независимый семафор запросов с настраиваемой паузой (по умолчанию 1.5–2 секунды). Это защищает API-ключи от временных блокировок при массовом поиске по большой библиотеке.
+              <span class="lang-ru">Каждый хост индексатора имеет независимый семафор запросов с настраиваемой паузой (по умолчанию 1.5–2 секунды). Это защищает API-ключи от временных блокировок при массовом поиске по большой библиотеке.</span>
+              <span class="lang-en">Each indexer host features an independent request semaphore with configurable intervals (default 1.5–2.0s). This shields user API keys from temporary IP bans during massive library search passes.</span>
             </p>
           </div>
 
@@ -1863,7 +1936,8 @@ services:
               <span class="lang-en">HTTP 429 &amp; Retry-After Handling</span>
             </div>
             <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0;">
-              При получении ответа <code>429 Too Many Requests</code> сетевой клиент Aliasarr считывает заголовок <code>Retry-After</code> и автоматически ставит запросы к этому трекеру на паузу с экспоненциальным backoff-интервалом.
+              <span class="lang-ru">При получении ответа <code>429 Too Many Requests</code> сетевой клиент Aliasarr считывает заголовок <code>Retry-After</code> и автоматически ставит запросы к этому трекеру на паузу с экспоненциальным backoff-интервалом.</span>
+              <span class="lang-en">Upon receiving an HTTP <code>429 Too Many Requests</code> response, Aliasarr parses the <code>Retry-After</code> header and pauses host dispatch with an exponential backoff escalation.</span>
             </p>
           </div>
         </div>
@@ -1901,10 +1975,11 @@ services:
             <div class="wiki-subcard-title">
               <i data-lucide="globe" style="width:16px;height:16px;color:var(--teal);"></i>
               <span class="lang-ru">Публичные трекеры (RuTracker, Rutor, Nyaa)</span>
-              <span class="lang-en">Public Trackers</span>
+              <span class="lang-en">Public Trackers (RuTracker, Rutor, Nyaa)</span>
             </div>
             <p class="wiki-subcard-text">
-              Чекбокс «Раздавать» отключен. После скачивания и импорта файл перемещается в библиотеку, а торрент немедленно удаляется из клиента без захламления папки загрузок.
+              <span class="lang-ru">Чекбокс «Раздавать» отключен. После скачивания и импорта файл перемещается в библиотеку, а торрент немедленно удаляется из клиента без захламления папки загрузок.</span>
+              <span class="lang-en">Seeding switch disabled. After download and import, the file moves into the library, and the torrent is immediately removed to keep storage clean.</span>
             </p>
           </div>
 
@@ -1912,10 +1987,11 @@ services:
             <div class="wiki-subcard-title">
               <i data-lucide="lock" style="width:16px;height:16px;color:#10b981;"></i>
               <span class="lang-ru">Приватные трекеры (IPTorrents, TorrentLeech, Tapochek)</span>
-              <span class="lang-en">Private Trackers</span>
+              <span class="lang-en">Private Trackers (IPTorrents, TorrentLeech, Tapochek)</span>
             </div>
             <p class="wiki-subcard-text">
-              Чекбокс «Раздавать» включен. Задаются персональные <strong>Лимит Ratio</strong> (например, 1.5) и <strong>Лимит времени раздачи</strong> (например, 72 часа). Aliasarr вызывает нативные API клиента (<code>setShareLimits</code>) сразу в момент добавления.
+              <span class="lang-ru">Чекбокс «Раздавать» включен. Задаются персональные <strong>Лимит Ratio</strong> (например, 1.5) и <strong>Лимит времени раздачи</strong> (например, 72 часа). Aliasarr вызывает нативные API клиента (<code>setShareLimits</code>) сразу в момент добавления.</span>
+              <span class="lang-en">Seeding switch enabled. Users set explicit <strong>Ratio Limits</strong> (e.g., 1.5) and <strong>Seeding Time Limits</strong> (e.g., 72h). Aliasarr invokes client APIs (<code>setShareLimits</code>) at dispatch.</span>
             </p>
           </div>
         </div>
@@ -1928,19 +2004,19 @@ services:
         <div class="code-block-wrapper">
           <div class="code-block-header"><span>Activity Queue UI</span></div>
           <pre><code>INVINCIBLE (2021)          Transmission    —       100%      seeding
-8 eps  [Tapochek]                                  11ч 53м / 12ч
-                                                   Осталось: 6м
+8 eps  [Tapochek]                                  11h 53m / 12h
+                                                   Remaining: 6m
                                                    Ratio: 0.06
 
 Occult Academy             Transmission    —       100%      pausedup
-19 eps [RuTracker]                                 33с (∞)
+19 eps [RuTracker]                                 33s (∞)
                                                    Ratio: 0.12</code></pre>
         </div>
 
         <ul style="font-size:13.5px;color:var(--text-muted);line-height:1.7;padding-left:20px;">
-          <li><strong>Таймер с фиксированным лимитом (11ч 53м / 12ч + Осталось: 6м):</strong> динамический обратный отсчет до автоматического завершения сидирования и очистки загрузки.</li>
-          <li><strong>Бессрочная раздача (время &infin;):</strong> символ бесконечности означает, что лимит времени не накладывается, сохраняя рейтинг раздающего.</li>
-          <li><strong>Принцип «Что наступит раньше» (Logical OR):</strong> если лимит Ratio 1.5 набран за 8 часов, раздача завершится сразу, не дожидаясь истечения 72 часов таймера.</li>
+          <li><span class="lang-ru"><strong>Таймер с фиксированным лимитом (11ч 53м / 12ч + Осталось: 6м):</strong> динамический обратный отсчет до автоматического завершения сидирования и очистки загрузки.</span><span class="lang-en"><strong>Fixed-limit countdown timer (11h 53m / 12h + Remaining: 6m):</strong> real-time counter leading to automated torrent removal and storage cleanup.</span></li>
+          <li><span class="lang-ru"><strong>Бессрочная раздача (время &infin;):</strong> символ бесконечности означает, что лимит времени не накладывается, сохраняя рейтинг раздающего.</span><span class="lang-en"><strong>Indefinite seeding (&infin;):</strong> infinity symbol signals zero timeout cap, preserving private tracker account ratios.</span></li>
+          <li><span class="lang-ru"><strong>Принцип «Что наступит раньше» (Logical OR):</strong> если лимит Ratio 1.5 набран за 8 часов, раздача завершится сразу, не дожидаясь истечения 72 часов таймера.</span><span class="lang-en"><strong>Logical OR principle:</strong> if a 1.5 ratio is reached within 8 hours, the torrent terminates immediately without idling through the full 72h timer.</span></li>
         </ul>
       </div>
     </section>
@@ -1974,7 +2050,8 @@ Occult Academy             Transmission    —       100%      pausedup
               <span class="lang-en">Quality Profiles</span>
             </div>
             <p class="wiki-subcard-text">
-              Ранжирование видеоресурсов: <code>Remux-2160p</code>, <code>Bluray-1080p</code>, <code>WEB-DL 1080p</code>, <code>WEBRip</code>, <code>HDTV</code>, <code>SD</code>. Отсечение релизов вне разрешенного диапазона.
+              <span class="lang-ru">Ранжирование видеоресурсов: <code>Remux-2160p</code>, <code>Bluray-1080p</code>, <code>WEB-DL 1080p</code>, <code>WEBRip</code>, <code>HDTV</code>, <code>SD</code>. Отсечение релизов вне разрешенного диапазона.</span>
+              <span class="lang-en">Resolution hierarchy: <code>Remux-2160p</code>, <code>Bluray-1080p</code>, <code>WEB-DL 1080p</code>, <code>WEBRip</code>, <code>HDTV</code>, <code>SD</code>. Out-of-bounds tiers are automatically rejected.</span>
             </p>
           </div>
 
@@ -1985,7 +2062,8 @@ Occult Academy             Transmission    —       100%      pausedup
               <span class="lang-en">Custom Format Scores</span>
             </div>
             <p class="wiki-subcard-text">
-              Начисление или штраф очков за теги: HDR10+, Dolby Vision (DoVi), студии дубляжа (LostFilm: +100, HDRezka: +80), звуковые дороги (Atmos, DTS-HD MA, TrueHD), кодеки (AV1, HEVC).
+              <span class="lang-ru">Начисление или штраф очков за теги: HDR10+, Dolby Vision (DoVi), студии дубляжа (LostFilm: +100, HDRezka: +80), звуковые дороги (Atmos, DTS-HD MA, TrueHD), кодеки (AV1, HEVC).</span>
+              <span class="lang-en">Score weighting for release attributes: HDR10+, Dolby Vision (DoVi), dubbing studios (LostFilm: +100, HDRezka: +80), premium audio (Atmos, DTS-HD MA, TrueHD), modern codecs (AV1, HEVC).</span>
             </p>
           </div>
 
@@ -1996,7 +2074,8 @@ Occult Academy             Transmission    —       100%      pausedup
               <span class="lang-en">Threshold Filters</span>
             </div>
             <p class="wiki-subcard-text">
-              Проверка минимального количества сидов (seeders &ge; min), лимитов размера на эпизод или фильм (МБ/мин), а также фильтрация нежелательных релиз-групп.
+              <span class="lang-ru">Проверка минимального количества сидов (seeders &ge; min), лимитов размера на эпизод или фильм (МБ/мин), а также фильтрация нежелательных релиз-групп.</span>
+              <span class="lang-en">Enforcing minimum seeder counts (seeders &ge; min), bit-budget size bounds per minute (MB/min), and blacklisting unwanted release groups.</span>
             </p>
           </div>
         </div>
@@ -2027,33 +2106,36 @@ Occult Academy             Transmission    —       100%      pausedup
         <div class="code-block-wrapper">
           <div class="code-block-header"><span>Upgrade Hierarchy</span></div>
           <pre><code>┌──────────────────────────────────────────────────────────────┐
-│  Уровень 3: Серия / Сезон (ep.upgrade_requested)             │ ──► Наивысший приоритет
+│  Tier 3: Episode / Season (ep.upgrade_requested)             │ ──► Highest Priority
 ├──────────────────────────────────────────────────────────────┤
-│  Уровень 2: Тайтл целиком (show.upgrade_requested)           │ ──► Высокий приоритет
+│  Tier 2: Entire Show / Movie (show.upgrade_requested)        │ ──► High Priority
 ├──────────────────────────────────────────────────────────────┤
-│  Уровень 1: Профиль качества (QualityProfile.upgrade_allowed)│ ──► Фоновый режим
+│  Tier 1: Global Profile (QualityProfile.upgrade_allowed)     │ ──► Background Pass
 └──────────────────────────────────────────────────────────────┘</code></pre>
         </div>
 
         <div class="wiki-grid-3" style="margin-top:20px;">
           <div class="wiki-card">
-            <div style="font-weight:700;color:var(--teal);margin-bottom:6px;">Уровень 1: Профиль качества</div>
+            <div style="font-weight:700;color:var(--teal);margin-bottom:6px;"><span class="lang-ru">Уровень 1: Профиль качества</span><span class="lang-en">Tier 1: Quality Profile</span></div>
             <p style="font-size:13px;color:var(--text-muted);margin:0;line-height:1.6;">
-              Флаг <code>upgrade_allowed</code> в профиле. Если включен, планировщик ищет релизы до достижения порогов <code>cutoff_quality</code> и <code>cutoff_score</code>. При достижении порога серия помечается завершенной.
+              <span class="lang-ru">Флаг <code>upgrade_allowed</code> в профиле. Если включен, планировщик ищет релизы до достижения порогов <code>cutoff_quality</code> и <code>cutoff_score</code>. При достижении порога серия помечается завершенной.</span>
+              <span class="lang-en">Profile flag <code>upgrade_allowed</code>. When enabled, background scheduler searches until <code>cutoff_quality</code> and <code>cutoff_score</code> are met, after which upgrading halts.</span>
             </p>
           </div>
 
           <div class="wiki-card">
-            <div style="font-weight:700;color:#10b981;margin-bottom:6px;">Уровень 2: Кнопка тайтла «На обновлении»</div>
+            <div style="font-weight:700;color:#10b981;margin-bottom:6px;"><span class="lang-ru">Уровень 2: Кнопка «На обновлении»</span><span class="lang-en">Tier 2: Show "Upgrading" Button</span></div>
             <p style="font-size:13px;color:var(--text-muted);margin:0;line-height:1.6;">
-              Параметр <code>show.upgrade_requested</code>. Запускает форсированный апгрейд сериала или фильма, даже если глобальный флаг отключен. <strong>Автоматически отключается</strong> при достижении целевого качества.
+              <span class="lang-ru">Параметр <code>show.upgrade_requested</code>. Запускает форсированный апгрейд сериала или фильма, даже если глобальный флаг отключен. <strong>Автоматически отключается</strong> при достижении целевого качества.</span>
+              <span class="lang-en">Parameter <code>show.upgrade_requested</code>. Forces upgrades even when global auto-upgrade is disabled. <strong>Automatically resets</strong> once all episodes attain cutoff quality.</span>
             </p>
           </div>
 
           <div class="wiki-card">
-            <div style="font-weight:700;color:#f59e0b;margin-bottom:6px;">Уровень 3: Точечная серия или сезон</div>
+            <div style="font-weight:700;color:#f59e0b;margin-bottom:6px;"><span class="lang-ru">Уровень 3: Точечная серия или сезон</span><span class="lang-en">Tier 3: Episode / Season Button</span></div>
             <p style="font-size:13px;color:var(--text-muted);margin:0;line-height:1.6;">
-              Параметр <code>ep.upgrade_requested</code>. Иконка со стрелочкой вверх у конкретного эпизода. После успешного скачивания и импорта флаг <strong>автоматически сбрасывается в False</strong>.
+              <span class="lang-ru">Параметр <code>ep.upgrade_requested</code>. Иконка со стрелочкой вверх у конкретного эпизода. После успешного скачивания и импорта флаг <strong>автоматически сбрасывается в False</strong>.</span>
+              <span class="lang-en">Parameter <code>ep.upgrade_requested</code>. Target icon next to specific episode. After successful grab and import, the flag <strong>automatically resets to False</strong>.</span>
             </p>
           </div>
         </div>
@@ -2089,7 +2171,8 @@ Occult Academy             Transmission    —       100%      pausedup
               <span class="lang-en">Physical MediaProbe Inspection</span>
             </div>
             <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0;">
-              Перед выполнением импорта модуль анализирует реальные параметры контейнера. Если на диске уже хранится серия ранга 17 (HDTV-1080p), а скачанный файл имеет ранг 10 (480p), замена блокируется. Существующий файл остается неприкосновенным.
+              <span class="lang-ru">Перед выполнением импорта модуль анализирует реальные параметры контейнера. Если на диске уже хранится серия ранга 17 (HDTV-1080p), а скачанный файл имеет ранг 10 (480p), замена блокируется. Существующий файл остается неприкосновенным.</span>
+              <span class="lang-en">Before import, MediaProbe inspects actual container properties. If the existing disk file has rank 17 (HDTV-1080p) while the downloaded file is rank 10 (480p), replacement is strictly blocked and the existing file is preserved.</span>
             </p>
           </div>
 
@@ -2100,7 +2183,8 @@ Occult Academy             Transmission    —       100%      pausedup
               <span class="lang-en">Auto-Purge &amp; Blocklist Insertion</span>
             </div>
             <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0;">
-              Бракованный торрент немедленно удаляется из торрент-клиента вместе с временными файлами. Его инфохэш автоматически заносится в <strong>Blocklist</strong> с причиной «Отклонено при импорте из-за попытки даунгрейда», предотвращая повторное скачивание по кругу.
+              <span class="lang-ru">Бракованный торрент немедленно удаляется из торрент-клиента вместе с временными файлами. Его инфохэш автоматически заносится в <strong>Blocklist</strong> с причиной «Отклонено при импорте из-за попытки даунгрейда», предотвращая повторное скачивание по кругу.</span>
+              <span class="lang-en">The defective torrent is instantly purged from the download client alongside cached files. Its infohash is blacklisted with the reason "Rejected during import: downgrade attempt blocked", preventing infinite redownload loops.</span>
             </p>
           </div>
         </div>
@@ -2129,9 +2213,9 @@ Occult Academy             Transmission    —       100%      pausedup
         </p>
 
         <ul style="font-size:13.5px;color:var(--text-muted);line-height:1.7;padding-left:20px;">
-          <li><strong>Селективная докачка:</strong> при добавлении в топик новых серий торрент обновляется, и клиент скачивает <em>только свежие серии</em>, не перекачивая уже имеющиеся.</li>
-          <li><strong>Интеллектуальная деактивация:</strong> опрашиваются только те раздачи, чьи сериалы стоят на мониторинге (<code>monitored = True</code>) и имеют недостающие серии (<code>WANTED</code>).</li>
-          <li><strong>Мгновенное завершение:</strong> когда все серии скачаны или статус сериала переходит в <code>ended/completed</code>, отслеживание темы автоматически деактивируется (<code>active = False</code>), устраняя нагрузку на трекер.</li>
+          <li><span class="lang-ru"><strong>Селективная докачка:</strong> при добавлении в топик новых серий торрент обновляется, и клиент скачивает <em>только свежие серии</em>, не перекачивая уже имеющиеся.</span><span class="lang-en"><strong>Selective update:</strong> when new episodes are uploaded to the topic, the client downloads <em>only the newly added episodes</em>, preserving existing data.</span></li>
+          <li><span class="lang-ru"><strong>Интеллектуальная деактивация:</strong> опрашиваются только те раздачи, чьи сериалы стоят на мониторинге (<code>monitored = True</code>) и имеют недостающие серии (<code>WANTED</code>).</span><span class="lang-en"><strong>Smart deactivation:</strong> polling is restricted to monitored shows (<code>monitored = True</code>) that still have missing episodes (<code>WANTED</code>).</span></li>
+          <li><span class="lang-ru"><strong>Мгновенное завершение:</strong> когда все серии скачаны или статус сериала переходит в <code>ended/completed</code>, отслеживание темы автоматически деактивируется (<code>active = False</code>), устраняя нагрузку на трекер.</span><span class="lang-en"><strong>Instant completion:</strong> when all episodes are downloaded or show status reaches <code>ended/completed</code>, topic polling is automatically disabled (<code>active = False</code>).</span></li>
         </ul>
       </div>
     </section>
@@ -2225,7 +2309,8 @@ Occult Academy             Transmission    —       100%      pausedup
               <span class="lang-en">Authenticator Apps</span>
             </div>
             <p class="wiki-subcard-text">
-              Google Authenticator, Aegis Authenticator, 1Password, Bitwarden, Apple Keychain, Microsoft Authenticator.
+              <span class="lang-ru">Google Authenticator, Aegis Authenticator, 1Password, Bitwarden, Apple Keychain, Microsoft Authenticator.</span>
+              <span class="lang-en">Google Authenticator, Aegis Authenticator, 1Password, Bitwarden, Apple Keychain, Microsoft Authenticator.</span>
             </p>
           </div>
 
@@ -2236,7 +2321,8 @@ Occult Academy             Transmission    —       100%      pausedup
               <span class="lang-en">Emergency Recovery Codes</span>
             </div>
             <p class="wiki-subcard-text">
-              При активации 2FA система генерирует 8 одноразовых резервных кодов для экстренного восстановления доступа при утрате смартфона.
+              <span class="lang-ru">При активации 2FA система генерирует 8 одноразовых резервных кодов для экстренного восстановления доступа при утрате смартфона.</span>
+              <span class="lang-en">Upon enabling 2FA, Aliasarr issues 8 single-use emergency recovery codes to restore account access if a mobile device is lost.</span>
             </p>
           </div>
         </div>
@@ -2265,9 +2351,9 @@ Occult Academy             Transmission    —       100%      pausedup
         </p>
 
         <ul style="font-size:13.5px;color:var(--text-muted);line-height:1.7;padding-left:20px;">
-          <li><strong>Автономная генерация:</strong> при первом включении HTTPS создается валидный сертификат с максимальным сроком действия (~100 лет) без необходимости настройки внешних утилит (certbot/openssl).</li>
-          <li><strong>Автопродление за 30 дней:</strong> фоновый воркер автоматически проверяет срок сертификата и обновляет его за 30 дней до истечения, исключая обрывы защищенного соединения.</li>
-          <li><strong>HTTPS порт 9898:</strong> безопасный доступ ко всем веб-страницам и REST API с шифрованием трафика.</li>
+          <li><span class="lang-ru"><strong>Автономная генерация:</strong> при первом включении HTTPS создается валидный сертификат с максимальным сроком действия (~100 лет) без необходимости настройки внешних утилит (certbot/openssl).</span><span class="lang-en"><strong>Autonomous generation:</strong> upon enabling HTTPS, a valid X.509 certificate with maximum validity (~100 years) is created without needing certbot or external CLI tools.</span></li>
+          <li><span class="lang-ru"><strong>Автопродление за 30 дней:</strong> фоновый воркер автоматически проверяет срок сертификата и обновляет его за 30 дней до истечения, исключая обрывы защищенного соединения.</span><span class="lang-en"><strong>30-day auto-renew:</strong> a background worker inspects validity and re-issues credentials 30 days before expiration to guarantee zero downtime.</span></li>
+          <li><span class="lang-ru"><strong>HTTPS порт 9898:</strong> безопасный доступ ко всем веб-страницам и REST API с шифрованием трафика.</span><span class="lang-en"><strong>HTTPS Port 9898:</strong> secure, encrypted access to the web interface and REST API.</span></li>
         </ul>
       </div>
     </section>
@@ -2300,8 +2386,8 @@ Occult Academy             Transmission    —       100%      pausedup
               <span class="lang-en">Snapshot Modes</span>
             </div>
             <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0;">
-              <strong>Полный бэкап (Full):</strong> ZIP-архив с базой данных SQLite, файлом конфигурации, SSL-сертификатами и кастомными форматами.<br>
-              <strong>Конфигурационный бэкап (Config Only):</strong> компактный архив только ключевых параметров системы.
+              <span class="lang-ru"><strong>Полный бэкап (Full):</strong> ZIP-архив с базой данных SQLite, файлом конфигурации, SSL-сертификатами и кастомными форматами.<br><strong>Конфигурационный бэкап (Config Only):</strong> компактный архив только ключевых параметров системы.</span>
+              <span class="lang-en"><strong>Full Backup:</strong> complete ZIP snapshot including SQLite database, configuration files, TLS certificates, and custom formats.<br><strong>Config-Only Backup:</strong> lightweight archive of system parameters only.</span>
             </p>
           </div>
 
@@ -2311,7 +2397,8 @@ Occult Academy             Transmission    —       100%      pausedup
               <span class="lang-en">Safety Rollback Snapshot</span>
             </div>
             <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0;">
-              Перед развертыванием любого бэкапа Aliasarr <strong>автоматически делает моментальный снимок текущего состояния</strong> базы. Если восстановленный архив поврежден, система позволяет в 1 клик откатиться назад без потери данных.
+              <span class="lang-ru">Перед развертыванием любого бэкапа Aliasarr <strong>автоматически делает моментальный снимок текущего состояния</strong> базы. Если восстановленный архив поврежден, система позволяет в 1 клик откатиться назад без потери данных.</span>
+              <span class="lang-en">Before applying any archive, Aliasarr <strong>automatically creates an instantaneous database snapshot</strong>. If the restored archive is corrupt, users can revert in 1 click with zero data loss.</span>
             </p>
           </div>
         </div>
@@ -2343,18 +2430,18 @@ Occult Academy             Transmission    —       100%      pausedup
         <div class="code-block-wrapper">
           <div class="code-block-header">
             <span>Bash / cURL</span>
-            <button class="btn-copy-code" onclick="copyCode(this)"><i data-lucide="copy" style="width:12px;height:12px;"></i> Скопировать</button>
+            <button class="btn-copy-code" onclick="copyCode(this)"><i data-lucide="copy" style="width:12px;height:12px;"></i> <span class="lang-ru">Скопировать</span><span class="lang-en">Copy</span></button>
           </div>
-          <pre><code>curl -X GET "http://localhost:8989/api/v1/shows"   -H "X-Api-Key: ВАШ_API_КЛЮЧ"</code></pre>
+          <pre><code>curl -X GET "http://localhost:8989/api/v1/shows"   -H "X-Api-Key: YOUR_API_KEY"</code></pre>
         </div>
 
         <h4 style="margin:16px 0 8px 0;font-size:14px;"><span class="lang-ru">2. Добавление Scoped-алиаса со смещением (+Offset):</span><span class="lang-en">2. Add Scoped Alias with Offset:</span></h4>
         <div class="code-block-wrapper">
           <div class="code-block-header">
             <span>Bash / cURL</span>
-            <button class="btn-copy-code" onclick="copyCode(this)"><i data-lucide="copy" style="width:12px;height:12px;"></i> Скопировать</button>
+            <button class="btn-copy-code" onclick="copyCode(this)"><i data-lucide="copy" style="width:12px;height:12px;"></i> <span class="lang-ru">Скопировать</span><span class="lang-en">Copy</span></button>
           </div>
-          <pre><code>curl -X POST "http://localhost:8989/api/v1/shows/42/aliases"   -H "X-Api-Key: ВАШ_API_КЛЮЧ"   -H "Content-Type: application/json"   -d '{
+          <pre><code>curl -X POST "http://localhost:8989/api/v1/shows/42/aliases"   -H "X-Api-Key: YOUR_API_KEY"   -H "Content-Type: application/json"   -d '{
     "text": "Space Dandy TV-2",
     "season_number": 1,
     "episode_from": 14,
@@ -2367,9 +2454,9 @@ Occult Academy             Transmission    —       100%      pausedup
         <div class="code-block-wrapper">
           <div class="code-block-header">
             <span>Bash / cURL</span>
-            <button class="btn-copy-code" onclick="copyCode(this)"><i data-lucide="copy" style="width:12px;height:12px;"></i> Скопировать</button>
+            <button class="btn-copy-code" onclick="copyCode(this)"><i data-lucide="copy" style="width:12px;height:12px;"></i> <span class="lang-ru">Скопировать</span><span class="lang-en">Copy</span></button>
           </div>
-          <pre><code>curl -X POST "http://localhost:8989/api/v1/wanted/search"   -H "X-Api-Key: ВАШ_API_КЛЮЧ"</code></pre>
+          <pre><code>curl -X POST "http://localhost:8989/api/v1/wanted/search"   -H "X-Api-Key: YOUR_API_KEY"</code></pre>
         </div>
       </div>
     </section>
@@ -2391,30 +2478,46 @@ Occult Academy             Transmission    —       100%      pausedup
 
       <div class="wiki-content">
         <div class="wiki-card">
-          <div style="font-weight:700;color:var(--teal);margin-bottom:6px;">В: Как проверить, что создался Hardlink, а не копия?</div>
+          <div style="font-weight:700;color:var(--teal);margin-bottom:6px;">
+            <span class="lang-ru">В: Как проверить, что создался Hardlink, а не копия?</span>
+            <span class="lang-en">Q: How to verify that a Hardlink was created instead of a copy?</span>
+          </div>
           <p style="font-size:13px;color:var(--text-muted);margin:0;line-height:1.6;">
-            Выполните команду <code>ls -l "/data/downloads/file.mkv" "/data/media/file.mkv"</code>. Во 2-й колонке счетчик ссылок должен быть равен <code>2</code> или более. Также номер Inode в <code>stat -c "%i" [файл]</code> должен совпадать у обоих файлов.
+            <span class="lang-ru">Выполните команду <code>ls -l "/data/downloads/file.mkv" "/data/media/file.mkv"</code>. Во 2-й колонке счетчик ссылок должен быть равен <code>2</code> или более. Также номер Inode в <code>stat -c "%i" [файл]</code> должен совпадать у обоих файлов.</span>
+            <span class="lang-en">Run command <code>ls -l "/data/downloads/file.mkv" "/data/media/file.mkv"</code>. In the 2nd column, link count must be <code>2</code> or higher. Furthermore, Inode numbers retrieved via <code>stat -c "%i" [file]</code> must match identically.</span>
           </p>
         </div>
 
         <div class="wiki-card">
-          <div style="font-weight:700;color:var(--teal);margin-bottom:6px;">В: Что делать при ошибке «Invalid cross-device link»?</div>
+          <div style="font-weight:700;color:var(--teal);margin-bottom:6px;">
+            <span class="lang-ru">В: Что делать при ошибке «Invalid cross-device link»?</span>
+            <span class="lang-en">Q: How to fix the "Invalid cross-device link" error?</span>
+          </div>
           <p style="font-size:13px;color:var(--text-muted);margin:0;line-height:1.6;">
-            Это означает, что папка загрузок и папка медиатеки смонтированы в контейнер как разные диски. Перенастройте Docker volumes на единый корень <code>/mnt/storage:/data</code>.
+            <span class="lang-ru">Это означает, что папка загрузок и папка медиатеки смонтированы в контейнер как разные диски. Перенастройте Docker volumes на единый корень <code>/mnt/storage:/data</code>.</span>
+            <span class="lang-en">This indicates downloads and library folders are mapped into Docker as separate virtual mounts or distinct filesystems. Reconfigure Docker volumes to a shared root: <code>/mnt/storage:/data</code>.</span>
           </p>
         </div>
 
         <div class="wiki-card">
-          <div style="font-weight:700;color:var(--teal);margin-bottom:6px;">В: Что произойдет, если я вручную удалю файл из папки загрузок?</div>
+          <div style="font-weight:700;color:var(--teal);margin-bottom:6px;">
+            <span class="lang-ru">В: Что произойдет, если я вручную удалю файл из папки загрузок?</span>
+            <span class="lang-en">Q: What happens if I manually delete a file from the downloads folder?</span>
+          </div>
           <p style="font-size:13px;color:var(--text-muted);margin:0;line-height:1.6;">
-            Файл в медиатеке останется на 100% сохранным. Физические блоки на накопителе освобождаются операционной системой только тогда, когда счетчик ссылок Inode падает до нуля (удалены все хардлинки).
+            <span class="lang-ru">Файл в медиатеке останется на 100% сохранным. Физические блоки на накопителе освобождаются операционной системой только тогда, когда счетчик ссылок Inode падает до нуля (удалены все хардлинки).</span>
+            <span class="lang-en">The media library file remains 100% intact. Physical filesystem blocks are only deallocated by the kernel when the Inode reference count reaches zero (all hardlinks deleted).</span>
           </p>
         </div>
 
         <div class="wiki-card">
-          <div style="font-weight:700;color:var(--teal);margin-bottom:6px;">В: Как обрабатываются комбинированные раздачи (Сезоны + OVA / Спецвыпуски)?</div>
+          <div style="font-weight:700;color:var(--teal);margin-bottom:6px;">
+            <span class="lang-ru">В: Как обрабатываются комбинированные раздачи (Сезоны + OVA / Спецвыпуски)?</span>
+            <span class="lang-en">Q: How are combined packs (Seasons + OVA / Specials) processed?</span>
+          </div>
           <p style="font-size:13px;color:var(--text-muted);margin:0;line-height:1.6;">
-            Регулярные серии сезона распознаются и линкуются автоматически. Спецвыпуски переводятся в режим подтверждения. Aliasarr защищает исходную папку загрузки и не удаляет торрент до тех пор, пока пользователь не выполнит ручной импорт через карточку тайтла.
+            <span class="lang-ru">Регулярные серии сезона распознаются и линкуются автоматически. Спецвыпуски переводятся в режим подтверждения. Aliasarr защищает исходную папку загрузки и не удаляет торрент до тех пор, пока пользователь не выполнит ручной импорт через карточку тайтла.</span>
+            <span class="lang-en">Regular season episodes are recognized and linked automatically. Special episodes are routed to manual confirmation. Aliasarr protects the download directory and retains the torrent until the user imports specials via the show card.</span>
           </p>
         </div>
       </div>
@@ -2424,7 +2527,7 @@ Occult Academy             Transmission    —       100%      pausedup
 
 <!-- FLOATING CONTROLS -->
 <div class="wiki-floating-bar">
-  <button id="btn-back-to-top" class="wiki-floating-btn" onclick="scrollToTop()" title="Наверх">
+  <button id="btn-back-to-top" class="wiki-floating-btn" onclick="scrollToTop()" title="Наверх / Scroll to Top">
     <i data-lucide="arrow-up"></i>
   </button>
 </div>
@@ -2433,8 +2536,10 @@ Occult Academy             Transmission    —       100%      pausedup
 <script src="/ui/static/js/lucide.min.js"></script>
 <script>
   // Initialize Lucide vector icons
-  if (window.lucide) {
-    lucide.createIcons();
+  function refreshLucideIcons() {
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
   }
 
   // Language switcher
@@ -2444,12 +2549,22 @@ Occult Academy             Transmission    —       100%      pausedup
     var nextLang = curLang === 'ru' ? 'en' : 'ru';
     body.setAttribute('data-lang', nextLang);
     localStorage.setItem('aliasarr_lang', nextLang);
+    
     var label = document.getElementById('wiki-lang-label');
     if (label) label.textContent = nextLang.toUpperCase();
+    
     var pageTitle = document.getElementById('wiki-page-title');
     if (pageTitle) {
-      pageTitle.textContent = nextLang === 'ru' ? 'Wiki & Документация — Aliasarr' : 'Wiki & Architecture — Aliasarr';
+      pageTitle.textContent = nextLang === 'ru' ? 'Wiki & Документация — Aliasarr' : 'Wiki & Documentation — Aliasarr';
     }
+
+    var searchInput = document.getElementById('wiki-search');
+    if (searchInput) {
+      searchInput.placeholder = nextLang === 'ru' ? 'Поиск по документации...' : 'Search documentation...';
+    }
+
+    updateDesignLabel(nextLang);
+    refreshLucideIcons();
   }
 
   // Theme switcher
@@ -2460,6 +2575,31 @@ Occult Academy             Transmission    —       100%      pausedup
     var next = themes[(idx + 1) % themes.length];
     document.documentElement.setAttribute('data-theme', next);
     localStorage.setItem('vbeacon_theme', next);
+
+    var iconEl = document.getElementById('wiki-theme-icon');
+    if (iconEl) {
+      iconEl.setAttribute('data-lucide', next === 'light' ? 'sun' : 'moon');
+    }
+    refreshLucideIcons();
+  }
+
+  // Design switcher
+  function toggleWikiDesign() {
+    var cur = document.documentElement.getAttribute('data-design') || 'classic';
+    var next = cur === 'classic' ? 'vanguard' : 'classic';
+    document.documentElement.setAttribute('data-design', next);
+    localStorage.setItem('aliasarr_design', next);
+    var lang = document.body.getAttribute('data-lang') || 'ru';
+    updateDesignLabel(lang);
+  }
+
+  function updateDesignLabel(lang) {
+    var design = document.documentElement.getAttribute('data-design') || 'classic';
+    var label = document.getElementById('wiki-design-label');
+    if (!label) return;
+    var ruText = design === 'vanguard' ? 'Авангард' : 'Классика';
+    var enText = design === 'vanguard' ? 'Vanguard' : 'Classic';
+    label.innerHTML = '<span class="lang-ru" id="wiki-design-label-ru">' + ruText + '</span><span class="lang-en" id="wiki-design-label-en">' + enText + '</span>';
   }
 
   // Back to top logic
@@ -2525,24 +2665,40 @@ Occult Academy             Transmission    —       100%      pausedup
     var codeEl = wrapper.querySelector('pre code');
     if (!codeEl) return;
     var text = codeEl.textContent;
+    var lang = document.body.getAttribute('data-lang') || 'ru';
     navigator.clipboard.writeText(text).then(function() {
       var oldHtml = btn.innerHTML;
-      btn.innerHTML = '<i data-lucide="check" style="width:12px;height:12px;color:#10b981;"></i> Скопировано';
-      if (window.lucide) lucide.createIcons();
+      btn.innerHTML = '<i data-lucide="check" style="width:12px;height:12px;color:#10b981;"></i> ' + (lang === 'en' ? 'Copied' : 'Скопировано');
+      refreshLucideIcons();
       setTimeout(function() {
         btn.innerHTML = oldHtml;
-        if (window.lucide) lucide.createIcons();
+        refreshLucideIcons();
       }, 2000);
     });
   }
 
-  // Initialize lang from localStorage
-  (function() {
+  // Initial load execution
+  window.addEventListener('DOMContentLoaded', function() {
     var savedLang = localStorage.getItem('aliasarr_lang') || 'ru';
     document.body.setAttribute('data-lang', savedLang);
     var label = document.getElementById('wiki-lang-label');
     if (label) label.textContent = savedLang.toUpperCase();
-  })();
+    var pageTitle = document.getElementById('wiki-page-title');
+    if (pageTitle) {
+      pageTitle.textContent = savedLang === 'ru' ? 'Wiki & Документация — Aliasarr' : 'Wiki & Documentation — Aliasarr';
+    }
+    var searchInput = document.getElementById('wiki-search');
+    if (searchInput) {
+      searchInput.placeholder = savedLang === 'ru' ? 'Поиск по документации...' : 'Search documentation...';
+    }
+    updateDesignLabel(savedLang);
+    refreshLucideIcons();
+  });
+
+  // Fallback trigger if DOMContentLoaded already fired
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    refreshLucideIcons();
+  }
 </script>
 </body>
 </html>
