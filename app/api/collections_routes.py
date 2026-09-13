@@ -195,7 +195,15 @@ async def get_collection_detail(
                 if c_det.get("overview") and not coll.overview:
                     coll.overview = c_det.get("overview")
                 if c_det.get("poster_url") and not coll.poster_url:
-                    coll.poster_url = c_det.get("poster_url")
+                    coll.poster_source_url = c_det.get("poster_url")
+                    from app.services.cover_service import download_and_store_collection_cover
+                    c_loc = await download_and_store_collection_cover(coll.id, c_det.get("poster_url"))
+                    coll.poster_url = c_loc or f"/api/v1/collections/{coll.id}/poster"
+                if c_det.get("backdrop_url") and not coll.backdrop_url:
+                    coll.backdrop_source_url = c_det.get("backdrop_url")
+                    from app.services.cover_service import download_and_store_collection_backdrop
+                    b_loc = await download_and_store_collection_backdrop(coll.id, c_det.get("backdrop_url"))
+                    coll.backdrop_url = b_loc or f"/api/v1/collections/{coll.id}/backdrop"
                 coll.last_metadata_refresh_at = dt.datetime.utcnow()
                 db.add(coll)
                 db.commit()
@@ -261,6 +269,10 @@ async def get_collection_detail(
             if not part_ov and matched_show and matched_show.overview:
                 part_ov = matched_show.overview
 
+            part_poster = part.get("poster_url")
+            if matched_show and matched_show.poster_url:
+                part_poster = matched_show.poster_url
+
             franchise_parts.append(
                 FranchisePart(
                     tmdb_id=tmdb_id or 0,
@@ -268,7 +280,7 @@ async def get_collection_detail(
                     year=part.get("year"),
                     release_date=part.get("release_date"),
                     overview=part_ov,
-                    poster_url=part.get("poster_url"),
+                    poster_url=part_poster,
                     rating=part.get("rating"),
                     in_library=in_lib,
                     show_id=show_id_val,
@@ -375,9 +387,15 @@ async def refresh_collection(
     if data.get("overview"):
         coll.overview = data.get("overview")
     if data.get("poster_url"):
-        coll.poster_url = data.get("poster_url")
+        coll.poster_source_url = data.get("poster_url")
+        from app.services.cover_service import download_and_store_collection_cover
+        c_loc = await download_and_store_collection_cover(coll.id, data.get("poster_url"))
+        coll.poster_url = c_loc or f"/api/v1/collections/{coll.id}/poster"
     if data.get("backdrop_url"):
-        coll.backdrop_url = data.get("backdrop_url")
+        coll.backdrop_source_url = data.get("backdrop_url")
+        from app.services.cover_service import download_and_store_collection_backdrop
+        b_loc = await download_and_store_collection_backdrop(coll.id, data.get("backdrop_url"))
+        coll.backdrop_url = b_loc or f"/api/v1/collections/{coll.id}/backdrop"
     coll.last_metadata_refresh_at = dt.datetime.utcnow()
     db.add(coll)
     db.commit()
@@ -492,6 +510,45 @@ async def get_collection_poster(
         headers["ETag"] = etag
 
     return FileResponse(poster_path, media_type="image/jpeg", headers=headers)
+
+
+@router.get("/{collection_id}/backdrop", summary="Получить локальный фон киноколлекции")
+async def get_collection_backdrop(
+    collection_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Отдает локальный файл фона коллекции из /config/MediaCover/collections/{collection_id}/backdrop.jpg
+    с поддержкой ETag и 304 Not Modified.
+    """
+    from app.services.cover_service import (
+        get_collection_backdrop_path,
+        get_cover_etag,
+        download_and_store_collection_backdrop,
+    )
+
+    backdrop_path = get_collection_backdrop_path(collection_id)
+    if not os.path.isfile(backdrop_path):
+        coll = db.get(MovieCollection, collection_id)
+        if coll and (getattr(coll, "backdrop_source_url", None) or coll.backdrop_url):
+            src_url = getattr(coll, "backdrop_source_url", None) or coll.backdrop_url
+            if src_url and not str(src_url).startswith(f"/api/v1/collections/{collection_id}/backdrop"):
+                await download_and_store_collection_backdrop(collection_id, str(src_url))
+
+    if not os.path.isfile(backdrop_path):
+        raise HTTPException(404, "Фон коллекции не найден")
+
+    etag = get_cover_etag(backdrop_path)
+    if_none_match = request.headers.get("if-none-match")
+    if etag and if_none_match and if_none_match.strip() == etag:
+        return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "public, max-age=2592000, immutable"})
+
+    headers = {"Cache-Control": "public, max-age=2592000, immutable"}
+    if etag:
+        headers["ETag"] = etag
+
+    return FileResponse(backdrop_path, media_type="image/jpeg", headers=headers)
 
 
 @router.post("/{collection_id}/import-missing", status_code=200)

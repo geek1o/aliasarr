@@ -627,12 +627,20 @@ async def import_show(
                                     coll.parts_count = len(c_det["parts"])
                                     coll.parts_cache = json.dumps(c_det["parts"])
                                     coll.last_metadata_refresh_at = dt.datetime.utcnow()
-                                    if not coll.overview and c_det.get("overview"):
+                                    if c_det.get("overview"):
                                         coll.overview = c_det.get("overview")
-                                    if not coll.poster_url and c_det.get("poster_url"):
-                                        coll.poster_url = c_det.get("poster_url")
-                                    if not coll.backdrop_url and c_det.get("backdrop_url"):
-                                        coll.backdrop_url = c_det.get("backdrop_url")
+                                    if c_det.get("name") and not coll.title:
+                                        coll.title = c_det.get("name")
+                                    if c_det.get("poster_url") and not coll.poster_url:
+                                        coll.poster_source_url = c_det.get("poster_url")
+                                        from app.services.cover_service import download_and_store_collection_cover
+                                        c_loc = await download_and_store_collection_cover(coll.id, c_det.get("poster_url"))
+                                        coll.poster_url = c_loc or f"/api/v1/collections/{coll.id}/poster"
+                                    if c_det.get("backdrop_url") and not coll.backdrop_url:
+                                        coll.backdrop_source_url = c_det.get("backdrop_url")
+                                        from app.services.cover_service import download_and_store_collection_backdrop
+                                        b_loc = await download_and_store_collection_backdrop(coll.id, c_det.get("backdrop_url"))
+                                        coll.backdrop_url = b_loc or f"/api/v1/collections/{coll.id}/backdrop"
                                     db.add(coll)
                             except Exception as e:
                                 logger.debug("Failed fetching collection details for %s: %s", coll.title, e)

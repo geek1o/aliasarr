@@ -15,14 +15,17 @@ from app.services.cover_service import (
     get_show_poster_path,
     get_collection_poster_dir,
     get_collection_poster_path,
+    get_collection_backdrop_path,
     optimize_image,
     save_show_poster,
     save_collection_poster,
+    save_collection_backdrop,
     delete_show_cover,
     delete_collection_cover,
     get_cover_etag,
     download_and_store_show_cover,
     download_and_store_collection_cover,
+    download_and_store_collection_backdrop,
     backfill_existing_covers,
 )
 
@@ -153,6 +156,30 @@ class TestCoverServiceFilesystem(unittest.TestCase):
             res = asyncio.run(download_and_store_collection_cover(99, "https://image.tmdb.org/t/p/original/coll.jpg"))
             self.assertEqual(res, "/api/v1/collections/99/poster")
             self.assertTrue(os.path.isfile(get_collection_poster_path(99)))
+
+    def test_save_and_download_collection_backdrop(self):
+        backdrop_bytes = b"sample_collection_backdrop"
+        url = asyncio.run(save_collection_backdrop(30, backdrop_bytes))
+        self.assertEqual(url, "/api/v1/collections/30/backdrop")
+        target_file = get_collection_backdrop_path(30)
+        self.assertTrue(os.path.isfile(target_file))
+
+        # Test download
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = b"downloaded_backdrop_bytes"
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_httpx = MagicMock()
+        mock_httpx.AsyncClient.return_value = mock_client
+
+        with patch.dict("sys.modules", {"httpx": mock_httpx}):
+            res = asyncio.run(download_and_store_collection_backdrop(31, "https://image.tmdb.org/t/p/original/bd.jpg"))
+            self.assertEqual(res, "/api/v1/collections/31/backdrop")
+            self.assertTrue(os.path.isfile(get_collection_backdrop_path(31)))
 
 
 @unittest.skipUnless(HAS_DEPS, "Requires sqlalchemy, fastapi, and pydantic")
@@ -304,6 +331,31 @@ class TestCoverServiceEndpointsAndDb(unittest.TestCase):
         resp304 = asyncio.run(get_collection_poster(coll.id, req_cached, db=self.db))
         self.assertEqual(resp304.status_code, 304)
 
+    def test_get_collection_backdrop_endpoint(self):
+        from app.api.collections_routes import get_collection_backdrop
+
+        coll = MovieCollection(title="Test Coll BD", tmdb_collection_id=12346)
+        self.db.add(coll)
+        self.db.commit()
+
+        req_mock = MagicMock()
+        req_mock.headers = {}
+
+        with self.assertRaises(HTTPException) as ctx:
+            asyncio.run(get_collection_backdrop(coll.id, req_mock, db=self.db))
+        self.assertEqual(ctx.exception.status_code, 404)
+
+        asyncio.run(save_collection_backdrop(coll.id, b"coll_backdrop_content"))
+        resp = asyncio.run(get_collection_backdrop(coll.id, req_mock, db=self.db))
+        self.assertEqual(resp.media_type, "image/jpeg")
+        etag = resp.headers.get("ETag")
+        self.assertIsNotNone(etag)
+
+        req_cached = MagicMock()
+        req_cached.headers = {"if-none-match": etag}
+        resp304 = asyncio.run(get_collection_backdrop(coll.id, req_cached, db=self.db))
+        self.assertEqual(resp304.status_code, 304)
+
     def test_delete_show_deletes_cover_folder(self):
         from app.schemas import DeleteContentPayload
         from app.api.shows import delete_content
@@ -328,7 +380,9 @@ class TestCoverServiceEndpointsAndDb(unittest.TestCase):
         self.db.commit()
 
         asyncio.run(save_collection_poster(coll.id, b"coll_cover_data"))
+        asyncio.run(save_collection_backdrop(coll.id, b"coll_backdrop_data"))
         self.assertTrue(os.path.isfile(get_collection_poster_path(coll.id)))
+        self.assertTrue(os.path.isfile(get_collection_backdrop_path(coll.id)))
 
         res = delete_collection(coll.id, db=self.db, current_user=self.user)
         self.assertTrue(res.get("success", False))

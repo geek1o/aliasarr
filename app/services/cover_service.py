@@ -45,6 +45,10 @@ def get_collection_poster_path(collection_id: int) -> str:
     return os.path.join(get_collection_poster_dir(collection_id), "poster.jpg")
 
 
+def get_collection_backdrop_path(collection_id: int) -> str:
+    return os.path.join(get_collection_poster_dir(collection_id), "backdrop.jpg")
+
+
 def optimize_image(
     image_bytes: bytes,
     max_width: int = 600,
@@ -194,6 +198,59 @@ async def download_and_store_collection_cover(collection_id: int, remote_url_or_
     return None
 
 
+async def save_collection_backdrop(collection_id: int, image_bytes: bytes) -> str:
+    """
+    Оптимизирует и сохраняет фоновое изображение (backdrop) коллекции на диск в
+    /config/MediaCover/collections/{collection_id}/backdrop.jpg.
+    Возвращает локальный URL эндпоинта /api/v1/collections/{collection_id}/backdrop.
+    """
+    opt_bytes = optimize_image(image_bytes, max_width=1280, max_height=720, quality=80)
+    poster_dir = get_collection_poster_dir(collection_id)
+    os.makedirs(poster_dir, exist_ok=True)
+    backdrop_path = get_collection_backdrop_path(collection_id)
+    with open(backdrop_path, "wb") as f:
+        f.write(opt_bytes)
+    return f"/api/v1/collections/{collection_id}/backdrop"
+
+
+async def download_and_store_collection_backdrop(collection_id: int, remote_url_or_data: str) -> Optional[str]:
+    """
+    Скачивает фон коллекции по внешнему URL (TMDb) или декодирует Base64,
+    сохраняет файл на диск и возвращает локальный URL.
+    """
+    if not remote_url_or_data or not str(remote_url_or_data).strip():
+        return None
+
+    raw_val = str(remote_url_or_data).strip()
+
+    if raw_val.startswith(f"/api/v1/collections/{collection_id}/backdrop"):
+        if os.path.isfile(get_collection_backdrop_path(collection_id)):
+            return raw_val
+
+    if raw_val.startswith("data:image/"):
+        try:
+            _, encoded = raw_val.split(",", 1)
+            image_bytes = base64.b64decode(encoded)
+            if image_bytes:
+                return await save_collection_backdrop(collection_id, image_bytes)
+        except Exception as e:
+            logger.debug("Failed to decode base64 backdrop for collection %s: %s", collection_id, e)
+        return None
+
+    if raw_val.startswith(("http://", "https://")):
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=20, follow_redirects=True, headers={"User-Agent": "Aliasarr/1.0.0"}) as client:
+                resp = await client.get(raw_val)
+                if resp.status_code == 200 and resp.content:
+                    return await save_collection_backdrop(collection_id, resp.content)
+                logger.debug("Failed to download backdrop from %s: HTTP %s", raw_val, resp.status_code)
+        except Exception as e:
+            logger.debug("Error downloading backdrop for collection %s from %s: %s", collection_id, raw_val, e)
+
+    return None
+
+
 def delete_show_cover(show_id: int) -> bool:
     """Удаляет директорию с локальными обложками тайтла при удалении карточки."""
     poster_dir = get_show_poster_dir(show_id)
@@ -231,17 +288,17 @@ def get_cover_etag(file_path: str) -> Optional[str]:
 
 async def backfill_existing_covers(db) -> dict:
     """
-    Фоновая миграция существующих тайтлов:
-    - Находит тайтлы, у которых poster_url начинается с http или data:image;
-    - Скачивает/декодирует их и сохраняет в /config/MediaCover/shows/{id}/poster.jpg;
-    - Сохраняет оригинальную ссылку в poster_source_url и переключает poster_url на локальный эндпоинт.
+    Фоновая миграция существующих тайтлов и киноколлекций:
+    - Находит тайтлы и саги, у которых poster_url/backdrop_url начинаются с http или data:image;
+    - Скачивает/декодирует их и сохраняет в /config/MediaCover/...;
+    - Сохраняет оригинальную ссылку в *_source_url и переключает на локальные эндпоинты.
     """
-    from app.models.db import Show
+    from app.models.db import Show, MovieCollection
     try:
         shows = db.query(Show).all()
     except Exception as e:
-        logger.debug("backfill_existing_covers query failed: %s", e)
-        return {"total": 0, "migrated": 0}
+        logger.debug("backfill_existing_covers query shows failed: %s", e)
+        shows = []
 
     migrated = 0
     for show in shows:
@@ -265,10 +322,45 @@ async def backfill_existing_covers(db) -> dict:
                 show.poster_url = res
                 migrated += 1
 
+    try:
+        colls = db.query(MovieCollection).all()
+    except Exception as e:
+        logger.debug("backfill_existing_covers query collections failed: %s", e)
+        colls = []
+
+    for coll in colls:
+        # 1. Постер коллекции
+        p_path = get_collection_poster_path(coll.id)
+        p_url = coll.poster_url or getattr(coll, "poster_source_url", None)
+        if p_url:
+            raw_p = str(p_url).strip()
+            needs_p = raw_p.startswith(("http://", "https://", "data:image/")) or (not os.path.isfile(p_path) and getattr(coll, "poster_source_url", None))
+            if needs_p:
+                if raw_p.startswith(("http://", "https://")):
+                    coll.poster_source_url = raw_p
+                res_p = await download_and_store_collection_cover(coll.id, raw_p)
+                if res_p:
+                    coll.poster_url = res_p
+                    migrated += 1
+
+        # 2. Фон коллекции
+        b_path = get_collection_backdrop_path(coll.id)
+        b_url = coll.backdrop_url or getattr(coll, "backdrop_source_url", None)
+        if b_url:
+            raw_b = str(b_url).strip()
+            needs_b = raw_b.startswith(("http://", "https://", "data:image/")) or (not os.path.isfile(b_path) and getattr(coll, "backdrop_source_url", None))
+            if needs_b:
+                if raw_b.startswith(("http://", "https://")):
+                    coll.backdrop_source_url = raw_b
+                res_b = await download_and_store_collection_backdrop(coll.id, raw_b)
+                if res_b:
+                    coll.backdrop_url = res_b
+                    migrated += 1
+
     if migrated:
         try:
             db.commit()
         except Exception as e:
             logger.debug("backfill_existing_covers commit error: %s", e)
 
-    return {"total": len(shows), "migrated": migrated}
+    return {"total": len(shows) + len(colls), "migrated": migrated}
