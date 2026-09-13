@@ -670,6 +670,54 @@
         box-sizing: border-box !important;
       }
     }
+
+    /* Floating Scroll to Top */
+    .api-floating-bar {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      gap: 8px;
+      z-index: 90;
+    }
+
+    .api-floating-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+      transition: all 0.2s ease;
+    }
+
+    .api-floating-btn:hover {
+      border-color: var(--teal, #00F0FF);
+      color: var(--teal, #00F0FF);
+      transform: translateY(-2px);
+    }
+
+    #btn-back-to-top {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #btn-back-to-top.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    @media (max-width: 768px) {
+      .api-floating-bar {
+        bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+        right: 16px;
+      }
+    }
   </style>
 </head>
 <body data-lang="ru">
@@ -728,6 +776,13 @@
 <main class="api-main-container">
   <div id="swagger-ui"></div>
 </main>
+
+<!-- FLOATING CONTROLS -->
+<div class="api-floating-bar">
+  <button id="btn-back-to-top" class="api-floating-btn" onclick="scrollToTop()" title="Наверх / Scroll to Top" aria-label="Scroll to top">
+    <i data-lucide="arrow-up"></i>
+  </button>
+</div>
 
 <script src="/ui/static/js/lucide.min.js"></script>
 <script src="/ui/static/js/swagger-ui-bundle.js"></script>
@@ -857,6 +912,21 @@
         }
       });
     });
+  }
+
+  // Back to top logic
+  window.addEventListener('scroll', function() {
+    var btn = document.getElementById('btn-back-to-top');
+    if (!btn) return;
+    if (window.scrollY > 300) {
+      btn.classList.add('visible');
+    } else {
+      btn.classList.remove('visible');
+    }
+  });
+
+  function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   // Initialize Swagger UI

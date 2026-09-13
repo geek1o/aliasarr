@@ -5,8 +5,19 @@ import copy
 import re
 from typing import Any, Optional
 
-from fastapi import FastAPI
-from fastapi.openapi.utils import get_openapi
+try:
+    from fastapi import FastAPI
+    from fastapi.openapi.utils import get_openapi
+except ImportError:
+    FastAPI = Any  # type: ignore
+    get_openapi = None  # type: ignore
+
+from app.services.openapi_catalog import (
+    COMMON_PARAM_DESCRIPTIONS,
+    ENDPOINT_CATALOG,
+    RESPONSES_EN,
+    RESPONSES_RU,
+)
 
 # In-memory cache for OpenAPI schemas
 _CACHED_SCHEMAS: dict[str, dict[str, Any]] = {}
@@ -138,8 +149,6 @@ TAGS_METADATA_EN = [
 ]
 
 DESCRIPTION_RU = """
-# Aliasarr REST API — Интерактивный справочник
-
 Добро пожаловать в официальную документацию REST API системы **Aliasarr** (версия 2.9.0).
 
 API предоставляет полный программный доступ ко всем функциям системы: управлению медиатекой, мониторингу торрент-клиентов, настройке индексаторов, планировщику автоматического поиска и проверке качества релизов.
@@ -165,11 +174,9 @@ API предоставляет полный программный доступ 
 - `404 Not Found` — запрашиваемый ресурс (тайтл, серия, индексатор) не найден.
 - `409 Conflict` — конфликт состояния (например, дубликат тайтла в библиотеке).
 - `429 Too Many Requests` — превышение лимита запросов (Rate Limiter).
-"""
+""".strip()
 
 DESCRIPTION_EN = """
-# Aliasarr REST API — Interactive Reference
-
 Welcome to the official REST API documentation for **Aliasarr** (version 2.9.0).
 
 The API grants complete programmatic control over every system capability: media library indexing, download client lifecycle, indexer proxies, scheduled WANTED auto-search, and release quality verification.
@@ -195,86 +202,11 @@ Two authentication methods are supported for secure endpoints:
 - `404 Not Found` — Requested entity (show, episode, indexer) was not found.
 - `409 Conflict` — State conflict (e.g. show already exists in the library).
 - `429 Too Many Requests` — Rate limit exceeded.
-"""
+""".strip()
 
-# Explicit overrides for common endpoint summaries: (path, method) -> (ru_summary, en_summary)
+# Backward-compatible summary overrides: (path, method) -> (ru_summary, en_summary)
 ENDPOINT_SUMMARIES: dict[tuple[str, str], tuple[str, str]] = {
-    # Shows & Episodes
-    ("/api/v1/shows", "GET"): ("Получить список всех тайтлов медиатеки", "List all library shows"),
-    ("/api/v1/shows", "POST"): ("Добавить новый тайтл в медиатеку", "Add new show to library"),
-    ("/api/v1/shows/{show_id}", "GET"): ("Получить подробные данные тайтла по ID", "Get show details by ID"),
-    ("/api/v1/shows/{show_id}", "PUT"): ("Обновить метаданные и настройки тайтла", "Update show metadata and settings"),
-    ("/api/v1/shows/{show_id}", "DELETE"): ("Удалить тайтл из медиатеки", "Delete show from library"),
-    ("/api/v1/shows/{show_id}/aliases", "POST"): ("Добавить поисковый алиас к тайтлу", "Add search alias to show"),
-    ("/api/v1/shows/{show_id}/aliases/{alias_id}", "DELETE"): ("Удалить поисковый алиас", "Delete search alias"),
-    ("/api/v1/shows/{show_id}/search", "POST"): ("Запустить поиск релизов для тайтла", "Search releases for show"),
-    ("/api/v1/shows/{show_id}/episodes", "GET"): ("Получить список эпизодов тайтла", "List show episodes"),
-    ("/api/v1/shows/{show_id}/episodes/{episode_id}", "PUT"): ("Обновить статус и параметры эпизода", "Update episode status"),
-    ("/api/v1/shows/{show_id}/refresh-metadata", "POST"): ("Обновить метаданные тайтла из базы", "Refresh show metadata"),
-
-    # Settings
-    ("/api/v1/settings", "GET"): ("Получить текущие конфигурационные настройки", "Get system configuration settings"),
-    ("/api/v1/settings", "PUT"): ("Сохранить конфигурационные настройки системы", "Save system configuration settings"),
-    ("/api/v1/settings/quality-profiles", "GET"): ("Список настроенных профилей качества", "List configured quality profiles"),
-    ("/api/v1/settings/quality-profiles", "POST"): ("Создать новый профиль качества", "Create new quality profile"),
-    ("/api/v1/settings/backup/create", "POST"): ("Создать резервную копию системы (ZIP)", "Create system backup archive (ZIP)"),
-    ("/api/v1/settings/backup/list", "GET"): ("Список доступных резервных копий", "List available system backups"),
-
-    # Indexers
-    ("/api/v1/indexers", "GET"): ("Список настроенных торрент-индексаторов", "List configured torrent indexers"),
-    ("/api/v1/indexers", "POST"): ("Добавить новый торрент-индексатор", "Add new torrent indexer"),
-    ("/api/v1/indexers/{indexer_id}", "GET"): ("Получить параметры индексатора по ID", "Get indexer details by ID"),
-    ("/api/v1/indexers/{indexer_id}", "PUT"): ("Обновить параметры торрент-индексатора", "Update torrent indexer settings"),
-    ("/api/v1/indexers/{indexer_id}", "DELETE"): ("Удалить торрент-индексатор", "Delete torrent indexer"),
-    ("/api/v1/indexers/{indexer_id}/test", "POST"): ("Проверить связь с торрент-индексатором", "Test indexer connection"),
-
-    # Download Clients
-    ("/api/v1/download-clients", "GET"): ("Список подключенных торрент-клиентов", "List connected download clients"),
-    ("/api/v1/download-clients", "POST"): ("Подключить новый торрент-клиент", "Connect new download client"),
-    ("/api/v1/download-clients/{client_id}", "GET"): ("Параметры торрент-клиента по ID", "Get download client by ID"),
-    ("/api/v1/download-clients/{client_id}", "PUT"): ("Обновить параметры торрент-клиента", "Update download client settings"),
-    ("/api/v1/download-clients/{client_id}", "DELETE"): ("Отключить торрент-клиент", "Remove download client"),
-    ("/api/v1/download-clients/{client_id}/test", "POST"): ("Проверить соединение с клиентом", "Test download client connection"),
-
-    # Operations
-    ("/api/v1/operations/scan", "POST"): ("Запустить полное сканирование диска", "Trigger full disk library scan"),
-    ("/api/v1/operations/search-wanted", "POST"): ("Запустить автопоиск недостающих серий", "Trigger search for wanted episodes"),
-    ("/api/v1/operations/cleanup-debris", "POST"): ("Очистить остаточные файлы и папки", "Clean up debris files and directories"),
-    ("/api/v1/operations/tasks", "GET"): ("Список и статус активных фоновых задач", "List status of active background tasks"),
-
-    # Blocklist
-    ("/api/v1/blocklist", "GET"): ("Список заблокированных релизов и инфохэшей", "List blocklisted releases and infohashes"),
-    ("/api/v1/blocklist", "POST"): ("Добавить раздачу в черный список вручную", "Add release to blocklist manually"),
-    ("/api/v1/blocklist/clear-all", "DELETE"): ("Полностью очистить черный список", "Clear entire blocklist"),
-
-    # Collections
-    ("/api/v1/collections", "GET"): ("Список коллекций и саг фильмов TMDb", "List TMDb movie collections and sagas"),
-    ("/api/v1/collections/{collection_id}", "GET"): ("Детальная карточка коллекции фильмов", "Get movie collection details"),
-    ("/api/v1/collections/refresh-all", "POST"): ("Синхронизировать все коллекции с TMDb", "Sync all collections with TMDb"),
-
-    # Custom Formats
-    ("/api/v1/custom-formats", "GET"): ("Список кастомных форматов ранжирования", "List custom formats for release scoring"),
-    ("/api/v1/custom-formats", "POST"): ("Создать новый кастомный формат", "Create new custom format"),
-
-    # Audit & Release Logs
-    ("/api/v1/audit", "GET"): ("Получить журнал аудита действий", "Get security audit logs"),
-    ("/api/v1/audit/clear", "POST"): ("Очистить журнал аудита", "Clear security audit logs"),
-    ("/api/v1/release-logs", "GET"): ("История решений парсера по релизам", "Get release grab and decision logs"),
-
-    # Auth & Users
-    ("/api/v1/auth/status", "GET"): ("Проверить статус текущей сессии", "Check current session status"),
-    ("/api/v1/auth/login", "POST"): ("Авторизация по логину и паролю", "Login with username and password"),
-    ("/api/v1/auth/logout", "POST"): ("Завершить сессию пользователя", "Logout current user session"),
-    ("/api/v1/auth/me", "GET"): ("Данные текущего авторизованного пользователя", "Get current user profile"),
-    ("/api/v1/auth/my-api-key", "GET"): ("Получить персональный API-ключ", "Get personal API key"),
-    ("/api/v1/auth/regenerate-my-api-key", "POST"): ("Перевыпустить персональный API-ключ", "Regenerate personal API key"),
-    ("/api/v1/users", "GET"): ("Список пользователей системы", "List system user accounts"),
-    ("/api/v1/users", "POST"): ("Создать нового пользователя", "Create new user account"),
-
-    # System
-    ("/api/v1/system/status", "GET"): ("Диагностика состояния служб системы", "System and service health status"),
-    ("/api/v1/system/restart", "POST"): ("Перезапустить сервис Aliasarr", "Restart Aliasarr service"),
-    ("/api/v1/system/logs", "GET"): ("Получить последние системные логи", "Get recent application logs"),
+    key: (val[0], val[1]) for key, val in ENDPOINT_CATALOG.items()
 }
 
 
@@ -360,8 +292,10 @@ def get_localized_openapi(app: FastAPI, lang: str = "ru") -> dict[str, Any]:
     }
     schema["security"] = [{"ApiKeyAuth": []}, {"CookieAuth": []}]
 
-    # Enhance and localize path operation summaries
+    # Enhance and localize path operation summaries, descriptions, parameters, and responses
     paths = schema.get("paths", {})
+    cyrillic_pattern = re.compile(r"[\u0400-\u04FF]")
+
     for path, path_item in paths.items():
         if not isinstance(path_item, dict):
             continue
@@ -374,40 +308,67 @@ def get_localized_openapi(app: FastAPI, lang: str = "ru") -> dict[str, Any]:
             method_upper = method.upper()
             lookup_key = (path, method_upper)
 
-            # 1. Exact match in explicit dictionary
-            if lookup_key in ENDPOINT_SUMMARIES:
+            # 1. Exact match in explicit catalog
+            if lookup_key in ENDPOINT_CATALOG:
+                ru_summary, en_summary, ru_desc, en_desc = ENDPOINT_CATALOG[lookup_key]
+                operation["summary"] = ru_summary if target_lang == "ru" else en_summary
+                operation["description"] = ru_desc if target_lang == "ru" else en_desc
+            elif lookup_key in ENDPOINT_SUMMARIES:
                 ru_summary, en_summary = ENDPOINT_SUMMARIES[lookup_key]
                 operation["summary"] = ru_summary if target_lang == "ru" else en_summary
+                if target_lang == "en" and operation.get("description") and cyrillic_pattern.search(operation["description"]):
+                    operation["description"] = en_summary
             else:
                 # 2. Derive from operation_id or existing summary
                 op_id = operation.get("operation_id", "")
                 existing_summary = operation.get("summary", "")
-                if existing_summary and not target_lang == "ru":
-                    # English can keep the existing summary if present
+                if existing_summary and target_lang == "en":
                     pass
                 elif op_id:
                     operation["summary"] = _humanize_func_name(op_id, target_lang)
 
-            # Localize common responses
+                if target_lang == "en" and operation.get("description") and cyrillic_pattern.search(operation["description"]):
+                    operation["description"] = operation.get("summary", "")
+
+            # 2. Sanitize English mode to ensure 100% Cyrillic-free output
+            if target_lang == "en":
+                if operation.get("summary") and cyrillic_pattern.search(operation["summary"]):
+                    op_id = operation.get("operation_id", "")
+                    operation["summary"] = _humanize_func_name(op_id, "en") if op_id else "API Operation"
+                if operation.get("description") and cyrillic_pattern.search(operation["description"]):
+                    operation["description"] = operation.get("summary", "")
+            else:
+                # In Russian mode, ensure non-empty description
+                if not operation.get("description"):
+                    operation["description"] = operation.get("summary", "")
+
+            # 3. Localize parameters (path, query, header)
+            parameters = operation.get("parameters", [])
+            if isinstance(parameters, list):
+                for param in parameters:
+                    if not isinstance(param, dict):
+                        continue
+                    p_name = param.get("name", "")
+                    if p_name in COMMON_PARAM_DESCRIPTIONS:
+                        p_ru, p_en = COMMON_PARAM_DESCRIPTIONS[p_name]
+                        param["description"] = p_ru if target_lang == "ru" else p_en
+                    elif target_lang == "en" and param.get("description") and cyrillic_pattern.search(param["description"]):
+                        param["description"] = f"Parameter '{p_name}'"
+
+            # 4. Localize common responses
             responses = operation.get("responses", {})
             if isinstance(responses, dict):
                 for code, resp in responses.items():
                     if not isinstance(resp, dict):
                         continue
-                    if code == "200" and target_lang == "ru":
-                        resp["description"] = "Успешный ответ"
-                    elif code == "201" and target_lang == "ru":
-                        resp["description"] = "Успешно создано"
-                    elif code == "400" and target_lang == "ru":
-                        resp["description"] = "Ошибка валидации параметров"
-                    elif code == "401" and target_lang == "ru":
-                        resp["description"] = "Требуется авторизация (неверный API-ключ или сессия)"
-                    elif code == "403" and target_lang == "ru":
-                        resp["description"] = "Доступ запрещен (недостаточно прав RBAC)"
-                    elif code == "404" and target_lang == "ru":
-                        resp["description"] = "Ресурс не найден"
-                    elif code == "422" and target_lang == "ru":
-                        resp["description"] = "Некорректные данные запроса (Unprocessable Entity)"
+                    if target_lang == "ru":
+                        if code in RESPONSES_RU:
+                            resp["description"] = RESPONSES_RU[code]
+                    else:
+                        if code in RESPONSES_EN:
+                            resp["description"] = RESPONSES_EN[code]
+                        elif resp.get("description") and cyrillic_pattern.search(resp["description"]):
+                            resp["description"] = "Server response"
 
     _CACHED_SCHEMAS[target_lang] = schema
     return copy.deepcopy(schema)
