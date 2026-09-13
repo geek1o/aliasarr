@@ -54,6 +54,14 @@ if is_sqlite:
             cursor.close()
         except Exception:
             pass
+
+    @event.listens_for(engine, "begin")
+    def do_begin(conn):
+        # Использование BEGIN IMMEDIATE предотвращает deadlocks при конкурентных транзакциях в SQLite
+        try:
+            conn.exec_driver_sql("BEGIN IMMEDIATE")
+        except Exception:
+            pass
 else:
     engine = create_engine(
         DATABASE_URL,
@@ -209,3 +217,18 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def optimize_and_checkpoint_db(db_engine=None) -> None:
+    """Выполняет регламентное обслуживание SQLite: сброс WAL и оптимизацию индексов."""
+    if not is_sqlite:
+        return
+    eng = db_engine or engine
+    try:
+        with eng.connect() as conn:
+            conn.execute(text("PRAGMA wal_checkpoint(PASSIVE)"))
+            conn.execute(text("PRAGMA optimize"))
+            conn.commit()
+    except Exception as exc:
+        logger.debug("Ошибка optimize_and_checkpoint_db: %s", exc)
+

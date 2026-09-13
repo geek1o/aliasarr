@@ -568,19 +568,22 @@ async def delete_show(
     episodes = db.query(Episode).filter_by(show_id=show.id).all()
 
     if delete_files:
-        # 1. Удаляем отдельные файлы серий
-        for ep in episodes:
-            if ep.file_path and os.path.isfile(ep.file_path):
+        def _remove_files_sync(f_paths: list[str], s_path: Optional[str]):
+            for f in f_paths:
+                if f and os.path.isfile(f):
+                    try:
+                        os.remove(f)
+                    except Exception:
+                        pass
+            if s_path and os.path.isdir(s_path):
                 try:
-                    os.remove(ep.file_path)
-                except Exception as exc:
+                    shutil.rmtree(s_path, ignore_errors=True)
+                except Exception:
                     pass
-        # 2. Удаляем папку тайтла, если существует
-        if show_path and os.path.isdir(show_path):
-            try:
-                shutil.rmtree(show_path, ignore_errors=True)
-            except Exception as exc:
-                pass
+
+        import asyncio
+        file_paths_to_delete = [ep.file_path for ep in episodes if ep.file_path]
+        await asyncio.to_thread(_remove_files_sync, file_paths_to_delete, show_path)
 
     # 3. Очищаем зависимые записи истории загрузок, слежения и логов перед удалением шоу
     try:
@@ -643,18 +646,25 @@ async def delete_content(
         affected_eps = len(episodes)
 
         if payload.delete_files:
-            for ep in episodes:
-                if ep.file_path and os.path.isfile(ep.file_path):
+            def _remove_files_sync(f_paths: list[str], s_path: Optional[str]) -> int:
+                count = 0
+                for f in f_paths:
+                    if f and os.path.isfile(f):
+                        try:
+                            os.remove(f)
+                            count += 1
+                        except Exception:
+                            pass
+                if s_path and os.path.isdir(s_path):
                     try:
-                        os.remove(ep.file_path)
-                        deleted_files += 1
+                        shutil.rmtree(s_path, ignore_errors=True)
                     except Exception:
                         pass
-            if show_path and os.path.isdir(show_path):
-                try:
-                    shutil.rmtree(show_path, ignore_errors=True)
-                except Exception:
-                    pass
+                return count
+
+            import asyncio
+            file_paths_to_delete = [ep.file_path for ep in episodes if ep.file_path]
+            deleted_files = await asyncio.to_thread(_remove_files_sync, file_paths_to_delete, show_path)
 
         # Очищаем зависимые записи истории загрузок, слежения и логов перед удалением шоу
         try:
@@ -3137,7 +3147,6 @@ async def refresh_show_cover(
 async def get_show_poster(
     show_id: int,
     request: Request,
-    db: Session = Depends(get_db),
 ):
     """
     Отдает локальный файл постера из /config/MediaCover/shows/{show_id}/poster.jpg
@@ -3148,11 +3157,13 @@ async def get_show_poster(
 
     poster_path = get_show_poster_path(show_id)
     if not os.path.isfile(poster_path):
-        show = db.get(Show, show_id)
-        if show:
-            src_url = getattr(show, "poster_source_url", None) or show.poster_url
-            if src_url and not str(src_url).startswith(f"/api/v1/shows/{show_id}/poster"):
-                await download_and_store_show_cover(show_id, str(src_url))
+        from app.database import SessionLocal
+        with SessionLocal() as db:
+            show = db.get(Show, show_id)
+            if show:
+                src_url = getattr(show, "poster_source_url", None) or show.poster_url
+                if src_url and not str(src_url).startswith(f"/api/v1/shows/{show_id}/poster"):
+                    await download_and_store_show_cover(show_id, str(src_url))
 
     if not os.path.isfile(poster_path):
         raise HTTPException(404, "Обложка не найдена")

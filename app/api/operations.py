@@ -1245,7 +1245,6 @@ async def get_queue(db: Session = Depends(get_db), current_user: User = Depends(
 
     indexer_cache: dict[int, Indexer] = {}
     show_cache: dict[int, Show] = {}
-    progress_updated = False
 
     for dc in db.query(DownloadClient).filter(DownloadClient.enabled == True).all():  # noqa: E712
         try:
@@ -1278,12 +1277,6 @@ async def get_queue(db: Session = Depends(get_db), current_user: User = Depends(
                     ep_label = f"S{matching_eps[0].season_number:02d}E{matching_eps[0].episode_number:02d}"
                 else:
                     ep_label = f"{len(matching_eps)} eps"
-
-                for ep in matching_eps:
-                    if ep.status == EpisodeStatus.DOWNLOADING and abs((ep.download_progress or 0) - t.progress) > 0.001:
-                        ep.download_progress = t.progress
-                        db.add(ep)
-                        progress_updated = True
 
             # Определяем трекер и лимиты сидирования
             indexer_row: Optional[Indexer] = None
@@ -1345,12 +1338,6 @@ async def get_queue(db: Session = Depends(get_db), current_user: User = Depends(
                 indexer_name=indexer_name,
                 is_seeding=is_seeding,
             ))
-
-    if progress_updated:
-        try:
-            db.commit()
-        except Exception:
-            db.rollback()
 
     return items
 
@@ -1714,6 +1701,12 @@ async def trigger_refresh_all_metadata(
     """
     from app.services.metadata import refresh_all_shows_metadata
     from app.database import SessionLocal
+    from app.services.task_manager import task_manager
+
+    status_data = task_manager.get_status()
+    running_tasks = status_data.get("running_tasks", [])
+    if any(t.get("name") == "metadata_refresh" for t in running_tasks):
+        return {"success": False, "message": "Обновление метаданных уже выполняется"}
 
     async def _runner():
         async_db = SessionLocal()

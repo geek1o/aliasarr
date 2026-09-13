@@ -572,8 +572,17 @@ async def _send_custom_script(settings: dict, message: str, event_type: str = "g
         "ALIASARR_PLAIN_MESSAGE": _strip_html(message),
         "ALIASARR_FILE_PATH": file_path or "",
     }
-    proc = await asyncio.create_subprocess_exec(*cmd, env=env)
-    await proc.communicate()
+    try:
+        proc = await asyncio.create_subprocess_exec(*cmd, env=env)
+        await asyncio.wait_for(proc.communicate(), timeout=30.0)
+    except asyncio.TimeoutError:
+        logger.warning("Пользовательский скрипт %s превысил таймаут 30 секунд и был прерван", script_path)
+        try:
+            proc.kill()
+        except Exception:
+            pass
+    except Exception as exc:
+        logger.warning("Ошибка выполнения пользовательского скрипта %s: %s", script_path, exc)
 
 
 # Реестр доступных диспетчеров

@@ -36,6 +36,14 @@ except ImportError:
         def isnot(self, other): return self
         def is_(self, other): return self
         def in_(self, other): return self
+        def desc(self): return self
+        def asc(self): return self
+        def __or__(self, other): return self
+        def __ror__(self, other): return self
+        def __and__(self, other): return self
+        def __rand__(self, other): return self
+        def ilike(self, other): return self
+        def like(self, other): return self
     Episode = type("Episode", (), {
         "id": _MockCol(),
         "show_id": _MockCol(),

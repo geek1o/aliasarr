@@ -38,6 +38,12 @@ except ImportError:
         def in_(self, other): return self
         def desc(self): return self
         def asc(self): return self
+        def __or__(self, other): return self
+        def __ror__(self, other): return self
+        def __and__(self, other): return self
+        def __rand__(self, other): return self
+        def ilike(self, other): return self
+        def like(self, other): return self
 
     class _MockModelMeta(type):
         def __getattr__(cls, name):
@@ -307,7 +313,7 @@ async def _check_seeding_torrents(db: Session, active_clients: list[DownloadClie
                     c_val = (
                         db.query(Episode)
                         .filter(
-                            func.lower(Episode.torrent_hash) == th_lower,
+                            (Episode.torrent_hash == th_lower) | (Episode.torrent_hash == t.hash),
                             Episode.status == EpisodeStatus.DOWNLOADING,
                         )
                         .count()
@@ -328,7 +334,7 @@ async def _check_seeding_torrents(db: Session, active_clients: list[DownloadClie
                 dh = (
                     db.query(DownloadHistory)
                     .filter(
-                        func.lower(DownloadHistory.torrent_hash) == th_lower,
+                        (DownloadHistory.torrent_hash == th_lower) | (DownloadHistory.torrent_hash == t.hash),
                     )
                     .order_by(DownloadHistory.id.desc())
                     .first()
@@ -336,7 +342,9 @@ async def _check_seeding_torrents(db: Session, active_clients: list[DownloadClie
                 show_id = dh.show_id if (dh and getattr(dh, "show_id", None)) else None
                 if not show_id:
                     try:
-                        any_ep = db.query(Episode).filter(func.lower(Episode.torrent_hash) == th_lower).first()
+                        any_ep = db.query(Episode).filter(
+                            (Episode.torrent_hash == th_lower) | (Episode.torrent_hash == t.hash)
+                        ).first()
                         if any_ep:
                             show_id = any_ep.show_id
                     except Exception:
@@ -417,7 +425,7 @@ async def _check_seeding_torrents(db: Session, active_clients: list[DownloadClie
                         has_downloaded_eps = (
                             db.query(Episode)
                             .filter(
-                                func.lower(Episode.torrent_hash) == th_lower,
+                                (Episode.torrent_hash == th_lower) | (Episode.torrent_hash == t.hash),
                                 Episode.status == EpisodeStatus.DOWNLOADED,
                             )
                             .count() > 0

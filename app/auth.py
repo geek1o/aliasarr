@@ -166,16 +166,25 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
             or path.endswith(".html")
         )
 
+        # 1. Извлекаем токен сессии (из Cookie или заголовка Authorization)
+        token = request.cookies.get(SESSION_COOKIE_NAME)
+        if not token:
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:].strip()
+
+        # Fast-path: если сессия есть в кэше памяти и валидна, пропускаем без обращения к БД
+        if token:
+            now_ts = time.time()
+            cached = _SESSION_USER_CACHE.get(token)
+            if cached and (now_ts - cached[0] < _SESSION_CACHE_TTL) and cached[1]:
+                request.state.user = cached[2]
+                request.state.is_authenticated = True
+                return await call_next(request)
+
         db = SessionLocal()
         try:
             settings = get_or_create_settings(db)
-
-            # 1. Извлекаем токен сессии (из Cookie или заголовка Authorization)
-            token = request.cookies.get(SESSION_COOKIE_NAME)
-            if not token:
-                auth_header = request.headers.get("Authorization", "")
-                if auth_header.startswith("Bearer "):
-                    token = auth_header[7:].strip()
 
             is_valid_session, user = _get_valid_session_user(db, token)
             if is_valid_session:

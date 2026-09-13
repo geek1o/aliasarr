@@ -9,7 +9,7 @@ import zipfile
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -396,11 +396,10 @@ def download_backup(name: str, current_user: User = Depends(require_permission("
     path = os.path.join(BACKUP_DIR, safe_name)
     if not os.path.isfile(path):
         raise HTTPException(404, "Резервная копия не найдена")
-    with open(path, "rb") as f:
-        data = f.read()
-    return Response(
-        content=data, media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+    return FileResponse(
+        path,
+        media_type="application/zip",
+        filename=safe_name,
     )
 
 

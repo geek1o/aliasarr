@@ -427,6 +427,7 @@ async def on_startup():
                 logger.info("Индексатор «%s» снова доступен", idx_name)
 
     async def _purge_logs_job():
+        from app.database import optimize_and_checkpoint_db
         db = SessionLocal()
         try:
             settings = get_or_create_settings(db)
@@ -436,6 +437,10 @@ async def on_startup():
                             settings.log_retention_days or 14, deleted)
         finally:
             db.close()
+        try:
+            await asyncio.to_thread(optimize_and_checkpoint_db)
+        except Exception:
+            pass
 
     async def _calendar_poll_job():
         """Периодический опрос источников метаданных для обновления дат выхода невышедших релизов."""
@@ -638,6 +643,11 @@ async def on_startup():
 @app.on_event("shutdown")
 async def on_shutdown():
     scheduler.shutdown()
+    try:
+        from app.services.log_service import stop_db_log_worker
+        stop_db_log_worker()
+    except Exception:
+        pass
 
 
 @app.get("/api/v1/health")
