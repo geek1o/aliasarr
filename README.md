@@ -14,7 +14,11 @@
 [![Python: 3.11+](https://img.shields.io/badge/Python-3.11%2B-10b981?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-059669?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![UI: Vanguard Luxe](https://img.shields.io/badge/Design-Vanguard%20Luxe%20%2F%20Neo--Glass-a855f7?style=for-the-badge)](https://github.com/lQwestl/aliasarr)
-[![i18n: RU | EN](https://img.shields.io/badge/i18n-RU%20%7C%20EN-e11d48?style=for-the-badge)](https://github.com/lQwestl/aliasarr)
+[![i18n: RU | EN](https://img.shields.io/badge/i18n-RU%20%7C%20EN-e11d48?style=for-the-badge)](README.en.md)
+
+<p align="center">
+  <b>Русский</b> | <a href="README.en.md">English</a>
+</p>
 
 </div>
 
@@ -22,9 +26,9 @@
 
 ## Оглавление
 
-1. [О проекте и концепция](#-о-проекте-и-концепция)
-2. [Интерактивная галерея интерфейса (UI Showcase)](#-интерактивная-галерея-интерфейса-ui-showcase)
-3. [Ключевые преимущества и Killer-фичи](#-ключевые-преимущества-и-killer-фичи)
+1. [О проекте и концепция](#о-проекте-и-концепция)
+2. [Интерактивная галерея интерфейса (UI Showcase)](#интерактивная-галерея-интерфейса-ui-showcase)
+3. [Ключевые преимущества и Killer-фичи](#ключевые-преимущества-и-killer-фичи)
    - [Scoped Aliases & Offset (+Смещение номеров)](#1-scoped-aliases--offset-смещение-номеров)
    - [Lossless Movie Merger (Потоковая склейка многофайловых релизов)](#2-lossless-movie-merger-потоковая-склейка-многофайловых-релизов)
    - [Издания фильмов (Movie Editions) и Франшизы (TMDb Sagas)](#3-издания-фильмов-movie-editions-и-франшизы-tmdb-sagas)
@@ -32,14 +36,14 @@
    - [Жесткие ссылки (Hardlinks) и селективное сидирование](#5-жесткие-ссылки-hardlinks-и-селективное-сидирование)
    - [3-уровневая иерархия апгрейдов и Защита от даунгрейда](#6-3-уровневая-иерархия-апгрейдов-и-защита-от-даунгрейда)
    - [Сопутствующие файлы (Companion Files) и шрифты](#7-сопутствующие-файлы-companion-files-и-шрифты)
-4. [Сравнительная матрица: Aliasarr vs Sonarr vs Radarr](#-сравнительная-матрица-aliasarr-vs-sonarr-vs-radarr)
-5. [Быстрый старт (Docker & Docker Compose)](#-быстрый-старт-docker--docker-compose)
-6. [Переменные окружения и структура томов](#-переменные-окружения-и-структура-томов)
-7. [Архитектура системы](#-архитектура-системы)
-8. [Безопасность, RBAC и Аудит](#-безопасность-rbac-и-аудит)
-9. [REST API и автоматизация](#-rest-api-и-автоматизация)
-10. [Документация и руководства](#-документация-и-руководства)
-11. [Лицензия](#-лицензия)
+4. [Сравнительная матрица: Aliasarr vs Sonarr vs Radarr](#сравнительная-матрица-aliasarr-vs-sonarr-vs-radarr)
+5. [Быстрый старт (Docker & Docker Compose)](#быстрый-старт-docker--docker-compose)
+6. [Переменные окружения и структура томов](#переменные-окружения-и-структура-томов)
+7. [Архитектура системы](#архитектура-системы)
+8. [Безопасность, RBAC и Аудит](#безопасность-rbac-и-аудит)
+9. [REST API и автоматизация](#rest-api-и-автоматизация)
+10. [Документация и руководства](#документация-и-руководства)
+11. [Лицензия](#лицензия)
 
 ---
 
