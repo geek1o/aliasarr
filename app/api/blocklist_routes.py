@@ -55,6 +55,7 @@ def list_blocklist_entries(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(require_any_permission("manage_library", "manual_search")),
 ):
     """Возвращает постраничный список записей в черном списке."""
     items, total = blocklist_service.get_blocklist_entries(
@@ -69,7 +70,10 @@ def list_blocklist_entries(
 
 
 @router.get("/shows")
-def get_blocked_shows_summary(db: Session = Depends(get_db)):
+def get_blocked_shows_summary(
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(require_any_permission("manage_library", "manual_search")),
+):
     """Возвращает список тайтлов, содержащих заблокированные релизы (для группировки на UI)."""
     return blocklist_service.get_blocked_shows_summary(db)
 
@@ -232,4 +236,3 @@ def delete_blocklist_entry(
     return remove_blocklist_item(item_id=target, db=db, current_user=current_user)
 
 clear_blocklist = delete_blocklist_bulk
-
