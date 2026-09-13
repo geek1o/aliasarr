@@ -4866,12 +4866,14 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
 .modal-wide { max-width: 1180px; width: 95%; }
 .modal-small { max-width: 420px; }
 
-#show-modal .modal {
+#show-modal .modal,
+#collection-modal .modal {
   padding-top: 52px;
   overflow-x: hidden;
   box-sizing: border-box;
 }
-#show-modal .modal-close {
+#show-modal .modal-close,
+#collection-modal .modal-close {
   top: 14px;
   right: 18px;
   width: 32px;
@@ -8208,10 +8210,14 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   #show-modal.modal-overlay.active,
   #interactive-search-modal.active,
   #interactive-search-modal.modal-overlay.active,
+  #collection-modal.active,
+  #collection-modal.modal-overlay.active,
   [data-design="vanguard"] #show-modal.active,
   [data-design="vanguard"] #show-modal.modal-overlay.active,
   [data-design="vanguard"] #interactive-search-modal.active,
-  [data-design="vanguard"] #interactive-search-modal.modal-overlay.active {
+  [data-design="vanguard"] #interactive-search-modal.modal-overlay.active,
+  [data-design="vanguard"] #collection-modal.active,
+  [data-design="vanguard"] #collection-modal.modal-overlay.active {
     display: block !important;
   }
 
@@ -8257,7 +8263,9 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   }
 
   #show-modal .modal,
-  [data-design="vanguard"] #show-modal .modal {
+  #collection-modal .modal,
+  [data-design="vanguard"] #show-modal .modal,
+  [data-design="vanguard"] #collection-modal .modal {
     padding-top: calc(52px + env(safe-area-inset-top, 0px)) !important;
   }
 
@@ -11875,7 +11883,9 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   [data-design="vanguard"] #show-modal.active,
   [data-design="vanguard"] #show-modal.modal-overlay.active,
   [data-design="vanguard"] #interactive-search-modal.active,
-  [data-design="vanguard"] #interactive-search-modal.modal-overlay.active {
+  [data-design="vanguard"] #interactive-search-modal.modal-overlay.active,
+  [data-design="vanguard"] #collection-modal.active,
+  [data-design="vanguard"] #collection-modal.modal-overlay.active {
     display: block !important;
   }
   [data-design="vanguard"] .modal {
