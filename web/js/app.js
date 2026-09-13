@@ -8161,8 +8161,10 @@ function renderSearchStatus(show) {
 
   return `<span class="search-status-badge ${statusCls}" title="${escapeHtml(resultText)} (${when})">
     ${iconSvg}
-    <span class="search-status-text">${escapeHtml(resultText)}</span>
-    <span class="search-status-date">(${when})</span>
+    <span class="search-status-body">
+      <span class="search-status-text">${escapeHtml(resultText)}</span>
+      <span class="search-status-date">(${when})</span>
+    </span>
   </span>`;
 }
 

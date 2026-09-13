@@ -4782,6 +4782,8 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
 
 #show-modal .modal {
   padding-top: 52px;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 #show-modal .modal-close {
   top: 14px;
@@ -5902,33 +5904,42 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
 /* ---------- SEARCH STATUS (Show Card & General) ---------- */
 .search-status-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   font-size: 12px;
   color: var(--text-muted);
   margin: 6px 0 10px 0;
   min-height: 30px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
 }
 .search-status-row.is-searching { color: var(--teal); }
 .spin-icon { display: inline-block; animation: spin 1s linear infinite; }
 
 .search-status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 0 10px;
-  height: 30px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 12px;
   min-height: 30px;
+  height: auto;
   box-sizing: border-box;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 12px;
   font-weight: 500;
+  line-height: 1.5;
   background: var(--panel-alt, rgba(255, 255, 255, 0.06));
   border: 1px solid var(--border);
   color: var(--text-muted);
   transition: all 0.2s ease;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  width: 100%;
   max-width: 100%;
+  min-width: 0;
 }
 
 .search-status-badge.status-none {
@@ -5951,13 +5962,33 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   box-shadow: 0 0 10px rgba(239, 68, 68, 0.12);
 }
 
+.search-status-badge svg,
+.search-status-badge .ico-xs,
+.search-status-badge .search-status-icon-wrap {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.search-status-body {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
 .search-status-badge .search-status-date {
   font-size: 11px;
   opacity: 0.75;
-  margin-left: 2px;
+  margin-left: 6px;
+  white-space: nowrap;
+  display: inline;
+  font-variant-numeric: tabular-nums;
 }
 
 .search-status-badge.is-searching {
+  display: inline-flex;
+  align-items: center;
   position: relative;
   overflow: hidden;
   background: rgba(13, 22, 36, 0.85);
@@ -5970,6 +6001,8 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   padding: 0 10px;
   height: 30px;
   min-height: 30px;
+  width: auto;
+  white-space: nowrap;
 }
 
 @keyframes search-badge-pulse {
@@ -6017,14 +6050,30 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   stroke: var(--teal, #00F0FF);
 }
 
-.search-stage-text,
-.search-status-text {
+.search-stage-text {
   display: inline-flex;
   align-items: center;
   white-space: nowrap;
   font-size: 12px;
   font-weight: 500;
   color: var(--text, #f0f6fc);
+}
+
+.search-status-text {
+  display: inline;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--text, #f0f6fc);
+}
+.search-status-badge.status-grabbed .search-status-text {
+  color: #4ade80;
+}
+.search-status-badge.status-error .search-status-text {
+  color: #f87171;
 }
 
 .search-status-dots {
