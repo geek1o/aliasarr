@@ -14735,7 +14735,9 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
 }
 
 .glass-table-wrap .data-table tbody tr {
-  transition: background 0.15s ease, transform 0.15s ease;
+  /* Keep row hover immediate: animating every pointer crossing forces continuous
+     repaints across the table and can saturate the compositor on HiDPI displays. */
+  transition: none;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
@@ -16341,7 +16343,6 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   color: var(--text-muted);
   margin-top: 2px;
 }
-
 
 
 
