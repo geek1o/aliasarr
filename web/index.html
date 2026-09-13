@@ -2925,14 +2925,14 @@
                 Запускает полный опрос облачных провайдеров (Radarr/Sonarr SkyHook, TMDb) для всей библиотеки: обновляет официальные названия, саги и киноколлекции, постеры, синопсисы и даты премьер.
               </p>
 
-              <div class="settings-field-group" style="margin-bottom: 20px; max-width: 440px;">
+              <div class="settings-field-group" style="margin-bottom: 20px; max-width: 580px;">
                 <label class="settings-field-label" for="setting-metadata-overview-language">
                   <span data-i18n="md.overview_language_label">Язык описания (синопсиса)</span>
                 </label>
                 <p class="field-hint" style="margin: 0 0 8px 0; color: var(--text-muted); font-size: 12.5px; line-height: 1.4;" data-i18n="md.overview_language_desc">
                   Предпочтительный язык для описания сюжета карточек фильмов, сериалов и аниме.
                 </p>
-                <select id="setting-metadata-overview-language" class="input" onchange="changeMetadataOverviewLanguage(this.value)">
+                <select id="setting-metadata-overview-language" class="input" style="max-width: 320px;" onchange="changeMetadataOverviewLanguage(this.value)">
                   <option value="ru" data-i18n="lang.ru">Русский (RU)</option>
                   <option value="en" data-i18n="lang.en">English (EN)</option>
                   <option value="original" data-i18n="lang.original">Оригинальный язык тайтла</option>
@@ -2946,6 +2946,21 @@
                   <option value="uk">Українська (UK)</option>
                   <option value="pt">Português (PT)</option>
                 </select>
+
+                <div class="settings-info-banner" style="margin-top: 12px;">
+                  <div class="settings-info-banner-icon">
+                    <i data-lucide="info" class="ico-sm"></i>
+                  </div>
+                  <div class="settings-info-banner-content">
+                    <strong data-i18n="md.overview_language_tip_title">Как работает выбор языка синопсиса:</strong>
+                    <p style="margin: 4px 0 0 0;" data-i18n="md.overview_language_tip_text">
+                      Система запрашивает синопсис на выбранном языке из баз TMDb и SkyHook. Если официальный перевод на этот язык отсутствует в международной базе, автоматически используется английский текст (или язык оригинала), чтобы карточка тайтла не оставалась пустой.
+                    </p>
+                    <p style="margin: 4px 0 0 0; font-size: 11.5px; opacity: 0.85;" data-i18n="md.overview_language_tip_subtext">
+                      Для применения нового языка к уже добавленным карточкам запустите «Синхронизировать всё» ниже или обновите нужный тайтл вручную.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <div class="settings-field-group" style="margin-bottom: 16px;">
