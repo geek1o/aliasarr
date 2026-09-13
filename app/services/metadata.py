@@ -3116,9 +3116,20 @@ async def refresh_show_metadata(db, show) -> dict:
     if getattr(details, "overview", None) and show.overview != details.overview:
         show.overview = details.overview
         changed = True
-    if getattr(details, "poster_url", None) and show.poster_url != details.poster_url:
-        show.poster_url = details.poster_url
-        changed = True
+    if getattr(details, "poster_url", None):
+        det_poster = str(details.poster_url).strip()
+        from app.services.cover_service import download_and_store_show_cover, get_show_poster_path
+        if getattr(show, "poster_source_url", None) != det_poster or not os.path.isfile(get_show_poster_path(show.id)):
+            if det_poster.startswith(("http://", "https://")):
+                show.poster_source_url = det_poster
+            local_url = await download_and_store_show_cover(show.id, det_poster)
+            target_url = local_url or f"/api/v1/shows/{show.id}/poster"
+            if show.poster_url != target_url:
+                show.poster_url = target_url
+                changed = True
+        elif not show.poster_url or str(show.poster_url).startswith(("http://", "https://")):
+            show.poster_url = f"/api/v1/shows/{show.id}/poster"
+            changed = True
     if getattr(details, "rating", None) and show.rating != details.rating:
         show.rating = details.rating
         changed = True
@@ -3184,8 +3195,11 @@ async def refresh_show_metadata(db, show) -> dict:
                             coll.last_metadata_refresh_at = dt.datetime.utcnow()
                             if not coll.overview and c_det.get("overview"):
                                 coll.overview = c_det.get("overview")
-                            if not coll.poster_url and c_det.get("poster_url"):
-                                coll.poster_url = c_det.get("poster_url")
+                            if c_det.get("poster_url"):
+                                coll.poster_source_url = c_det.get("poster_url")
+                                from app.services.cover_service import download_and_store_collection_cover
+                                c_loc = await download_and_store_collection_cover(coll.id, c_det.get("poster_url"))
+                                coll.poster_url = c_loc or f"/api/v1/collections/{coll.id}/poster"
                             if not coll.backdrop_url and c_det.get("backdrop_url"):
                                 coll.backdrop_url = c_det.get("backdrop_url")
                             db.add(coll)
@@ -3651,7 +3665,10 @@ async def refresh_all_collections_metadata(db, force: bool = False) -> dict:
                 if c_det.get("overview"):
                     db_coll.overview = c_det.get("overview")
                 if c_det.get("poster_url"):
-                    db_coll.poster_url = c_det.get("poster_url")
+                    db_coll.poster_source_url = c_det.get("poster_url")
+                    from app.services.cover_service import download_and_store_collection_cover
+                    c_loc = await download_and_store_collection_cover(db_coll.id, c_det.get("poster_url"))
+                    db_coll.poster_url = c_loc or f"/api/v1/collections/{db_coll.id}/poster"
                 if c_det.get("backdrop_url"):
                     db_coll.backdrop_url = c_det.get("backdrop_url")
                 s_db.add(db_coll)

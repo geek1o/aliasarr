@@ -119,6 +119,7 @@ class MovieCollection(Base):
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     overview: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     poster_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    poster_source_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     backdrop_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     parts_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
     parts_cache: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON-кеш структуры всех частей саги
@@ -141,6 +142,7 @@ class Show(Base):
     metadata_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     overview: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     poster_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    poster_source_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     path: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)  # папка на диске
     monitored: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     quality_profile_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quality_profiles.id"), nullable=True)

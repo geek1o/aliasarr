@@ -3048,7 +3048,10 @@ function applyLanguage(lang) {
 // ---------- API helper ----------
 async function api(path, options = {}) {
   const opts = typeof options === "string" ? { method: options } : (options || {});
-  const headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
+  const headers = Object.assign({}, opts.headers || {});
+  if (!(opts.body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
   const sessionToken = sessionStorage.getItem("aliasarr_session_token") || localStorage.getItem("aliasarr_session_token");
   if (sessionToken && !headers["Authorization"]) {
     headers["Authorization"] = `Bearer ${sessionToken}`;
@@ -8886,16 +8889,21 @@ async function deleteAliasFromShow(showId, aliasId) {
 async function onShowCoverFile(event, showId) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = async () => {
-    try {
-      await api(`/api/v1/shows/${showId}`, { method: "PUT", body: JSON.stringify({ poster_url: reader.result }) });
-      await refreshShowModal();
-      await loadShows();
-      toast(t("settings.toast_saved"));
-    } catch (e) { toast("Ошибка: " + e.message, true); }
-  };
-  reader.readAsDataURL(file);
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    await api(`/api/v1/shows/${showId}/upload-cover`, {
+      method: "POST",
+      body: formData,
+    });
+    await refreshShowModal();
+    await loadShows();
+    toast(t("settings.toast_saved") || "Обложка обновлена");
+  } catch (e) {
+    toast("Ошибка: " + e.message, true);
+  } finally {
+    if (event.target) event.target.value = "";
+  }
 }
 
 async function searchPosterForShow(showId) {

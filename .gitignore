@@ -59,6 +59,7 @@ config/*.txt
 config/backups/*
 !config/backups/.gitkeep
 !config/.gitkeep
+config/MediaCover/
 
 # Runtime storage & Test directories
 data/*

@@ -7,7 +7,8 @@ import logging
 import os
 import shutil
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, UploadFile, File
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
@@ -262,6 +263,18 @@ async def create_show(
     db.commit()
     db.refresh(show)
 
+    if show.poster_url:
+        p_raw = str(show.poster_url).strip()
+        if p_raw.startswith(("http://", "https://", "data:image/")):
+            if p_raw.startswith(("http://", "https://")):
+                show.poster_source_url = p_raw
+            from app.services.cover_service import download_and_store_show_cover
+            local_cover = await download_and_store_show_cover(show.id, p_raw)
+            if local_cover:
+                show.poster_url = local_cover
+                db.commit()
+                db.refresh(show)
+
     from app.services.blocklist_service import relink_blocklist_for_show
     try:
         relink_blocklist_for_show(db, show)
@@ -429,6 +442,9 @@ async def delete_show(
     from app.services.auto_search import clear_rejected_cache_for_show
     clear_rejected_cache_for_show(show_id)
 
+    from app.services.cover_service import delete_show_cover
+    delete_show_cover(show_id)
+
     log_audit(
         db,
         "show.delete",
@@ -499,6 +515,9 @@ async def delete_content(
 
         from app.services.auto_search import clear_rejected_cache_for_show
         clear_rejected_cache_for_show(show_id)
+
+        from app.services.cover_service import delete_show_cover
+        delete_show_cover(show_id)
 
         log_audit(
             db,
@@ -672,7 +691,7 @@ async def delete_content(
 
 
 @router.put("/{show_id}", response_model=ShowOut)
-def update_show(
+async def update_show(
     show_id: int,
     payload: ShowUpdate,
     db: Session = Depends(get_db),
@@ -682,6 +701,19 @@ def update_show(
     if not show:
         raise HTTPException(404, "Show not found")
     dumped = payload.model_dump(exclude_unset=True)
+    if "poster_url" in dumped and dumped["poster_url"]:
+        p_val = str(dumped["poster_url"]).strip()
+        if p_val.startswith("data:image/"):
+            from app.services.cover_service import download_and_store_show_cover
+            local_url = await download_and_store_show_cover(show.id, p_val)
+            if local_url:
+                dumped["poster_url"] = local_url
+        elif p_val.startswith(("http://", "https://")):
+            show.poster_source_url = p_val
+            from app.services.cover_service import download_and_store_show_cover
+            local_url = await download_and_store_show_cover(show.id, p_val)
+            if local_url:
+                dumped["poster_url"] = local_url
     if "title" in dumped or "year" in dumped:
         new_title, new_year = clean_show_title_and_year(dumped.get("title", show.title), dumped.get("year", show.year))
         if "title" in dumped:
@@ -2915,7 +2947,10 @@ async def refresh_show_cover(
         target_service = "Radarr SkyHook (Movie Cloud)" if is_movie else "Sonarr SkyHook"
         raise HTTPException(404, f"Постер не найден в источниках метаданных ({target_service})")
 
-    show.poster_url = poster_url
+    show.poster_source_url = poster_url
+    from app.services.cover_service import download_and_store_show_cover
+    local_url = await download_and_store_show_cover(show.id, poster_url)
+    show.poster_url = local_url or poster_url
     db.commit()
     db.refresh(show)
 
@@ -2932,6 +2967,80 @@ async def refresh_show_cover(
         "poster_url": show.poster_url,
         "source_name": source_name or ("Radarr SkyHook" if is_movie else "Sonarr SkyHook"),
     }
+
+
+@router.get("/{show_id}/poster", summary="Получить локальную обложку тайтла")
+async def get_show_poster(
+    show_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Отдает локальный файл постера из /config/MediaCover/shows/{show_id}/poster.jpg
+    с поддержкой ETag и 304 Not Modified.
+    Если файла на диске нет, пытается автоматически скачать его по исходной ссылке.
+    """
+    from app.services.cover_service import get_show_poster_path, get_cover_etag, download_and_store_show_cover
+
+    poster_path = get_show_poster_path(show_id)
+    if not os.path.isfile(poster_path):
+        show = db.get(Show, show_id)
+        if show:
+            src_url = getattr(show, "poster_source_url", None) or show.poster_url
+            if src_url and not str(src_url).startswith(f"/api/v1/shows/{show_id}/poster"):
+                await download_and_store_show_cover(show_id, str(src_url))
+
+    if not os.path.isfile(poster_path):
+        raise HTTPException(404, "Обложка не найдена")
+
+    etag = get_cover_etag(poster_path)
+    if_none_match = request.headers.get("if-none-match")
+    if etag and if_none_match and if_none_match.strip() == etag:
+        return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "public, max-age=2592000, immutable"})
+
+    headers = {"Cache-Control": "public, max-age=2592000, immutable"}
+    if etag:
+        headers["ETag"] = etag
+
+    return FileResponse(poster_path, media_type="image/jpeg", headers=headers)
+
+
+@router.post("/{show_id}/upload-cover", summary="Загрузить локальную обложку для тайтла")
+async def upload_show_cover(
+    show_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("manage_library")),
+):
+    """
+    Прямая загрузка обложки пользователем:
+    сохраняет файл на диск в /config/MediaCover/shows/{show_id}/poster.jpg,
+    выполняя оптимизацию размера, и обновляет poster_url.
+    """
+    from app.services.cover_service import save_show_poster
+
+    show = db.get(Show, show_id)
+    if not show:
+        raise HTTPException(404, "Карточка не найдена")
+
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(400, "Файл пуст")
+
+    local_url = await save_show_poster(show.id, contents)
+    show.poster_url = local_url
+    db.commit()
+    db.refresh(show)
+
+    log_audit(
+        db,
+        "show.upload_cover",
+        f"Загружена новая обложка для карточки «{show.title}»",
+        username=current_user.username,
+        user=current_user,
+    )
+
+    return {"success": True, "poster_url": show.poster_url}
 
 
 @router.api_route("/{show_id}/refresh-metadata", methods=["GET", "POST"], summary="Обновление метаданных тайтла из сети")

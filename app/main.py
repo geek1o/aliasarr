@@ -588,6 +588,23 @@ async def on_startup():
             pass
 
     asyncio.create_task(_delayed_initial_refresh())
+
+    # Фоновая миграция существующих постеров в локальное хранилище /config/MediaCover
+    async def _delayed_cover_backfill():
+        try:
+            await asyncio.sleep(10)
+            from app.services.cover_service import backfill_existing_covers
+            b_db = SessionLocal()
+            try:
+                res = await backfill_existing_covers(b_db)
+                if res.get("migrated"):
+                    logger.info("Миграция локальных обложек: сохранено локально %d обложек", res["migrated"])
+            finally:
+                b_db.close()
+        except Exception as e:
+            logger.debug("Ошибка фоновой миграции обложек: %s", e)
+
+    asyncio.create_task(_delayed_cover_backfill())
     logger.info(
         "Планировщик запущен: поиск wanted каждые %d мин, загрузки каждые %d сек, "
         "слежение за раздачами каждые %d мин, активация премьер каждые %d мин, проверка индексаторов каждые %d мин, "

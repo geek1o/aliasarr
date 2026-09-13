@@ -4,7 +4,9 @@ import datetime as dt
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import os
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, or_, and_
 from sqlalchemy.orm import Session
@@ -421,6 +423,44 @@ def delete_collection(
     )
     db.delete(coll)
     db.commit()
+
+    from app.services.cover_service import delete_collection_cover
+    delete_collection_cover(collection_id)
+
+
+@router.get("/{collection_id}/poster", summary="Получить локальную обложку киноколлекции")
+async def get_collection_poster(
+    collection_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Отдает локальный файл постера коллекции из /config/MediaCover/collections/{collection_id}/poster.jpg
+    с поддержкой ETag и 304 Not Modified.
+    """
+    from app.services.cover_service import get_collection_poster_path, get_cover_etag, download_and_store_collection_cover
+
+    poster_path = get_collection_poster_path(collection_id)
+    if not os.path.isfile(poster_path):
+        coll = db.get(MovieCollection, collection_id)
+        if coll and (getattr(coll, "poster_source_url", None) or coll.poster_url):
+            src_url = getattr(coll, "poster_source_url", None) or coll.poster_url
+            if src_url and not str(src_url).startswith(f"/api/v1/collections/{collection_id}/poster"):
+                await download_and_store_collection_cover(collection_id, str(src_url))
+
+    if not os.path.isfile(poster_path):
+        raise HTTPException(404, "Обложка коллекции не найдена")
+
+    etag = get_cover_etag(poster_path)
+    if_none_match = request.headers.get("if-none-match")
+    if etag and if_none_match and if_none_match.strip() == etag:
+        return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "public, max-age=2592000, immutable"})
+
+    headers = {"Cache-Control": "public, max-age=2592000, immutable"}
+    if etag:
+        headers["ETag"] = etag
+
+    return FileResponse(poster_path, media_type="image/jpeg", headers=headers)
 
 
 @router.post("/{collection_id}/import-missing", status_code=200)
