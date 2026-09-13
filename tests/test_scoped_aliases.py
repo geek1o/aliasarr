@@ -19,7 +19,6 @@ try:
         Alias,
         EpisodeStatus,
         User,
-        UserRole,
     )
     from app.schemas import AliasCreate, AliasUpdate
     from app.api.shows import add_alias, update_alias
@@ -237,8 +236,9 @@ class TestScopedAliasesDB(unittest.TestCase):
         self.user = User(
             id=1,
             username="admin",
-            role=UserRole.ADMIN,
-            is_active=True,
+            is_admin=True,
+            is_owner=True,
+            enabled=True,
             password_hash="hash",
         )
         self.db.add(self.user)
@@ -272,7 +272,7 @@ class TestScopedAliasesDB(unittest.TestCase):
 
     def test_season_split_crud_and_candidates(self):
         from app.schemas import SeasonSplitCreate, SeasonSplitPartCreate, SeasonSplitUpdate
-        from app.api.shows import create_season_split, update_season_split, get_season_splits, delete_season_split
+        from app.api.shows import create_season_split, update_season_split, list_season_splits, delete_season_split
         from app.services.matcher import build_alias_candidates
 
         show = Show(title="Space Dandy", content_type="anime")
@@ -349,8 +349,8 @@ class TestScopedAliasesDB(unittest.TestCase):
 
         # Delete split
         del_res = delete_season_split(show.id, split_out.id, db=self.db, current_user=self.user)
-        self.assertTrue(del_res["ok"])
-        splits = get_season_splits(show.id, db=self.db)
+        self.assertIsNone(del_res)
+        splits = list_season_splits(show.id, db=self.db, current_user=self.user)
         self.assertEqual(len(splits), 0)
 
     def test_decision_engine_with_offset(self):
@@ -368,16 +368,17 @@ class TestScopedAliasesDB(unittest.TestCase):
             self.db.add(ep)
         self.db.commit()
 
-        alias_cand = AliasCandidate(
-            alias_id=10,
+        scoped_alias = Alias(
+            show_id=show.id,
             text="Space Dandy 2nd Season",
             season_number=1,
             episode_start=14,
             episode_end=26,
             episode_offset=13,
         )
+        self.db.add(scoped_alias)
+        self.db.commit()
 
-        engine = DecisionEngine(self.db)
         release = TorznabRelease(
             title="[Erai-raws] Space Dandy 2nd Season - 01 [1080p]",
             guid="test-guid-1",
@@ -385,9 +386,20 @@ class TestScopedAliasesDB(unittest.TestCase):
             seeders=10,
         )
 
-        decision = engine.evaluate_release(release, show, alias_candidate=alias_cand)
-        self.assertTrue(decision.approved, f"Decision rejected: {decision.rejection_reason}")
-        self.assertIn(14, decision.matched_episode_ids_or_numbers)
+        wanted_episode = self.db.query(Episode).filter(
+            Episode.show_id == show.id,
+            Episode.episode_number == 14,
+        ).one()
+        decision = DecisionEngine.evaluate_release(
+            self.db,
+            release.title,
+            show=show,
+            episodes=[wanted_episode],
+            seeders=release.seeders,
+            guid=release.guid,
+            download_url=release.download_url,
+        )
+        self.assertTrue(decision.approved, f"Decision rejected: {decision.rejections}")
 
     def test_clear_auto_rejected_blocklist(self):
         """Test that clear_auto_rejected_for_show only clears automated empty-match blocks."""
@@ -426,4 +438,3 @@ class TestScopedAliasesDB(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

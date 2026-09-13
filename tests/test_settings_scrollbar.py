@@ -5,7 +5,7 @@ try:
     from fastapi import HTTPException
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from app.models.db import Base, AppSettings, User, UserRole
+    from app.models.db import Base, AppSettings, User
     from app.services.settings_service import get_or_create_settings
     from app.api.settings_routes import update_settings, SettingsUpdate
     HAS_DEPS = True
@@ -24,8 +24,9 @@ class TestSettingsScrollbar(unittest.TestCase):
         self.user = User(
             id=1,
             username="admin",
-            role=UserRole.ADMIN,
-            is_active=True,
+            is_admin=True,
+            is_owner=True,
+            enabled=True,
             password_hash="hash",
         )
         self.db.add(self.user)

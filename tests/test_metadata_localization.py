@@ -366,7 +366,7 @@ class TestSkyHookLocalizationEnrichment(unittest.TestCase):
 try:
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from app.models.db import Base, Show, Alias, AppSettings, User, Role
+    from app.models.db import Base, Show, Alias, AppSettings, User
     from app.api.shows import bulk_switch_title_language, BulkSwitchTitleLanguageRequest, update_show
     from app.schemas import ShowUpdate
     HAS_DB = True
@@ -382,10 +382,22 @@ class TestTitleLanguageAndBulkSwitch(unittest.TestCase):
         self.Session = sessionmaker(bind=self.engine)
         self.db = self.Session()
 
-        self.settings = AppSettings(id=1, metadata_overview_language="ru", metadata_title_language="ru")
+        self.settings = AppSettings(
+            id=1,
+            api_key="test-key",
+            metadata_overview_language="ru",
+            metadata_title_language="ru",
+        )
         self.db.add(self.settings)
 
-        self.user = User(id=1, username="admin", role=Role.ADMIN, password_hash="hash")
+        self.user = User(
+            id=1,
+            username="admin",
+            password_hash="hash",
+            is_admin=True,
+            is_owner=True,
+            enabled=True,
+        )
         self.db.add(self.user)
         self.db.commit()
 
