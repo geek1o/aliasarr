@@ -3230,15 +3230,20 @@ async def remap_show_metadata(
             if getattr(a, "priority", None) is not None
         ]
         cur_max_p = max(all_priorities) if all_priorities else 0
+        from app.services.metadata import get_allowed_metadata_languages, is_alias_allowed, detect_alias_language
+        allowed_langs = get_allowed_metadata_languages(db, show)
         for alias_text in details.aliases:
             clean_alias = str(alias_text).strip()
             if clean_alias and clean_alias.lower() not in existing_aliases:
+                if not is_alias_allowed(clean_alias, None, allowed_langs):
+                    continue
                 existing_aliases.add(clean_alias.lower())
                 cur_max_p += 1
+                det_lang = detect_alias_language(clean_alias)
                 db.add(Alias(
                     show_id=show.id,
                     text=clean_alias,
-                    language=AliasLanguage.RU if any(ord(c) >= 0x0400 and ord(c) <= 0x04FF for c in clean_alias) else AliasLanguage.EN,
+                    language=det_lang,
                     source="remap",
                     priority=cur_max_p,
                 ))

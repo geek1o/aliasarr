@@ -5,14 +5,22 @@ from typing import Optional, List, Dict, Any
 import asyncio
 import datetime as dt
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.db import Alias, Episode, EpisodeStatus, MetadataSource, MetadataSourceType, Show, User
-from app.services.metadata import MetadataResult, RadarrClient, SkyHookClient, get_metadata_client
+from app.models.db import Alias, AppSettings, Episode, EpisodeStatus, MetadataSource, MetadataSourceType, Show, User
+from app.services.metadata import (
+    MetadataResult,
+    RadarrClient,
+    SkyHookClient,
+    get_metadata_client,
+    get_allowed_metadata_languages,
+    is_alias_allowed,
+    detect_alias_language,
+)
 from app.services.user_service import require_permission, get_current_user
 import logging
 
@@ -675,12 +683,14 @@ async def import_show(
                 added_aliases.add(title_no_year.lower())
                 db.add(Alias(show_id=show.id, text=title_no_year, language="en", source=source_type_str, priority=1))
 
+        allowed_langs = get_allowed_metadata_languages(db, show)
         for i, alias_text in enumerate(details.aliases):
-            if alias_text and alias_text.strip() and alias_text.strip().lower() not in added_aliases:
-                clean_alias = alias_text.strip()
+            clean_alias = str(alias_text).strip() if alias_text else ""
+            if clean_alias and clean_alias.lower() not in added_aliases:
+                if not is_alias_allowed(clean_alias, None, allowed_langs):
+                    continue
                 added_aliases.add(clean_alias.lower())
-                is_cyrillic = any('\u0400' <= c <= '\u04ff' for c in clean_alias)
-                lang = "ru" if is_cyrillic else "other"
+                lang = detect_alias_language(clean_alias)
                 db.add(Alias(show_id=show.id, text=clean_alias, language=lang, source=source_type_str, priority=2 + i))
 
 
@@ -781,6 +791,52 @@ async def import_show(
     except Exception as e:
         logger.error(f"Ошибка при импорте шоу (external_id={payload.external_id}): {e}", exc_info=True)
         raise HTTPException(500, f"Внутренняя ошибка при импорте: {e}")
+
+
+@router.post("/cleanup-aliases")
+async def cleanup_unallowed_aliases(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("manage_settings")),
+):
+    """Очищает неактуальные/мусорные автосгенерированные алиасы во всей библиотеке согласно настройкам языков."""
+    shows = db.query(Show).all()
+    deleted_count = 0
+    shows_affected = 0
+
+    for show in shows:
+        show_allowed_langs = get_allowed_metadata_languages(db, show)
+        aliases = db.query(Alias).filter(Alias.show_id == show.id).all()
+        show_deleted = 0
+        for a in aliases:
+            if a.source == "manual":
+                continue
+            if a.text.strip().lower() == (show.title or "").strip().lower():
+                continue
+            if not is_alias_allowed(a.text, a.language, show_allowed_langs):
+                db.delete(a)
+                deleted_count += 1
+                show_deleted += 1
+        if show_deleted > 0:
+            shows_affected += 1
+
+    db.commit()
+
+    from app.services.audit_service import log_audit
+    log_audit(
+        db,
+        action="metadata.cleanup_aliases",
+        description=f"Очистка алиасов: удалено {deleted_count} неактуальных алиасов в {shows_affected} тайтлах",
+        user=current_user,
+        request=request,
+    )
+
+    return {
+        "status": "ok",
+        "deleted_count": deleted_count,
+        "shows_affected": shows_affected,
+        "message": f"Удалено {deleted_count} неактуальных алиасов в {shows_affected} тайтлах",
+    }
 
 
 @router.get("/image-proxy")

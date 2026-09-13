@@ -76,6 +76,7 @@ class SettingsOut(BaseModel):
     calendar_metadata_source_movie: str = "radarr"
     metadata_auto_refresh_enabled: bool = True
     metadata_refresh_interval_hours: int = 12
+    metadata_refresh_aliases: bool = True
 
     session_timeout_minutes: int
     backup_interval_days: int = 7
@@ -140,6 +141,7 @@ class SettingsUpdate(BaseModel):
     calendar_metadata_source_movie: Optional[str] = None
     metadata_auto_refresh_enabled: Optional[bool] = None
     metadata_refresh_interval_hours: Optional[int] = None
+    metadata_refresh_aliases: Optional[bool] = None
 
     session_timeout_minutes: Optional[int] = None
     backup_interval_days: Optional[int] = None
@@ -198,6 +200,7 @@ def _to_settings_out(settings, is_owner: bool = False) -> SettingsOut:
         calendar_metadata_source_movie=getattr(settings, "calendar_metadata_source_movie", "radarr") or "radarr",
         metadata_auto_refresh_enabled=getattr(settings, "metadata_auto_refresh_enabled", True),
         metadata_refresh_interval_hours=getattr(settings, "metadata_refresh_interval_hours", 12) or 12,
+        metadata_refresh_aliases=getattr(settings, "metadata_refresh_aliases", True),
         session_timeout_minutes=getattr(settings, "session_timeout_minutes", 43200) or 43200,
         backup_interval_days=getattr(settings, "backup_interval_days", 7) or 7,
         backup_retention_count=getattr(settings, "backup_retention_count", 10) or 10,
@@ -400,6 +403,8 @@ def update_settings(
             raise HTTPException(400, "Интервал обновления метаданных должен быть не меньше 1 часа")
         settings.metadata_refresh_interval_hours = payload.metadata_refresh_interval_hours
         _reschedule(request, "refresh_metadata", payload.metadata_refresh_interval_hours * 60)
+    if payload.metadata_refresh_aliases is not None:
+        settings.metadata_refresh_aliases = payload.metadata_refresh_aliases
 
     if payload.session_timeout_minutes is not None:
         if payload.session_timeout_minutes < 5:

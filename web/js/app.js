@@ -948,6 +948,11 @@ const TRANSLATIONS = {
     "md.refresh_all_info": "Запускает полный опрос облачных провайдеров (Radarr/Sonarr SkyHook) для всей библиотеки: обновляет официальные названия, саги и киноколлекции, постеры, синопсисы и даты премьер.",
     "md.settings_saved": "Настройки обновления метаданных сохранены",
     "md.refresh_started": "Запущено фоновое обновление метаданных библиотеки...",
+    "md.refresh_aliases_toggle": "Обновлять поисковые алиасы при синхронизации метаданных",
+    "md.refresh_aliases_hint": "Автоматически актуализировать список альтернативных названий тайтла согласно разрешенным языкам при фоновом или ручном обновлении метаданных",
+    "md.btn_cleanup_aliases": "Очистить неактуальные алиасы",
+    "md.cleanup_aliases_confirm": "Вы уверены, что хотите удалить неактуальные и мусорные алиасы на неподдерживаемых языках для всей библиотеки? Добавленные вручную алиасы останутся без изменений.",
+    "md.cleanup_aliases_success": "Очистка завершена: удалено {count} алиасов в {shows} тайтлах.",
     "library.btn_refresh_all": "Обновить метаданные",
     "library.btn_refresh_all_title": "Обновить метаданные всех тайтлов из сети",
 
@@ -2321,6 +2326,11 @@ const TRANSLATIONS = {
     "md.refresh_all_info": "Starts a full query of cloud metadata providers (Radarr/Sonarr SkyHook) for the entire library: updates official titles, movie collections and sagas, posters, overviews, and premiere dates.",
     "md.settings_saved": "Metadata refresh settings saved",
     "md.refresh_started": "Background library metadata refresh started...",
+    "md.refresh_aliases_toggle": "Update search aliases during metadata synchronization",
+    "md.refresh_aliases_hint": "Automatically update title alternative names according to allowed languages during background or manual metadata refresh",
+    "md.btn_cleanup_aliases": "Clean up unallowed aliases",
+    "md.cleanup_aliases_confirm": "Are you sure you want to remove unallowed and foreign language aliases across the entire library? Manually added aliases will be preserved.",
+    "md.cleanup_aliases_success": "Cleanup completed: removed {count} aliases across {shows} titles.",
     "library.btn_refresh_all": "Refresh Metadata",
     "library.btn_refresh_all_title": "Refresh all library metadata from the cloud",
 
@@ -14246,6 +14256,9 @@ async function loadGeneralSettings() {
     if (remapEl) remapEl.checked = remapEnabled;
     localStorage.setItem("aliasarr_enable_remap_button", remapEnabled ? "true" : "false");
 
+    const refreshAliasesEl = document.getElementById("setting-metadata-refresh-aliases");
+    if (refreshAliasesEl) refreshAliasesEl.checked = s.metadata_refresh_aliases !== false;
+
     applyTheme(s.theme || "dark");
     applyLanguage(s.language || "ru");
     applyScrollbarMode(s.scrollbar_mode || localStorage.getItem("aliasarr_scrollbar") || "autohide");
@@ -16973,6 +16986,11 @@ function toggleCustomMetadataFields() {
 
 async function loadMetadataSources() {
   toggleCustomMetadataFields();
+  try {
+    const s = CACHED_APP_SETTINGS || await api("/api/v1/settings");
+    const refreshAliasesEl = document.getElementById("setting-metadata-refresh-aliases");
+    if (refreshAliasesEl && s) refreshAliasesEl.checked = s.metadata_refresh_aliases !== false;
+  } catch (_) {}
   const tbody = document.querySelector("#md-table tbody");
   if (!tbody) return;
   try {
@@ -17019,6 +17037,48 @@ async function triggerManualMetadataRefresh(btn) {
       statusEl.textContent = e.message || (CURRENT_LANG === "en" ? "Error" : "Ошибка");
       statusEl.className = "inline-status-box error";
     }
+  } finally {
+    if (btn) btn.classList.remove("is-loading");
+  }
+}
+
+async function toggleMetadataRefreshAliases(checked) {
+  try {
+    const val = Boolean(checked);
+    await api("/api/v1/settings", {
+      method: "PUT",
+      body: JSON.stringify({ metadata_refresh_aliases: val }),
+    });
+    if (CACHED_APP_SETTINGS) {
+      CACHED_APP_SETTINGS.metadata_refresh_aliases = val;
+    }
+    showToast(t("md.settings_saved") || "Настройки обновлены");
+  } catch (e) {
+    showToast("Ошибка: " + e.message, "error");
+  }
+}
+
+async function triggerCleanupAliases(btn) {
+  const confirmed = await confirmModal(
+    t("md.cleanup_aliases_confirm") || "Удалить неактуальные авто-алиасы на неподдерживаемых языках? Ручные алиасы будут сохранены.",
+    { danger: true }
+  );
+  if (!confirmed) return;
+
+  if (btn) btn.classList.add("is-loading");
+  try {
+    const res = await api("/api/v1/metadata-sources/cleanup-aliases", { method: "POST" });
+    const count = res.deleted_count ?? 0;
+    const shows = res.shows_affected ?? 0;
+    const msg = (t("md.cleanup_aliases_success") || "Удалено {count} алиасов в {shows} тайтлах")
+      .replace("{count}", count)
+      .replace("{shows}", shows);
+    showToast(msg);
+    if (typeof loadShows === "function") {
+      loadShows();
+    }
+  } catch (e) {
+    showToast(e.message || "Ошибка при очистке алиасов", "error");
   } finally {
     if (btn) btn.classList.remove("is-loading");
   }

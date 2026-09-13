@@ -228,6 +228,61 @@ def normalize_metadata_lang_code(raw_val: Any) -> str:
     return s
 
 
+LANGUAGE_SPECIFIC_CHARS: list[tuple[set[str], set[str]]] = [
+    ({"de", "deu", "german"}, set("ß")),
+    ({"es", "spa", "spanish"}, set("ñÑ¿¡")),
+    ({"pl", "pol", "polish"}, set("łŁąĄęĘżŻźŹ")),
+    ({"hu", "hun", "hungarian"}, set("őŐűŰ")),
+    ({"cs", "ces", "cze", "czech", "sk", "slk", "slovak"}, set("řŘůŮěĚďť")),
+    ({"tr", "tur", "turkish", "az", "aze"}, set("ğĞşŞı")),
+    ({"ro", "ron", "romanian"}, set("șȘțȚăĂ")),
+]
+
+
+def detect_alias_language(text: str, default: str = "en") -> str:
+    """Определяет код языка для алиаса по символам и алфавиту."""
+    if not text:
+        return default
+    t = str(text).strip()
+    # Cyrillic -> ru
+    if any('\u0400' <= c <= '\u04ff' for c in t):
+        return "ru"
+    # Japanese (Hiragana / Katakana) -> ja
+    if any(('\u3040' <= c <= '\u309f') or ('\u30a0' <= c <= '\u30ff') for c in t):
+        return "ja"
+    # Korean (Hangul) -> ko
+    if any('\uac00' <= c <= '\ud7af' for c in t):
+        return "ko"
+    # Chinese (Kanji/Hanzi without Kana) -> zh
+    if any('\u4e00' <= c <= '\u9fff' for c in t):
+        return "zh"
+    # Arabic -> ar
+    if any('\u0600' <= c <= '\u06ff' for c in t):
+        return "ar"
+    # German ß -> de
+    if any(c in "ß" for c in t):
+        return "de"
+    # Spanish ñ -> es
+    if any(c in "ñÑ¿¡" for c in t):
+        return "es"
+    # Polish -> pl
+    if any(c in "łŁąĄęĘżŻźŹ" for c in t):
+        return "pl"
+    # Hungarian -> hu
+    if any(c in "őŐűŰ" for c in t):
+        return "hu"
+    # Czech/Slovak -> cs
+    if any(c in "řŘůŮěĚ" for c in t):
+        return "cs"
+    # Turkish -> tr
+    if any(c in "ğĞşŞı" for c in t):
+        return "tr"
+    # Romanian -> ro
+    if any(c in "șȘțȚăĂ" for c in t):
+        return "ro"
+    return default
+
+
 def is_alias_allowed(
     title: str,
     iso_or_lang: Any,
@@ -244,7 +299,33 @@ def is_alias_allowed(
     t_clean = str(title).strip()
     norm_lang = normalize_metadata_lang_code(iso_or_lang)
 
-    # 1. Если язык/страна явно указаны
+    # 1. Проверка специфических символов алфавитов (CJK, арабский, кириллица)
+    # Если в тексте есть кириллица — он допустим ТОЛЬКО если разрешен русский/украинский/белорусский
+    if any('\u0400' <= c <= '\u04ff' for c in t_clean):
+        return bool(allowed_langs.intersection({"ru", "rus", "russian", "uk", "ukr", "be"}))
+
+    # CJK / Японские / Корейские / Китайские иероглифы
+    is_cjk = any(
+        ('\u3040' <= c <= '\u309f') or  # Hiragana
+        ('\u30a0' <= c <= '\u30ff') or  # Katakana
+        ('\u4e00' <= c <= '\u9fff') or  # Kanji / Hanzi
+        ('\uac00' <= c <= '\ud7af')      # Hangul
+        for c in t_clean
+    )
+    if is_cjk:
+        return bool(allowed_langs.intersection({"ja", "jp", "jpn", "japanese", "zh", "zho", "chi", "chinese", "ko", "kor", "korean"}))
+
+    # Арабская вязь
+    if any('\u0600' <= c <= '\u06ff' for c in t_clean):
+        return bool(allowed_langs.intersection({"ar", "ara", "arabic"}))
+
+    # Специфические символы европейских языков (не встречающиеся в стандартных английских словах)
+    for lang_set, char_set in LANGUAGE_SPECIFIC_CHARS:
+        if any(c in char_set for c in t_clean):
+            if not allowed_langs.intersection(lang_set):
+                return False
+
+    # 2. Если язык/страна явно указаны
     if norm_lang:
         if norm_lang in allowed_langs:
             return True
@@ -253,30 +334,76 @@ def is_alias_allowed(
         # Язык явно определен и НЕ входит в разрешенные (например 'ja', 'hu', 'fr', 'id', 'az') -> отклоняем
         return False
 
-    # 2. Если язык/страна не указаны, проверяем по алфавиту/символам
-    # Кириллица
-    if any('\u0400' <= c <= '\u04ff' for c in t_clean):
-        return bool(allowed_langs.intersection({"ru", "rus", "russian", "uk", "ukr", "be"}))
-
-    # CJK / Японские / Корейские / Китайские иероглифы
-    if any(
-        ('\u3040' <= c <= '\u309f') or  # Hiragana
-        ('\u30a0' <= c <= '\u30ff') or  # Katakana
-        ('\u4e00' <= c <= '\u9fff') or  # Kanji / Hanzi
-        ('\uac00' <= c <= '\ud7af')      # Hangul
-        for c in t_clean
-    ):
-        return bool(allowed_langs.intersection({"ja", "jp", "jpn", "japanese", "zh", "zho", "chi", "chinese", "ko", "kor", "korean"}))
-
-    # Арабская вязь
-    if any('\u0600' <= c <= '\u06ff' for c in t_clean):
-        return bool(allowed_langs.intersection({"ar", "ara", "arabic"}))
-
-    # Латиница и цифры без указания конкретного языка (считаем допустимым для английского/оригинала)
+    # 3. Латиница и цифры без указания конкретного языка (считаем допустимым для английского/оригинала)
     if is_latin_text(t_clean) and bool(allowed_langs.intersection({"en", "eng", "english"})):
         return True
 
     return False
+
+
+def get_allowed_metadata_languages(db=None, show=None) -> set[str]:
+    """
+    Возвращает множество кодов разрешенных языков для алиасов на основе
+    настроек источника метаданных (field_mapping['alias_languages']) и дефолтных источников.
+    Всегда включает базовый английский ('en', 'eng').
+    """
+    try:
+        from app.models.db import MetadataSource
+    except (ImportError, Exception):
+        MetadataSource = None
+
+    custom_langs: set[str] = set()
+    source = None
+    if db and MetadataSource:
+        try:
+            if show and getattr(show, "metadata_source", None):
+                source = (
+                    db.query(MetadataSource)
+                    .filter(MetadataSource.type == show.metadata_source, MetadataSource.enabled == True)
+                    .first()
+                )
+            if not source:
+                # Берем первый активный источник, у которого настроены языки
+                for s in db.query(MetadataSource).filter(MetadataSource.enabled == True).all():
+                    if isinstance(getattr(s, "field_mapping", None), dict) and s.field_mapping.get("alias_languages"):
+                        source = s
+                        break
+        except Exception:
+            source = None
+
+    if source and isinstance(getattr(source, "field_mapping", None), dict) and source.field_mapping.get("alias_languages"):
+        for l in source.field_mapping["alias_languages"]:
+            if l:
+                custom_langs.add(str(l).lower().strip())
+
+    if not custom_langs:
+        custom_langs = {"ru"}
+
+    # Нормализуем и добавляем варианты (ru -> rus, en -> eng и т.п.)
+    result = {"en", "eng"}
+    for l in custom_langs:
+        norm = normalize_metadata_lang_code(l)
+        if norm:
+            result.add(norm)
+            if norm == "ru":
+                result.add("rus")
+            elif norm == "ja":
+                result.add("jpn")
+            elif norm == "zh":
+                result.add("chi")
+            elif norm == "ko":
+                result.add("kor")
+            elif norm == "de":
+                result.add("deu")
+            elif norm == "fr":
+                result.add("fra")
+            elif norm == "es":
+                result.add("spa")
+            elif norm == "it":
+                result.add("ita")
+            elif norm == "pl":
+                result.add("pol")
+    return result
 
 
 from difflib import SequenceMatcher
@@ -1179,17 +1306,21 @@ class SkyHookClient(BaseMetadataClient):
 
         raw_title = data.get("title") or ""
         aliases: list[str] = []
+        allowed_langs = {"en", "eng"} | {l.lower() for l in (self.alias_languages or ["ru"])}
 
-        # Алиасы и альтернативные названия из SkyHook (Sonarr отдаёт здесь ромаджи, синонимы и английские названия)
+        # Алиасы и альтернативные названия из SkyHook (проверяем на соответствие разрешенным языкам)
         for item in (data.get("aliases") or []) + (data.get("alternativeTitles") or []):
             if isinstance(item, str) and item.strip():
                 t = item.strip()
                 if t != raw_title and t not in aliases:
-                    aliases.append(t)
+                    if is_alias_allowed(t, None, allowed_langs):
+                        aliases.append(t)
             elif isinstance(item, dict):
                 t = (item.get("title") or item.get("cleanTitle") or "").strip()
+                lang = item.get("language") or item.get("country") or item.get("iso_3166_1") or item.get("iso_639_1") or None
                 if t and t != raw_title and t not in aliases:
-                    aliases.append(t)
+                    if is_alias_allowed(t, lang, allowed_langs):
+                        aliases.append(t)
 
         overview = data.get("overview")
 
@@ -1204,7 +1335,8 @@ class SkyHookClient(BaseMetadataClient):
                         lang_data = lang_resp.json()
                         lt = lang_data.get("title")
                         if lt and lt.strip() and lt.strip() != raw_title and lt.strip() not in aliases:
-                            aliases.append(lt.strip())
+                            if is_alias_allowed(lt.strip(), lang, allowed_langs):
+                                aliases.append(lt.strip())
                         lo = lang_data.get("overview")
                         if lo and (lang.lower() == "ru" or not overview):
                             overview = lo
@@ -1257,7 +1389,8 @@ class SkyHookClient(BaseMetadataClient):
                 if tmdb_details:
                     for a in tmdb_details.aliases:
                         if a and a != raw_title and a not in aliases:
-                            aliases.append(a)
+                            if is_alias_allowed(a, None, allowed_langs):
+                                aliases.append(a)
                     # Если в SkyHook английское описание, а в TMDb есть русское — обогащаем описание
                     if tmdb_details.overview and ("ru" in (self.alias_languages or ["ru"])) and any('\u0400' <= c <= '\u04ff' for c in tmdb_details.overview):
                         overview = tmdb_details.overview
@@ -2494,6 +2627,7 @@ async def refresh_show_metadata(db, show) -> dict:
 
     # 1. Разрешаем клиент источника метаданных
     client = None
+    source = None
     if getattr(show, "metadata_source", None):
         source = (
             db.query(MetadataSource)
@@ -2506,10 +2640,19 @@ async def refresh_show_metadata(db, show) -> dict:
             except Exception:
                 client = None
 
-    if not client:
-        client = RadarrClient() if is_movie else SkyHookClient()
+    alias_langs = None
+    if source and isinstance(source.field_mapping, dict):
+        alias_langs = source.field_mapping.get("alias_languages")
+    if not alias_langs:
+        for s in db.query(MetadataSource).filter(MetadataSource.enabled == True).all():
+            if isinstance(s.field_mapping, dict) and s.field_mapping.get("alias_languages"):
+                alias_langs = s.field_mapping["alias_languages"]
+                break
 
-    fallback_client = RadarrClient() if is_movie else SkyHookClient()
+    if not client:
+        client = RadarrClient(alias_languages=alias_langs) if is_movie else SkyHookClient(alias_languages=alias_langs)
+
+    fallback_client = RadarrClient(alias_languages=alias_langs) if is_movie else SkyHookClient(alias_languages=alias_langs)
     details = None
 
     # 2. Пробуем получить детали по metadata_id
@@ -2841,22 +2984,44 @@ async def refresh_show_metadata(db, show) -> dict:
                     episodes_added += 1
 
     # 6. Обновляем алиасы
-    if details.aliases:
-        existing_aliases = {a.text.lower().strip() for a in show.aliases}
-        cur_max_p = max([a.priority for a in show.aliases if a.priority is not None] or [0])
+    refresh_aliases_enabled = True
+    try:
+        from app.services.settings_service import get_or_create_settings
+        settings = get_or_create_settings(db)
+        refresh_aliases_enabled = getattr(settings, "metadata_refresh_aliases", True)
+    except Exception:
+        pass
+    allowed_langs = get_allowed_metadata_languages(db, show)
+
+    show_aliases = list(getattr(show, "aliases", None) or [])
+    if refresh_aliases_enabled and details.aliases:
+        existing_aliases = {a.text.lower().strip() for a in show_aliases}
+        cur_max_p = max([a.priority for a in show_aliases if getattr(a, "priority", None) is not None] or [0])
         for alias_text in details.aliases:
             clean_alias = str(alias_text).strip()
             if clean_alias and clean_alias.lower() not in existing_aliases:
+                # Строгая проверка разрешенных языков
+                if not is_alias_allowed(clean_alias, None, allowed_langs):
+                    continue
                 existing_aliases.add(clean_alias.lower())
                 cur_max_p += 1
+                det_lang = detect_alias_language(clean_alias)
                 db.add(Alias(
                     show_id=show.id,
                     text=clean_alias,
-                    language=AliasLanguage.RU if any(ord(c) >= 0x0400 and ord(c) <= 0x04FF for c in clean_alias) else AliasLanguage.EN,
+                    language=det_lang,
                     source="skyhook",
                     priority=cur_max_p,
                 ))
                 changed = True
+
+    # Очистка неактуальных авто-алиасов тайтла (если включено обновление алиасов)
+    if refresh_aliases_enabled:
+        for a in show_aliases:
+            if getattr(a, "source", None) != "manual" and (getattr(a, "text", "") or "").strip().lower() != (show.title or "").strip().lower():
+                if not is_alias_allowed(getattr(a, "text", ""), getattr(a, "language", None), allowed_langs):
+                    db.delete(a)
+                    changed = True
 
     show.last_metadata_refresh_at = now
     if changed:

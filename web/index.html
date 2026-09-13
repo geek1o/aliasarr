@@ -2924,10 +2924,24 @@
               <p style="margin: 0 0 16px 0; color: var(--text-muted); font-size: 14px; line-height: 1.5;" data-i18n="md.refresh_all_info">
                 Запускает полный опрос облачных провайдеров (Radarr/Sonarr SkyHook, TMDb) для всей библиотеки: обновляет официальные названия, саги и киноколлекции, постеры, синопсисы и даты премьер.
               </p>
-              <div class="form-row" style="align-items: center; gap: 12px;">
+
+              <div class="settings-field-group" style="margin-bottom: 16px;">
+                <label class="switch-toggle">
+                  <input id="setting-metadata-refresh-aliases" type="checkbox" checked onchange="toggleMetadataRefreshAliases(this.checked)">
+                  <span class="switch-slider"></span>
+                  <span class="switch-title" data-i18n="md.refresh_aliases_toggle">Обновлять поисковые алиасы при синхронизации метаданных</span>
+                  <span class="switch-desc" data-i18n="md.refresh_aliases_hint">Автоматически актуализировать список альтернативных названий тайтла согласно разрешенным языкам при фоновом или ручном обновлении метаданных</span>
+                </label>
+              </div>
+
+              <div class="form-row" style="align-items: center; gap: 12px; flex-wrap: wrap;">
                 <button type="button" class="btn btn-primary" onclick="triggerManualMetadataRefresh(this)">
                   <i data-lucide="refresh-cw" class="ico-xs"></i>
                   <span data-i18n="md.btn_refresh_now">Обновить метаданные всех тайтлов сейчас</span>
+                </button>
+                <button type="button" class="btn btn-secondary" id="btn-cleanup-aliases" onclick="triggerCleanupAliases(this)">
+                  <i data-lucide="trash-2" class="ico-xs"></i>
+                  <span data-i18n="md.btn_cleanup_aliases">Очистить неактуальные алиасы</span>
                 </button>
               </div>
               <div id="md-refresh-status" class="inline-status-box" style="display: none; margin-top: 14px;"></div>
