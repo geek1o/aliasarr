@@ -19739,12 +19739,15 @@ function renderBackupContentBadges(stats) {
   if (!stats || typeof stats !== "object") return '<span class="hint">—</span>';
   const badges = [];
   if (stats.shows) badges.push(`<span class="badge-tag badge-builtin">${stats.shows} ${CURRENT_LANG === "en" ? "shows" : "тайтлов"}</span>`);
+  if (stats.movie_collections) badges.push(`<span class="badge-tag" style="background:rgba(168,85,247,0.12); color:#c084fc;">${stats.movie_collections} ${CURRENT_LANG === "en" ? "collections" : "коллекций"}</span>`);
   if (stats.episodes) badges.push(`<span class="badge-tag" style="background:rgba(255,255,255,0.06); color:var(--text-muted);">${stats.episodes} ${CURRENT_LANG === "en" ? "episodes" : "серий"}</span>`);
+  if (stats.season_splits) badges.push(`<span class="badge-tag" style="background:rgba(20,184,166,0.12); color:#2dd4bf;">${stats.season_splits} ${CURRENT_LANG === "en" ? "splits" : "разделителей"}</span>`);
   if (stats.custom_formats) badges.push(`<span class="badge-tag badge-score-pos">${stats.custom_formats} ${CURRENT_LANG === "en" ? "formats" : "форматов"}</span>`);
   if (stats.quality_profiles) badges.push(`<span class="badge-tag badge-score-pos">${stats.quality_profiles} ${CURRENT_LANG === "en" ? "profiles" : "профилей"}</span>`);
   if (stats.indexers) badges.push(`<span class="badge-tag" style="background:rgba(99,102,241,0.12); color:#818cf8;">${stats.indexers} ${CURRENT_LANG === "en" ? "indexers" : "индексаторов"}</span>`);
   if (stats.download_clients) badges.push(`<span class="badge-tag" style="background:rgba(234,179,8,0.12); color:#facc15;">${stats.download_clients} ${CURRENT_LANG === "en" ? "clients" : "клиентов"}</span>`);
   if (stats.notifications) badges.push(`<span class="badge-tag" style="background:rgba(236,72,153,0.12); color:#f472b6;">${stats.notifications} ${CURRENT_LANG === "en" ? "notifiers" : "уведомлений"}</span>`);
+  if (stats.blocklist) badges.push(`<span class="badge-tag" style="background:rgba(239,68,68,0.12); color:#f87171;">${stats.blocklist} ${CURRENT_LANG === "en" ? "blocklist" : "черный список"}</span>`);
   return badges.length ? `<div style="display:flex; flex-wrap:wrap; gap:4px;">${badges.join("")}</div>` : '<span class="hint">—</span>';
 }
 

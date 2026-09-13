@@ -34,6 +34,7 @@ try:
         Episode,
         Indexer,
         MetadataSource,
+        MovieCollection,
         NotificationConfig,
         QualityProfile,
         SeasonSplit,
@@ -46,7 +47,7 @@ except ImportError:
     Session = Any  # type: ignore
     inspect = Any  # type: ignore
     text = Any  # type: ignore
-    Alias = AppSettings = Blocklist = CustomFormat = DownloadClient = DownloadHistory = Episode = Indexer = MetadataSource = NotificationConfig = QualityProfile = SeasonSplit = SeasonSplitPart = Show = TrackedRelease = User = Any  # type: ignore
+    Alias = AppSettings = Blocklist = CustomFormat = DownloadClient = DownloadHistory = Episode = Indexer = MetadataSource = MovieCollection = NotificationConfig = QualityProfile = SeasonSplit = SeasonSplitPart = Show = TrackedRelease = User = Any  # type: ignore
 
 from app.services.audit_service import log_audit
 from app.services.notifications import notify_all_sync
@@ -69,6 +70,7 @@ CONFIG_TABLES = {
 }
 
 LIBRARY_TABLES = {
+    "movie_collections": MovieCollection,
     "shows": Show,
     "aliases": Alias,
     "episodes": Episode,
@@ -133,6 +135,7 @@ def create_backup(
     # 1. Подсчёт статистики
     stats = {
         "shows": db.query(Show).count(),
+        "movie_collections": db.query(MovieCollection).count() if hasattr(MovieCollection, "__table__") else 0,
         "episodes": db.query(Episode).count(),
         "season_splits": db.query(SeasonSplit).count() if hasattr(SeasonSplit, "__table__") else 0,
         "custom_formats": db.query(CustomFormat).count(),
@@ -360,140 +363,221 @@ def restore_backup(
         export_name = "database_export.json" if "database_export.json" in zf.namelist() else "settings.json"
         payload = json.loads(zf.read(export_name).decode("utf-8"))
 
-    # 2. Восстановление настроек AppSettings
-    if task:
-        task.update(message="Восстановление настроек приложения...", progress=0.5)
+    # Отключаем проверку внешних ключей на время транзакции восстановления для SQLite
+    is_sqlite = False
+    try:
+        bind = db.get_bind() if hasattr(db, "get_bind") else getattr(db, "bind", None)
+        if bind and getattr(bind.dialect, "name", "") == "sqlite":
+            is_sqlite = True
+            db.execute(text("PRAGMA foreign_keys = OFF;"))
+    except Exception as fk_err:
+        logger.debug("Не удалось отключить PRAGMA foreign_keys: %s", fk_err)
 
-    settings = get_or_create_settings(db)
-    saved_api_key = settings.api_key
-    app_settings_data = payload.get("app_settings", {})
-    for field, value in app_settings_data.items():
-        if field in ("id", "api_key"):
-            continue
-        if hasattr(settings, field):
-            setattr(settings, field, value)
-    settings.api_key = saved_api_key
-    db.add(settings)
-
-    # 3. Восстановление конфигурационных таблиц
-    for key, model_cls in CONFIG_TABLES.items():
-        if key == "app_settings":
-            continue
-        rows_data = payload.get("tables", {}).get(key, [])
-        if rows_data or key in payload.get("tables", {}):
-            db.query(model_cls).delete()
-            for row in rows_data:
-                row_dict = dict(row)
-                row_dict.pop("id", None)
-                _deserialize_datetime_fields(row_dict)
-                db.add(model_cls(**row_dict))
-
-    # 4. Восстановление библиотеки (если полный бэкап и режим не config_only)
-    is_full_backup = (meta.get("backup_type") == "full" or "shows" in payload.get("tables", {}))
-    if is_full_backup and mode != "config_only":
+    try:
+        # 2. Восстановление настроек AppSettings
         if task:
-            task.update(message="Восстановление медиатеки и эпизодов...", progress=0.7)
-        
-        # Очистка старых данных библиотеки в порядке зависимостей
-        for key in (
-            "download_history",
-            "tracked_releases",
-            "blocklist",
-            "season_split_parts",
-            "season_splits",
-            "episodes",
-            "aliases",
-            "shows",
-        ):
-            model_cls = LIBRARY_TABLES.get(key)
-            if model_cls and hasattr(model_cls, "__table__"):
+            task.update(message="Восстановление настроек приложения...", progress=0.5)
+
+        settings = get_or_create_settings(db)
+        saved_api_key = settings.api_key
+        app_settings_data = payload.get("app_settings", {})
+        for field, value in app_settings_data.items():
+            if field == "id":
+                continue
+            if field == "api_key":
+                if value:
+                    setattr(settings, field, value)
+                continue
+            if hasattr(settings, field):
+                setattr(settings, field, value)
+        if not settings.api_key:
+            settings.api_key = saved_api_key
+        db.add(settings)
+        db.flush()
+
+        # Синхронизация /config/api_key.txt если доступен том
+        try:
+            if os.path.isdir("/config") and settings.api_key:
+                with open("/config/api_key.txt", "w") as f:
+                    f.write(settings.api_key)
+        except Exception:
+            pass
+
+        # 3. Восстановление конфигурационных таблиц
+        for key, model_cls in CONFIG_TABLES.items():
+            if key == "app_settings":
+                continue
+            rows_data = payload.get("tables", {}).get(key, [])
+            if rows_data or key in payload.get("tables", {}):
                 try:
                     db.query(model_cls).delete()
                 except Exception as del_err:
                     logger.warning("Ошибка очистки таблицы %s: %s", key, del_err)
-        db.flush()
+                for row in rows_data:
+                    row_dict = dict(row)
+                    _deserialize_datetime_fields(row_dict)
+                    db.add(model_cls(**row_dict))
+                db.flush()
 
-        show_id_map: dict[int, int] = {}
-
-        # Восстановление Show
-        shows_data = payload.get("tables", {}).get("shows", [])
-        for row in shows_data:
-            r = dict(row)
-            old_id = r.pop("id", None)
-            _deserialize_datetime_fields(r)
-            new_show = Show(**r)
-            db.add(new_show)
+        # 4. Восстановление библиотеки (если полный бэкап и режим не config_only)
+        is_full_backup = (meta.get("backup_type") == "full" or "shows" in payload.get("tables", {}))
+        if is_full_backup and mode != "config_only":
+            if task:
+                task.update(message="Восстановление медиатеки и эпизодов...", progress=0.7)
+            
+            # Очистка старых данных библиотеки в порядке зависимостей
+            for key in (
+                "download_history",
+                "tracked_releases",
+                "blocklist",
+                "season_split_parts",
+                "season_splits",
+                "episodes",
+                "aliases",
+                "shows",
+                "movie_collections",
+            ):
+                model_cls = LIBRARY_TABLES.get(key)
+                if model_cls and hasattr(model_cls, "__table__"):
+                    try:
+                        db.query(model_cls).delete()
+                    except Exception as del_err:
+                        logger.warning("Ошибка очистки таблицы %s: %s", key, del_err)
             db.flush()
-            if old_id is not None:
-                show_id_map[old_id] = new_show.id
 
-        # Восстановление Aliases
-        aliases_data = payload.get("tables", {}).get("aliases", [])
-        for row in aliases_data:
-            r = dict(row)
-            r.pop("id", None)
-            old_show_id = r.get("show_id")
-            if old_show_id in show_id_map:
-                r["show_id"] = show_id_map[old_show_id]
-            _deserialize_datetime_fields(r)
-            db.add(Alias(**r))
-
-        # Восстановление Episodes
-        episodes_data = payload.get("tables", {}).get("episodes", [])
-        for row in episodes_data:
-            r = dict(row)
-            r.pop("id", None)
-            old_show_id = r.get("show_id")
-            if old_show_id in show_id_map:
-                r["show_id"] = show_id_map[old_show_id]
-            _deserialize_datetime_fields(r)
-            db.add(Episode(**r))
-
-        # Восстановление SeasonSplit & SeasonSplitPart
-        split_id_map: dict[int, int] = {}
-        splits_data = payload.get("tables", {}).get("season_splits", [])
-        for row in splits_data:
-            r = dict(row)
-            old_split_id = r.pop("id", None)
-            old_show_id = r.get("show_id")
-            if old_show_id in show_id_map:
-                r["show_id"] = show_id_map[old_show_id]
-            _deserialize_datetime_fields(r)
-            new_split = SeasonSplit(**r)
-            db.add(new_split)
-            db.flush()
-            if old_split_id is not None:
-                split_id_map[old_split_id] = new_split.id
-
-        parts_data = payload.get("tables", {}).get("season_split_parts", [])
-        for row in parts_data:
-            r = dict(row)
-            r.pop("id", None)
-            old_split_id = r.get("split_id")
-            if old_split_id in split_id_map:
-                r["split_id"] = split_id_map[old_split_id]
-            _deserialize_datetime_fields(r)
-            db.add(SeasonSplitPart(**r))
-
-        # Восстановление TrackedRelease, DownloadHistory, Blocklist
-        for key, model_cls in [
-            ("tracked_releases", TrackedRelease),
-            ("download_history", DownloadHistory),
-            ("blocklist", Blocklist),
-        ]:
-            if not hasattr(model_cls, "__table__"):
-                continue
-            items_data = payload.get("tables", {}).get(key, [])
-            for row in items_data:
+            # Восстановление MovieCollection
+            collection_id_map: dict[int, int] = {}
+            collections_data = payload.get("tables", {}).get("movie_collections", [])
+            for row in collections_data:
                 r = dict(row)
-                r.pop("id", None)
+                old_c_id = r.get("id")
+                _deserialize_datetime_fields(r)
+                new_col = MovieCollection(**r)
+                db.add(new_col)
+                db.flush()
+                if old_c_id is not None:
+                    collection_id_map[old_c_id] = new_col.id
+
+            # Восстановление Show
+            show_id_map: dict[int, int] = {}
+            shows_data = payload.get("tables", {}).get("shows", [])
+            for row in shows_data:
+                r = dict(row)
+                old_id = r.get("id")
+                old_c_id = r.get("collection_id")
+                if old_c_id and old_c_id in collection_id_map:
+                    r["collection_id"] = collection_id_map[old_c_id]
+                _deserialize_datetime_fields(r)
+                new_show = Show(**r)
+                db.add(new_show)
+                db.flush()
+                if old_id is not None:
+                    show_id_map[old_id] = new_show.id
+
+            # Восстановление Aliases
+            aliases_data = payload.get("tables", {}).get("aliases", [])
+            for row in aliases_data:
+                r = dict(row)
+                old_show_id = r.get("show_id")
+                if old_show_id in show_id_map:
+                    r["show_id"] = show_id_map[old_show_id]
+                _deserialize_datetime_fields(r)
+                db.add(Alias(**r))
+
+            # Восстановление Episodes
+            ep_id_map: dict[int, int] = {}
+            episodes_data = payload.get("tables", {}).get("episodes", [])
+            for row in episodes_data:
+                r = dict(row)
+                old_ep_id = r.get("id")
+                old_show_id = r.get("show_id")
+                if old_show_id in show_id_map:
+                    r["show_id"] = show_id_map[old_show_id]
+                _deserialize_datetime_fields(r)
+                new_ep = Episode(**r)
+                db.add(new_ep)
+                db.flush()
+                if old_ep_id is not None:
+                    ep_id_map[old_ep_id] = new_ep.id
+
+            # Восстановление SeasonSplit & SeasonSplitPart
+            split_id_map: dict[int, int] = {}
+            splits_data = payload.get("tables", {}).get("season_splits", [])
+            for row in splits_data:
+                r = dict(row)
+                old_split_id = r.get("id")
+                old_show_id = r.get("show_id")
+                if old_show_id in show_id_map:
+                    r["show_id"] = show_id_map[old_show_id]
+                _deserialize_datetime_fields(r)
+                new_split = SeasonSplit(**r)
+                db.add(new_split)
+                db.flush()
+                if old_split_id is not None:
+                    split_id_map[old_split_id] = new_split.id
+
+            parts_data = payload.get("tables", {}).get("season_split_parts", [])
+            for row in parts_data:
+                r = dict(row)
+                old_split_id = r.get("split_id")
+                if old_split_id in split_id_map:
+                    r["split_id"] = split_id_map[old_split_id]
+                _deserialize_datetime_fields(r)
+                db.add(SeasonSplitPart(**r))
+
+            # Восстановление TrackedRelease
+            tracked_data = payload.get("tables", {}).get("tracked_releases", [])
+            for row in tracked_data:
+                r = dict(row)
                 old_show_id = r.get("show_id")
                 if old_show_id and old_show_id in show_id_map:
                     r["show_id"] = show_id_map[old_show_id]
                 _deserialize_datetime_fields(r)
-                db.add(model_cls(**r))
+                db.add(TrackedRelease(**r))
 
-    db.commit()
+            # Восстановление DownloadHistory
+            history_data = payload.get("tables", {}).get("download_history", [])
+            for row in history_data:
+                r = dict(row)
+                old_show_id = r.get("show_id")
+                if old_show_id and old_show_id in show_id_map:
+                    r["show_id"] = show_id_map[old_show_id]
+                old_ep_id = r.get("episode_id")
+                if old_ep_id and old_ep_id in ep_id_map:
+                    r["episode_id"] = ep_id_map[old_ep_id]
+                _deserialize_datetime_fields(r)
+                db.add(DownloadHistory(**r))
+
+            # Восстановление Blocklist
+            blocklist_data = payload.get("tables", {}).get("blocklist", [])
+            for row in blocklist_data:
+                r = dict(row)
+                old_show_id = r.get("show_id")
+                if old_show_id and old_show_id in show_id_map:
+                    r["show_id"] = show_id_map[old_show_id]
+                _deserialize_datetime_fields(r)
+                db.add(Blocklist(**r))
+
+        db.commit()
+    finally:
+        # Включаем проверку внешних ключей обратно для SQLite
+        if is_sqlite:
+            try:
+                db.execute(text("PRAGMA foreign_keys = ON;"))
+            except Exception:
+                pass
+            try:
+                # Синхронизация sqlite_sequence для таблиц со счетчиками автоинкремента
+                all_tables = list(CONFIG_TABLES.keys()) + list(LIBRARY_TABLES.keys())
+                for t_name in all_tables:
+                    try:
+                        db.execute(text(f"UPDATE sqlite_sequence SET seq = (SELECT COALESCE(MAX(id), 0) FROM {t_name}) WHERE name = '{t_name}';"))
+                    except Exception:
+                        pass
+                db.commit()
+            except Exception:
+                pass
+
     log_audit(db, "backup", f"Успешно восстановлена конфигурация из бэкапа ({meta.get('backup_type', 'full')})")
     
     if task:

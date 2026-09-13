@@ -11,12 +11,21 @@ try:
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
     from app.models.db import (
+        AppSettings,
         Base,
         Blocklist,
+        CustomFormat,
+        DownloadClient,
+        DownloadHistory,
         Episode,
+        Indexer,
+        MovieCollection,
+        QualityProfile,
         SeasonSplit,
         SeasonSplitPart,
         Show,
+        TrackedRelease,
+        User,
     )
     from app.services.backup_service import create_backup, restore_backup
     HAS_DB = True
@@ -181,6 +190,108 @@ class TestBackupService(unittest.TestCase):
         self.assertEqual(len(restored_blocks), 1)
         self.assertEqual(restored_blocks[0].show_id, restored_shows[0].id)
         self.assertEqual(restored_blocks[0].release_title, "Space Dandy S01 Fake")
+
+        db.close()
+        db2.close()
+
+    @unittest.skipUnless(HAS_DB, "SQLAlchemy required")
+    def test_backup_and_restore_movie_collections_and_foreign_keys(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        Session = sessionmaker(bind=engine)
+        db = Session()
+
+        # 1. Настройки и профиль качества
+        qp = QualityProfile(id=7, name="Ultra-HD 4K", cutoff_score=100)
+        db.add(qp)
+        settings = AppSettings(
+            id=1,
+            api_key="secret_test_key_12345",
+            default_quality_profile_movie_id=7,
+            metadata_title_language="ru",
+        )
+        db.add(settings)
+        db.flush()
+
+        # 2. Коллекция фильмов
+        col = MovieCollection(
+            id=10,
+            tmdb_collection_id=12444,
+            title="Harry Potter Collection",
+            overview="All Harry Potter movies",
+            quality_profile_id=7,
+        )
+        db.add(col)
+        db.flush()
+
+        # 3. Фильм внутри коллекции с привязкой к профилю
+        show = Show(
+            id=42,
+            title="Гарри Поттер и философский камень",
+            content_type="movie",
+            year=2001,
+            collection_id=col.id,
+            quality_profile_id=7,
+        )
+        db.add(show)
+        db.flush()
+
+        # 4. Эпизод и история загрузок
+        ep = Episode(id=101, show_id=show.id, season_number=1, episode_number=1, title="Movie")
+        db.add(ep)
+        db.flush()
+
+        hist = DownloadHistory(
+            show_id=show.id,
+            episode_id=ep.id,
+            release_title="Harry Potter 2001 2160p UHD",
+            event_type="grabbed",
+        )
+        db.add(hist)
+        db.commit()
+
+        # Создание бэкапа
+        backup_info = create_backup(db, backup_type="full")
+        self.assertEqual(backup_info["stats"]["movie_collections"], 1)
+        self.assertEqual(backup_info["stats"]["shows"], 1)
+        self.assertEqual(backup_info["stats"]["episodes"], 1)
+        self.assertEqual(backup_info["stats"]["quality_profiles"], 1)
+
+        # Восстановление в чистую базу
+        engine2 = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine2)
+        Session2 = sessionmaker(bind=engine2)
+        db2 = Session2()
+
+        archive_path = os.path.join(self.test_dir, backup_info["name"])
+        res = restore_backup(db2, archive_path, mode="full")
+        self.assertTrue(res["success"])
+
+        # Проверка восстановления коллекции и связей
+        restored_cols = db2.query(MovieCollection).all()
+        self.assertEqual(len(restored_cols), 1)
+        self.assertEqual(restored_cols[0].title, "Harry Potter Collection")
+        self.assertEqual(restored_cols[0].quality_profile_id, 7)
+
+        restored_shows = db2.query(Show).all()
+        self.assertEqual(len(restored_shows), 1)
+        self.assertEqual(restored_shows[0].title, "Гарри Поттер и философский камень")
+        self.assertEqual(restored_shows[0].collection_id, restored_cols[0].id)
+        self.assertEqual(restored_shows[0].quality_profile_id, 7)
+
+        # Проверка сохранения настроек и ключа API
+        restored_settings = db2.query(AppSettings).first()
+        self.assertIsNotNone(restored_settings)
+        self.assertEqual(restored_settings.api_key, "secret_test_key_12345")
+        self.assertEqual(restored_settings.default_quality_profile_movie_id, 7)
+        self.assertEqual(restored_settings.metadata_title_language, "ru")
+
+        # Проверка связности истории загрузок с эпизодом
+        restored_eps = db2.query(Episode).all()
+        self.assertEqual(len(restored_eps), 1)
+        restored_hist = db2.query(DownloadHistory).all()
+        self.assertEqual(len(restored_hist), 1)
+        self.assertEqual(restored_hist[0].episode_id, restored_eps[0].id)
 
         db.close()
         db2.close()

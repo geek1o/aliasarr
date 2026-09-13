@@ -527,9 +527,31 @@ async def on_startup():
             try:
                 settings = get_or_create_settings(db)
                 interval_days = getattr(settings, "backup_interval_days", 7) or 7
-                if interval_days > 0:
-                    b_type = getattr(settings, "backup_default_type", "full") or "full"
-                    await asyncio.to_thread(_sync_create_backup, b_type)
+                if interval_days <= 0:
+                    return
+
+                from app.services.backup_service import list_backups
+                backups = await asyncio.to_thread(list_backups)
+                if backups:
+                    latest = backups[0]
+                    created_at_str = latest.get("created_at")
+                    if created_at_str:
+                        try:
+                            created_dt = dt.datetime.fromisoformat(created_at_str)
+                            elapsed_seconds = (dt.datetime.utcnow() - created_dt).total_seconds()
+                            required_seconds = (interval_days * 86400) - 3600  # 1 hour margin
+                            if elapsed_seconds < required_seconds:
+                                logger.debug(
+                                    "Пропуск автобэкапа: последний бэкап был %s, интервал %d дн.",
+                                    created_at_str,
+                                    interval_days,
+                                )
+                                return
+                        except Exception as parse_err:
+                            logger.debug("Не удалось распарсить дату последнего бэкапа: %s", parse_err)
+
+                b_type = getattr(settings, "backup_default_type", "full") or "full"
+                await asyncio.to_thread(_sync_create_backup, b_type)
             except Exception as exc:
                 logger.warning("Ошибка автоматического создания бэкапа: %s", exc)
             finally:
