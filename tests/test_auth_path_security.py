@@ -26,7 +26,7 @@ def _request(path: str, host: bytes = b"testserver") -> Request:
             "raw_path": path.encode("ascii"),
             "query_string": b"",
             "headers": [(b"host", host)],
-            "client": ("203.0.113.10", 50000),
+            "client": ("8.8.8.8", 50000),
             "server": ("testserver", 80),
         }
     )
@@ -37,6 +37,7 @@ class TestAuthPathSecurity(unittest.TestCase):
         middleware = ApiKeyMiddleware(app=MagicMock())
         db = MagicMock()
         settings = MagicMock(login_enabled=True, api_key="secret")
+        settings.auth_disabled_for_local_addresses = False
         call_next = AsyncMock(return_value=MagicMock(status_code=200))
 
         async def run():
