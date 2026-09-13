@@ -77,6 +77,7 @@ class SettingsOut(BaseModel):
     metadata_auto_refresh_enabled: bool = True
     metadata_refresh_interval_hours: int = 12
     metadata_refresh_aliases: bool = True
+    metadata_overview_language: str = "ru"
 
     session_timeout_minutes: int
     backup_interval_days: int = 7
@@ -142,6 +143,7 @@ class SettingsUpdate(BaseModel):
     metadata_auto_refresh_enabled: Optional[bool] = None
     metadata_refresh_interval_hours: Optional[int] = None
     metadata_refresh_aliases: Optional[bool] = None
+    metadata_overview_language: Optional[str] = None
 
     session_timeout_minutes: Optional[int] = None
     backup_interval_days: Optional[int] = None
@@ -201,6 +203,7 @@ def _to_settings_out(settings, is_owner: bool = False) -> SettingsOut:
         metadata_auto_refresh_enabled=getattr(settings, "metadata_auto_refresh_enabled", True),
         metadata_refresh_interval_hours=getattr(settings, "metadata_refresh_interval_hours", 12) or 12,
         metadata_refresh_aliases=getattr(settings, "metadata_refresh_aliases", True),
+        metadata_overview_language=getattr(settings, "metadata_overview_language", "ru") or "ru",
         session_timeout_minutes=getattr(settings, "session_timeout_minutes", 43200) or 43200,
         backup_interval_days=getattr(settings, "backup_interval_days", 7) or 7,
         backup_retention_count=getattr(settings, "backup_retention_count", 10) or 10,
@@ -405,6 +408,9 @@ def update_settings(
         _reschedule(request, "refresh_metadata", payload.metadata_refresh_interval_hours * 60)
     if payload.metadata_refresh_aliases is not None:
         settings.metadata_refresh_aliases = payload.metadata_refresh_aliases
+    if payload.metadata_overview_language is not None:
+        val = str(payload.metadata_overview_language).strip().lower()
+        settings.metadata_overview_language = val or "ru"
 
     if payload.session_timeout_minutes is not None:
         if payload.session_timeout_minutes < 5:

@@ -3024,8 +3024,11 @@ async def remap_show_metadata(
         else:
             source = MetadataSource(name="SkyHook (Sonarr)", type="skyhook", base_url="https://skyhook.sonarr.tv/v1/tvdb", enabled=True)
 
-    client = get_metadata_client(source)
-    fallback_client = RadarrClient() if is_movie else SkyHookClient()
+    from app.models.db import AppSettings
+    app_settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+    overview_lang = getattr(app_settings, "metadata_overview_language", "ru") or "ru"
+    client = get_metadata_client(source, overview_language=overview_lang)
+    fallback_client = RadarrClient(overview_language=overview_lang) if is_movie else SkyHookClient(overview_language=overview_lang)
     details = None
 
     try:

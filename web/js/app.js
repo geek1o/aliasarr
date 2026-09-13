@@ -952,6 +952,12 @@ const TRANSLATIONS = {
     "md.sync_section_desc": "Принудительное обновление информации о фильмах, франшизах, сериях и датах выхода из сети",
     "md.refresh_all_info": "Запускает полный опрос облачных провайдеров (Radarr/Sonarr SkyHook) для всей библиотеки: обновляет официальные названия, саги и киноколлекции, постеры, синопсисы и даты премьер.",
     "md.settings_saved": "Настройки обновления метаданных сохранены",
+    "md.overview_language_label": "Язык описания (синопсиса)",
+    "md.overview_language_desc": "Предпочтительный язык для описания сюжета карточек фильмов, сериалов и аниме.",
+    "lang.ru": "Русский (RU)",
+    "lang.en": "English (EN)",
+    "lang.original": "Оригинальный язык тайтла",
+    "md.overview_language_saved": "Язык описания сохранен",
     "md.refresh_started": "Запущено фоновое обновление метаданных библиотеки...",
     "md.refresh_aliases_toggle": "Обновлять поисковые алиасы при синхронизации метаданных",
     "md.refresh_aliases_hint": "Автоматически актуализировать список альтернативных названий тайтла согласно разрешенным языкам при фоновом или ручном обновлении метаданных",
@@ -2335,6 +2341,12 @@ const TRANSLATIONS = {
     "md.sync_section_desc": "Force update movies, franchises, episodes, and release dates from the cloud",
     "md.refresh_all_info": "Starts a full query of cloud metadata providers (Radarr/Sonarr SkyHook) for the entire library: updates official titles, movie collections and sagas, posters, overviews, and premiere dates.",
     "md.settings_saved": "Metadata refresh settings saved",
+    "md.overview_language_label": "Overview Language",
+    "md.overview_language_desc": "Preferred language for movie, series, and anime overviews.",
+    "lang.ru": "Russian (RU)",
+    "lang.en": "English (EN)",
+    "lang.original": "Original title language",
+    "md.overview_language_saved": "Overview language saved",
     "md.refresh_started": "Background library metadata refresh started...",
     "md.refresh_aliases_toggle": "Update search aliases during metadata synchronization",
     "md.refresh_aliases_hint": "Automatically update title alternative names according to allowed languages during background or manual metadata refresh",
@@ -14388,6 +14400,11 @@ async function loadGeneralSettings() {
     const refreshAliasesEl = document.getElementById("setting-metadata-refresh-aliases");
     if (refreshAliasesEl) refreshAliasesEl.checked = s.metadata_refresh_aliases !== false;
 
+    const overviewLangEl = document.getElementById("setting-metadata-overview-language");
+    if (overviewLangEl && s.metadata_overview_language) {
+      overviewLangEl.value = s.metadata_overview_language;
+    }
+
     applyTheme(s.theme || "dark");
     applyLanguage(s.language || "ru");
     applyScrollbarMode(s.scrollbar_mode || localStorage.getItem("aliasarr_scrollbar") || "autohide");
@@ -17119,6 +17136,10 @@ async function loadMetadataSources() {
     const s = CACHED_APP_SETTINGS || await api("/api/v1/settings");
     const refreshAliasesEl = document.getElementById("setting-metadata-refresh-aliases");
     if (refreshAliasesEl && s) refreshAliasesEl.checked = s.metadata_refresh_aliases !== false;
+    const overviewLangEl = document.getElementById("setting-metadata-overview-language");
+    if (overviewLangEl && s && s.metadata_overview_language) {
+      overviewLangEl.value = s.metadata_overview_language;
+    }
   } catch (_) {}
   const tbody = document.querySelector("#md-table tbody");
   if (!tbody) return;
@@ -17182,6 +17203,22 @@ async function toggleMetadataRefreshAliases(checked) {
       CACHED_APP_SETTINGS.metadata_refresh_aliases = val;
     }
     showToast(t("md.settings_saved") || "Настройки обновлены");
+  } catch (e) {
+    showToast("Ошибка: " + e.message, "error");
+  }
+}
+
+async function changeMetadataOverviewLanguage(val) {
+  try {
+    const langVal = String(val || "ru").trim().toLowerCase();
+    await api("/api/v1/settings", {
+      method: "PUT",
+      body: JSON.stringify({ metadata_overview_language: langVal }),
+    });
+    if (CACHED_APP_SETTINGS) {
+      CACHED_APP_SETTINGS.metadata_overview_language = langVal;
+    }
+    showToast(t("md.overview_language_saved") || "Язык описания сохранен");
   } catch (e) {
     showToast("Ошибка: " + e.message, "error");
   }

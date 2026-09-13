@@ -2925,6 +2925,29 @@
                 Запускает полный опрос облачных провайдеров (Radarr/Sonarr SkyHook, TMDb) для всей библиотеки: обновляет официальные названия, саги и киноколлекции, постеры, синопсисы и даты премьер.
               </p>
 
+              <div class="settings-field-group" style="margin-bottom: 20px; max-width: 440px;">
+                <label class="settings-field-label" for="setting-metadata-overview-language">
+                  <span data-i18n="md.overview_language_label">Язык описания (синопсиса)</span>
+                </label>
+                <p class="field-hint" style="margin: 0 0 8px 0; color: var(--text-muted); font-size: 12.5px; line-height: 1.4;" data-i18n="md.overview_language_desc">
+                  Предпочтительный язык для описания сюжета карточек фильмов, сериалов и аниме.
+                </p>
+                <select id="setting-metadata-overview-language" class="input" onchange="changeMetadataOverviewLanguage(this.value)">
+                  <option value="ru" data-i18n="lang.ru">Русский (RU)</option>
+                  <option value="en" data-i18n="lang.en">English (EN)</option>
+                  <option value="original" data-i18n="lang.original">Оригинальный язык тайтла</option>
+                  <option value="de">Deutsch (DE)</option>
+                  <option value="fr">Français (FR)</option>
+                  <option value="es">Español (ES)</option>
+                  <option value="it">Italiano (IT)</option>
+                  <option value="ja">日本語 (JA)</option>
+                  <option value="ko">한국어 (KO)</option>
+                  <option value="zh">中文 (ZH)</option>
+                  <option value="uk">Українська (UK)</option>
+                  <option value="pt">Português (PT)</option>
+                </select>
+              </div>
+
               <div class="settings-field-group" style="margin-bottom: 16px;">
                 <label class="switch-toggle">
                   <input id="setting-metadata-refresh-aliases" type="checkbox" checked onchange="toggleMetadataRefreshAliases(this.checked)">

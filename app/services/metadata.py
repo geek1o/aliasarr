@@ -27,7 +27,7 @@ except ImportError:
     httpx = None  # type: ignore
 
 try:
-    from app.models.db import Alias, AliasLanguage, Episode, EpisodeStatus, MetadataSource, MetadataSourceType, Show, MovieCollection
+    from app.models.db import Alias, AliasLanguage, Episode, EpisodeStatus, MetadataSource, MetadataSourceType, Show, MovieCollection, AppSettings
 except ImportError:
     class _DummyExpr:
         def __eq__(self, other): return self
@@ -92,6 +92,10 @@ except ImportError:
         id = _DummyExpr()
         tmdb_collection_id = _DummyExpr()
         title = _DummyExpr()
+
+    class AppSettings:  # type: ignore
+        id = _DummyExpr()
+        metadata_overview_language = "ru"
 
 
 @dataclass
@@ -599,6 +603,65 @@ def calc_metadata_match_score(
     return max(0.0, min(1.0, best_sim))
 
 
+def select_overview(
+    overviews_by_lang: dict[str, Optional[str]],
+    original_overview: Optional[str] = None,
+    preferred_lang: str = "ru",
+) -> Optional[str]:
+    """
+    Выбирает наилучший синопсис (overview) на основе предпочтительного языка пользователя
+    с цепочкой надежных фоллбэков.
+    preferred_lang:
+      - 'original' -> original_overview -> en -> ru -> любой
+      - 'ru' -> ru -> original_overview -> en -> любой
+      - 'en' -> en -> original_overview -> ru -> любой
+      - '<other>' -> <other> -> en -> original_overview -> ru -> любой
+    """
+    clean_dict: dict[str, str] = {}
+    for k, v in (overviews_by_lang or {}).items():
+        if k and v and str(v).strip():
+            clean_dict[str(k).strip().lower()] = str(v).strip()
+
+    orig = str(original_overview).strip() if original_overview and str(original_overview).strip() else None
+    pref = (preferred_lang or "ru").strip().lower()
+
+    if pref == "original":
+        candidates = [orig, clean_dict.get("en"), clean_dict.get("eng"), clean_dict.get("ru"), clean_dict.get("rus")]
+        for c in candidates:
+            if c:
+                return c
+        return next(iter(clean_dict.values()), None)
+
+    norm_pref = normalize_metadata_lang_code(pref) or pref
+
+    # Ищем совпадение с предпочитаемым языком (по коду или нормализации)
+    pref_overview = clean_dict.get(norm_pref) or clean_dict.get(pref)
+    if not pref_overview:
+        for k, v in clean_dict.items():
+            if normalize_metadata_lang_code(k) == norm_pref:
+                pref_overview = v
+                break
+
+    if pref_overview:
+        return pref_overview
+
+    en_overview = clean_dict.get("en") or clean_dict.get("eng")
+    ru_overview = clean_dict.get("ru") or clean_dict.get("rus")
+
+    if norm_pref in ("ru", "rus"):
+        candidates = [orig, en_overview]
+    elif norm_pref in ("en", "eng"):
+        candidates = [orig, ru_overview]
+    else:
+        candidates = [en_overview, orig, ru_overview]
+
+    for c in candidates:
+        if c:
+            return c
+
+    return next(iter(clean_dict.values()), None)
+
+
 class BaseMetadataClient:
     async def search(self, query: str) -> list[MetadataResult]:
         raise NotImplementedError
@@ -623,7 +686,13 @@ class TMDBClient(BaseMetadataClient):
     IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
     DEFAULT_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIxYTczNzMzMDE5NjFkMDNmOTdmODUzYTg3NmRkMTIxMiIsInN1YiI6IjU4NjRmNTkyYzNhMzY4MGFiNjAxNzUzNCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.gh1BwogCCKOda6xj9FRMgAAj_RYKMMPC3oNlcBtlmwk"
 
-    def __init__(self, api_key: str = "", alias_countries: Optional[list[str]] = None, alias_languages: Optional[list[str]] = None):
+    def __init__(
+        self,
+        api_key: str = "",
+        alias_countries: Optional[list[str]] = None,
+        alias_languages: Optional[list[str]] = None,
+        overview_language: str = "ru",
+    ):
         import os as _os
         self.api_key = (api_key or _os.getenv("TMDB_API_KEY", "") or self.DEFAULT_TOKEN).strip()
         langs = []
@@ -635,6 +704,7 @@ class TMDBClient(BaseMetadataClient):
             langs = ["ru"]
         self.alias_languages = langs
         self.alias_countries = [c.upper() for c in alias_countries] if alias_countries else None
+        self.overview_language = (overview_language or "ru").strip().lower()
 
     def _headers(self) -> dict:
         return {
@@ -715,8 +785,7 @@ class TMDBClient(BaseMetadataClient):
         extra_lang_titles = []
 
         # Извлекаем названия и описания из переводов TMDB строго для разрешенных языков
-        ru_overview = None
-        eng_overview = None
+        overviews_by_lang: dict[str, str] = {}
         tr_raw = data.get("translations")
         tr_list = tr_raw.get("translations", []) if isinstance(tr_raw, dict) else (tr_raw if isinstance(tr_raw, list) else [])
         for tr in tr_list:
@@ -725,12 +794,13 @@ class TMDBClient(BaseMetadataClient):
             iso = normalize_metadata_lang_code(tr.get("iso_639_1") or tr.get("language") or "")
             tr_data = tr.get("data") if isinstance(tr.get("data"), dict) else tr
             t_t = tr_data.get("title")
+            ov = tr_data.get("overview")
+            if iso and ov and str(ov).strip():
+                overviews_by_lang[iso] = str(ov).strip()
             if iso in ("ru", "rus", "russian"):
                 ru_title = t_t or ru_title
-                ru_overview = tr_data.get("overview") or ru_overview
             elif iso in ("en", "eng", "english"):
                 eng_trans_title = t_t or eng_trans_title
-                eng_overview = tr_data.get("overview") or eng_overview
             elif iso in allowed_langs and t_t and t_t.strip():
                 extra_lang_titles.append(t_t.strip())
 
@@ -789,8 +859,8 @@ class TMDBClient(BaseMetadataClient):
         countries = [c["iso_3166_1"] for c in data.get("production_countries", [])]
         premiere = data.get("release_date") or None
 
-        # Описание сюжета: Русский -> Английский -> Оригинал
-        overview = ru_overview or data.get("overview") or eng_overview
+        # Описание сюжета на основе предпочтительного языка с фоллбэками
+        overview = select_overview(overviews_by_lang, data.get("overview"), self.overview_language)
 
         # Внешние идентификаторы и трейлер
         ext_ids = data.get("external_ids") or {}
@@ -979,24 +1049,21 @@ class TMDBClient(BaseMetadataClient):
         raw_title = show_data.get("name") or show_data.get("original_name") or ""
         aliases = []
         ru_title = None
-        ru_overview = None
-        eng_trans_title = None
-        eng_overview = None
-        extra_lang_titles = []
-
-        # Извлекаем русское и английское название и описание из переводов TMDB
+        # Извлекаем русское и английское название и описания из переводов TMDB
+        overviews_by_lang: dict[str, str] = {}
         for tr in (show_data.get("translations") or {}).get("translations", []):
             if not isinstance(tr, dict):
                 continue
             iso = normalize_metadata_lang_code(tr.get("iso_639_1") or tr.get("language") or "")
             tr_data = tr.get("data") if isinstance(tr.get("data"), dict) else tr
             t_t = tr_data.get("name") or tr_data.get("title")
+            ov = tr_data.get("overview")
+            if iso and ov and str(ov).strip():
+                overviews_by_lang[iso] = str(ov).strip()
             if iso in ("ru", "rus", "russian"):
                 ru_title = t_t or ru_title
-                ru_overview = tr_data.get("overview") or ru_overview
             elif iso in ("en", "eng", "english"):
                 eng_trans_title = t_t or eng_trans_title
-                eng_overview = tr_data.get("overview") or eng_overview
             elif iso in allowed_langs and t_t and t_t.strip():
                 extra_lang_titles.append(t_t.strip())
 
@@ -1049,8 +1116,8 @@ class TMDBClient(BaseMetadataClient):
         countries = show_data.get("origin_country", [])
         premiere = show_data.get("first_air_date") or None
 
-        # Описание сюжета: Русский -> Английский -> Оригинал
-        overview = ru_overview or show_data.get("overview") or eng_overview
+        # Описание сюжета на основе предпочтительного языка с фоллбэками
+        overview = select_overview(overviews_by_lang, show_data.get("overview"), self.overview_language)
 
         # Внешние идентификаторы и трейлер
         ext_ids = show_data.get("external_ids") or {}
@@ -1309,7 +1376,14 @@ class SkyHookClient(BaseMetadataClient):
     BASE_URL = "https://skyhook.sonarr.tv/v1/tvdb"
     RADARR_URL = "https://radarr.servarr.com/v1/api"
 
-    def __init__(self, api_key: str = "", alias_countries: Optional[list[str]] = None, base_url: str = "", alias_languages: Optional[list[str]] = None):
+    def __init__(
+        self,
+        api_key: str = "",
+        alias_countries: Optional[list[str]] = None,
+        base_url: str = "",
+        alias_languages: Optional[list[str]] = None,
+        overview_language: str = "ru",
+    ):
         self.base_url = (base_url or self.BASE_URL).rstrip("/")
         langs = []
         if alias_languages:
@@ -1320,6 +1394,7 @@ class SkyHookClient(BaseMetadataClient):
             langs = ["ru"]
         self.alias_languages = langs
         self.alias_countries = [c.upper() for c in alias_countries] if alias_countries else None
+        self.overview_language = (overview_language or "ru").strip().lower()
 
     async def search(self, query: str) -> list[MetadataResult]:
         if not query or not query.strip():
@@ -1424,11 +1499,18 @@ class SkyHookClient(BaseMetadataClient):
                     if is_alias_allowed(t, lang, allowed_langs):
                         aliases.append(t)
 
-        overview = data.get("overview")
+        overviews_by_lang: dict[str, str] = {}
+        if data.get("overview") and str(data.get("overview")).strip():
+            overviews_by_lang["en"] = str(data.get("overview")).strip()
 
-        # Запрашиваем переводы для всех настроенных языков пользователя (до 5 языков)
+        # Запрашиваем переводы для настроенных языков пользователя и предпочитаемого языка описания
+        req_langs = list(self.alias_languages or ["ru"])
+        norm_overview_lang = normalize_metadata_lang_code(self.overview_language) or self.overview_language
+        if norm_overview_lang and norm_overview_lang not in ("en", "original") and norm_overview_lang not in [l.lower() for l in req_langs]:
+            req_langs.append(norm_overview_lang)
+
         async with httpx.AsyncClient(timeout=15, headers={"User-Agent": "Aliasarr/1.0.0 (Sonarr SkyHook Proxy)"}) as client:
-            for lang in (self.alias_languages or ["ru"]):
+            for lang in req_langs:
                 if not lang or lang.lower() == "en":
                     continue
                 try:
@@ -1440,10 +1522,12 @@ class SkyHookClient(BaseMetadataClient):
                             if is_alias_allowed(lt.strip(), lang, allowed_langs):
                                 aliases.append(lt.strip())
                         lo = lang_data.get("overview")
-                        if lo and (lang.lower() == "ru" or not overview):
-                            overview = lo
+                        if lo and str(lo).strip():
+                            overviews_by_lang[normalize_metadata_lang_code(lang) or lang.lower()] = str(lo).strip()
                 except Exception:
                     pass
+
+        overview = select_overview(overviews_by_lang, data.get("overview"), self.overview_language)
 
         # Постер
         poster_url = extract_skyhook_poster(data.get("images", []))
@@ -1486,16 +1570,27 @@ class SkyHookClient(BaseMetadataClient):
         # Обогащение переводами и алиасами на всех настроенных языках (RU, JA, ZH, KO и др.) через TMDb
         if tmdb_id_val:
             try:
-                tmdb = TMDBClient(api_key=RadarrClient.RADARR_TMDB_TOKEN, alias_languages=self.alias_languages)
+                tmdb = TMDBClient(
+                    api_key=RadarrClient.RADARR_TMDB_TOKEN,
+                    alias_languages=self.alias_languages,
+                    overview_language=self.overview_language,
+                )
                 tmdb_details = await tmdb._get_tv_details(str(tmdb_id_val))
                 if tmdb_details:
                     for a in tmdb_details.aliases:
                         if a and a != raw_title and a not in aliases:
                             if is_alias_allowed(a, None, allowed_langs):
                                 aliases.append(a)
-                    # Если в SkyHook английское описание, а в TMDb есть русское — обогащаем описание
-                    if tmdb_details.overview and ("ru" in (self.alias_languages or ["ru"])) and any('\u0400' <= c <= '\u04ff' for c in tmdb_details.overview):
-                        overview = tmdb_details.overview
+                    # Если TMDb предоставил локализованное описание на выбранном языке
+                    norm_pref = normalize_metadata_lang_code(self.overview_language) or self.overview_language
+                    if tmdb_details.overview:
+                        if norm_pref in ("ru", "rus"):
+                            if any('\u0400' <= c <= '\u04ff' for c in tmdb_details.overview):
+                                overview = tmdb_details.overview
+                        elif norm_pref not in ("en", "original"):
+                            overview = tmdb_details.overview
+                        elif not overview:
+                            overview = tmdb_details.overview
             except Exception as e:
                 logger.debug("TMDb TV enrichment failed for tvdb %s (tmdb %s): %s", tvdb_id, tmdb_id_val, e)
 
@@ -1519,7 +1614,7 @@ class SkyHookClient(BaseMetadataClient):
         )
 
     async def _get_movie_details(self, tmdb_id: str) -> MetadataShowDetails:
-        radarr = RadarrClient(api_key="", alias_languages=self.alias_languages)
+        radarr = RadarrClient(api_key="", alias_languages=self.alias_languages, overview_language=self.overview_language)
         return await radarr.get_details(f"movie:{tmdb_id}")
 
 
@@ -1537,7 +1632,14 @@ class RadarrClient(BaseMetadataClient):
     # Встроенный сервисный Bearer-токен TMDb из Radarr для прямого резервного поиска
     RADARR_TMDB_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIxYTczNzMzMDE5NjFkMDNmOTdmODUzYTg3NmRkMTIxMiIsInN1YiI6IjU4NjRmNTkyYzNhMzY4MGFiNjAxNzUzNCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.gh1BwogCCKOda6xj9FRMgAAj_RYKMMPC3oNlcBtlmwk"
 
-    def __init__(self, api_key: str = "", alias_countries: Optional[list[str]] = None, base_url: str = "", alias_languages: Optional[list[str]] = None):
+    def __init__(
+        self,
+        api_key: str = "",
+        alias_countries: Optional[list[str]] = None,
+        base_url: str = "",
+        alias_languages: Optional[list[str]] = None,
+        overview_language: str = "ru",
+    ):
         self.base_url = (base_url or self.BASE_URL).rstrip("/")
         langs = []
         if alias_languages:
@@ -1548,6 +1650,7 @@ class RadarrClient(BaseMetadataClient):
             langs = ["ru"]
         self.alias_languages = langs
         self.alias_countries = [c.upper() for c in alias_countries] if alias_countries else None
+        self.overview_language = (overview_language or "ru").strip().lower()
 
     async def search(self, query: str) -> list[MetadataResult]:
         if not query or not query.strip():
@@ -1712,7 +1815,7 @@ class RadarrClient(BaseMetadataClient):
 
         # 1. Приоритетный прямой запрос к TMDB с сервисным токеном Radarr (надёжно и полно)
         try:
-            tmdb = TMDBClient(api_key=self.RADARR_TMDB_TOKEN, alias_languages=self.alias_languages)
+            tmdb = TMDBClient(api_key=self.RADARR_TMDB_TOKEN, alias_languages=self.alias_languages, overview_language=self.overview_language)
             details = await tmdb._get_movie_details(clean_id)
             if details and details.title and details.title.strip():
                 return details
@@ -1771,7 +1874,8 @@ class RadarrClient(BaseMetadataClient):
                             if is_alias_allowed(t_clean, "", allowed_langs, original_lang=orig_lang):
                                 aliases.append(t_clean)
 
-                # Собираем переводы (Translations) строго на разрешенных языках
+                # Собираем переводы (Translations) и описания на разрешенных языках
+                overviews_by_lang: dict[str, str] = {}
                 for tr in (data.get("translations", []) or []):
                     if isinstance(tr, dict):
                         tr_title = tr.get("title") or tr.get("name")
@@ -1781,9 +1885,11 @@ class RadarrClient(BaseMetadataClient):
                             tr_clean = tr_title.strip()
                             if tr_clean != title and tr_clean not in aliases:
                                 aliases.append(tr_clean)
-                        if norm_tr_lang in ("ru", "rus", "russian"):
-                            if tr.get("overview"):
-                                overview = tr.get("overview")
+                        tr_ov = tr.get("overview")
+                        if norm_tr_lang and tr_ov and str(tr_ov).strip():
+                            overviews_by_lang[norm_tr_lang] = str(tr_ov).strip()
+
+                overview = select_overview(overviews_by_lang, data.get("overview"), self.overview_language)
 
                 poster_url = extract_skyhook_poster(data.get("images", []))
                 ratings = data.get("ratings") or data.get("movieRatings") or {}
@@ -1842,13 +1948,30 @@ class RadarrClient(BaseMetadataClient):
                     )
 
         # 3. Fallback на TMDB с сервисным токеном
-        tmdb = TMDBClient(api_key=self.RADARR_TMDB_TOKEN, alias_languages=self.alias_languages)
+        tmdb = TMDBClient(api_key=self.RADARR_TMDB_TOKEN, alias_languages=self.alias_languages, overview_language=self.overview_language)
         return await tmdb._get_movie_details(clean_id)
 
     async def get_collection_details(self, tmdb_collection_id: int | str) -> dict:
         """Получить киноколлекцию через TMDb API с сервисным токеном Radarr."""
-        tmdb = TMDBClient(api_key=self.RADARR_TMDB_TOKEN, alias_languages=self.alias_languages)
+        tmdb = TMDBClient(api_key=self.RADARR_TMDB_TOKEN, alias_languages=self.alias_languages, overview_language=self.overview_language)
         return await tmdb.get_collection_details(tmdb_collection_id)
+
+
+def _tvdb_3_letter_code(lang: str) -> str:
+    m = {
+        "ru": "rus", "rus": "rus", "russian": "rus",
+        "en": "eng", "eng": "eng", "english": "eng",
+        "de": "deu", "deu": "deu", "german": "deu",
+        "fr": "fra", "fra": "fra", "french": "fra",
+        "es": "spa", "spa": "spa", "spanish": "spa",
+        "it": "ita", "ita": "ita", "italian": "ita",
+        "ja": "jpn", "jpn": "jpn", "japanese": "jpn",
+        "ko": "kor", "kor": "kor", "korean": "kor",
+        "zh": "zho", "zho": "zho", "chinese": "zho",
+        "uk": "ukr", "ukr": "ukr", "ukrainian": "ukr",
+        "pt": "por", "por": "por", "portuguese": "por",
+    }
+    return m.get((lang or "").lower(), (lang or "").lower())
 
 
 class TheTVDBClient(BaseMetadataClient):
@@ -1866,7 +1989,15 @@ class TheTVDBClient(BaseMetadataClient):
     BASE_URL = "https://api4.thetvdb.com/v4"
     ARTWORK_BASE = "https://artworks.thetvdb.com"
 
-    def __init__(self, api_key: str = "", pin: str = "", alias_countries: Optional[list[str]] = None, base_url: str = "", alias_languages: Optional[list[str]] = None):
+    def __init__(
+        self,
+        api_key: str = "",
+        pin: str = "",
+        alias_countries: Optional[list[str]] = None,
+        base_url: str = "",
+        alias_languages: Optional[list[str]] = None,
+        overview_language: str = "ru",
+    ):
         self.api_key = (api_key or "").strip()
         self.pin = (pin or "").strip()
         if ":" in self.api_key and not self.pin:
@@ -1874,6 +2005,7 @@ class TheTVDBClient(BaseMetadataClient):
         self.alias_countries = [c.upper() for c in alias_countries] if alias_countries else None
         self.alias_languages = [l.lower() for l in alias_languages] if alias_languages else None
         self.base_url = (base_url or self.BASE_URL).rstrip("/")
+        self.overview_language = (overview_language or "ru").strip().lower()
         self._token: Optional[str] = None
         self._token_expires_at: Optional[float] = None
 
@@ -2125,6 +2257,7 @@ class TheTVDBClient(BaseMetadataClient):
                 except Exception:
                     pass
 
+            overviews_by_lang: dict[str, str] = {}
             # Поиск официального английского перевода TheTVDB
             eng_title = None
             eng_overview = None
@@ -2134,6 +2267,8 @@ class TheTVDBClient(BaseMetadataClient):
                     eng_data = eng_resp.json().get("data") or {}
                     eng_title = eng_data.get("name")
                     eng_overview = eng_data.get("overview")
+                    if eng_overview and str(eng_overview).strip():
+                        overviews_by_lang["en"] = str(eng_overview).strip()
             except Exception:
                 pass
 
@@ -2146,8 +2281,25 @@ class TheTVDBClient(BaseMetadataClient):
                     ru_data = ru_resp.json().get("data") or {}
                     ru_title = ru_data.get("name")
                     ru_overview = ru_data.get("overview")
+                    if ru_overview and str(ru_overview).strip():
+                        overviews_by_lang["ru"] = str(ru_overview).strip()
             except Exception:
                 pass
+
+            # Поиск перевода для стороннего предпочтительного языка
+            norm_ov = normalize_metadata_lang_code(self.overview_language) or self.overview_language
+            if norm_ov and norm_ov not in ("en", "ru", "original"):
+                code_3 = _tvdb_3_letter_code(norm_ov)
+                if code_3:
+                    try:
+                        tr_resp = await self._authed_get(client, f"/series/{tvdb_id}/translations/{code_3}")
+                        if tr_resp.status_code == 200:
+                            tr_data = tr_resp.json().get("data") or {}
+                            tr_ov = tr_data.get("overview")
+                            if tr_ov and str(tr_ov).strip():
+                                overviews_by_lang[norm_ov] = str(tr_ov).strip()
+                    except Exception:
+                        pass
 
         raw_name = (data.get("name") or "").strip()
         aliases_raw = data.get("aliases") or []
@@ -2219,14 +2371,8 @@ class TheTVDBClient(BaseMetadataClient):
             if (country or "").lower() in ("jpn", "japan", "jp"):
                 content_type = "anime"
 
-        # Описание сюжета: Русский -> Английский -> Оригинал
-        overview = None
-        if ru_overview and str(ru_overview).strip():
-            overview = str(ru_overview).strip()
-        elif eng_overview and str(eng_overview).strip():
-            overview = str(eng_overview).strip()
-        elif data.get("overview") and str(data.get("overview")).strip():
-            overview = str(data.get("overview")).strip()
+        # Описание сюжета на основе предпочтительного языка с фоллбэками
+        overview = select_overview(overviews_by_lang, data.get("overview"), self.overview_language)
 
         raw_score = data.get("score")
         rating = None
@@ -2263,6 +2409,7 @@ class TheTVDBClient(BaseMetadataClient):
                 raise ValueError(f"TheTVDB movie {tvdb_id} not found (status {resp.status_code})")
             data = resp.json().get("data", {}) or {}
 
+            overviews_by_lang: dict[str, str] = {}
             # Поиск официального английского перевода TheTVDB
             eng_title = None
             eng_overview = None
@@ -2272,6 +2419,8 @@ class TheTVDBClient(BaseMetadataClient):
                     eng_data = eng_resp.json().get("data") or {}
                     eng_title = eng_data.get("name")
                     eng_overview = eng_data.get("overview")
+                    if eng_overview and str(eng_overview).strip():
+                        overviews_by_lang["en"] = str(eng_overview).strip()
             except Exception:
                 pass
 
@@ -2284,8 +2433,25 @@ class TheTVDBClient(BaseMetadataClient):
                     ru_data = ru_resp.json().get("data") or {}
                     ru_title = ru_data.get("name")
                     ru_overview = ru_data.get("overview")
+                    if ru_overview and str(ru_overview).strip():
+                        overviews_by_lang["ru"] = str(ru_overview).strip()
             except Exception:
                 pass
+
+            # Поиск перевода для стороннего предпочтительного языка
+            norm_ov = normalize_metadata_lang_code(self.overview_language) or self.overview_language
+            if norm_ov and norm_ov not in ("en", "ru", "original"):
+                code_3 = _tvdb_3_letter_code(norm_ov)
+                if code_3:
+                    try:
+                        tr_resp = await self._authed_get(client, f"/movies/{tvdb_id}/translations/{code_3}")
+                        if tr_resp.status_code == 200:
+                            tr_data = tr_resp.json().get("data") or {}
+                            tr_ov = tr_data.get("overview")
+                            if tr_ov and str(tr_ov).strip():
+                                overviews_by_lang[norm_ov] = str(tr_ov).strip()
+                    except Exception:
+                        pass
 
         raw_name = (data.get("name") or "").strip()
         aliases_raw = data.get("aliases") or []
@@ -2356,14 +2522,8 @@ class TheTVDBClient(BaseMetadataClient):
         if premiere:
             premiere = str(premiere)[:10]
 
-        # Описание сюжета: Русский -> Английский -> Оригинал
-        overview = None
-        if ru_overview and str(ru_overview).strip():
-            overview = str(ru_overview).strip()
-        elif eng_overview and str(eng_overview).strip():
-            overview = str(eng_overview).strip()
-        elif data.get("overview") and str(data.get("overview")).strip():
-            overview = str(data.get("overview")).strip()
+        # Описание сюжета на основе предпочтительного языка с фоллбэками
+        overview = select_overview(overviews_by_lang, data.get("overview"), self.overview_language)
 
         raw_score = data.get("score")
         rating = None
@@ -2398,7 +2558,7 @@ class DummyClient(BaseMetadataClient):
         raise NotImplementedError("Этот источник устарел и больше не поддерживается.")
 
 
-def get_metadata_client(source_row) -> BaseMetadataClient:
+def get_metadata_client(source_row, overview_language: Optional[str] = None) -> BaseMetadataClient:
     """source_row: модель MetadataSource из БД."""
     type_value = source_row.type.value if hasattr(source_row.type, "value") else str(source_row.type)
     
@@ -2411,16 +2571,17 @@ def get_metadata_client(source_row) -> BaseMetadataClient:
         alias_countries = source_row.field_mapping.get("alias_countries")
         pin = source_row.field_mapping.get("pin", "")
     
+    ov_lang = overview_language or "ru"
     if type_value in ("skyhook", "sonarr"):
-        return SkyHookClient(source_row.api_key or "", alias_countries=alias_countries, base_url=source_row.base_url or "", alias_languages=alias_languages)
+        return SkyHookClient(source_row.api_key or "", alias_countries=alias_countries, base_url=source_row.base_url or "", alias_languages=alias_languages, overview_language=ov_lang)
     elif type_value in ("radarr", "radarr_skyhook"):
-        return RadarrClient(source_row.api_key or "", alias_countries=alias_countries, base_url=source_row.base_url or "", alias_languages=alias_languages)
+        return RadarrClient(source_row.api_key or "", alias_countries=alias_countries, base_url=source_row.base_url or "", alias_languages=alias_languages, overview_language=ov_lang)
     elif type_value == "tmdb":
-        return TMDBClient(source_row.api_key or "", alias_countries=alias_countries, alias_languages=alias_languages)
+        return TMDBClient(source_row.api_key or "", alias_countries=alias_countries, alias_languages=alias_languages, overview_language=ov_lang)
     elif type_value == "tvmaze":
         return TVMazeClient(source_row.api_key or "", alias_countries)
     elif type_value == "thetvdb":
-        return TheTVDBClient(source_row.api_key or "", pin=pin, alias_countries=alias_countries, base_url=source_row.base_url or "", alias_languages=alias_languages)
+        return TheTVDBClient(source_row.api_key or "", pin=pin, alias_countries=alias_countries, base_url=source_row.base_url or "", alias_languages=alias_languages, overview_language=ov_lang)
     return DummyClient()
 
 
@@ -2726,6 +2887,15 @@ async def refresh_show_metadata(db, show) -> dict:
     is_movie = getattr(show, "content_type", None) == "movie" or getattr(show, "category", None) == "movies"
     metadata_id = getattr(show, "metadata_id", None)
     title = (getattr(show, "title", None) or "").strip()
+    # 0. Загружаем глобальную настройку языка описания (синопсиса)
+    app_settings = None
+    if db and AppSettings:
+        try:
+            app_settings = db.query(AppSettings).filter(getattr(AppSettings, "id", None) == 1).first()
+        except Exception:
+            app_settings = None
+    overview_lang = getattr(app_settings, "metadata_overview_language", "ru") if app_settings else "ru"
+    overview_lang = overview_lang or "ru"
 
     # 1. Разрешаем клиент источника метаданных
     client = None
@@ -2741,7 +2911,7 @@ async def refresh_show_metadata(db, show) -> dict:
         )
         if source:
             try:
-                client = get_metadata_client(source)
+                client = get_metadata_client(source, overview_language=overview_lang)
             except Exception:
                 client = None
     elif getattr(show, "metadata_source", None):
@@ -2752,7 +2922,7 @@ async def refresh_show_metadata(db, show) -> dict:
         )
         if source:
             try:
-                client = get_metadata_client(source)
+                client = get_metadata_client(source, overview_language=overview_lang)
             except Exception:
                 client = None
 
@@ -2768,9 +2938,9 @@ async def refresh_show_metadata(db, show) -> dict:
                 break
 
     if not client:
-        client = RadarrClient(alias_languages=alias_langs) if is_movie else SkyHookClient(alias_languages=alias_langs)
+        client = RadarrClient(alias_languages=alias_langs, overview_language=overview_lang) if is_movie else SkyHookClient(alias_languages=alias_langs, overview_language=overview_lang)
 
-    fallback_client = RadarrClient(alias_languages=alias_langs) if is_movie else SkyHookClient(alias_languages=alias_langs)
+    fallback_client = RadarrClient(alias_languages=alias_langs, overview_language=overview_lang) if is_movie else SkyHookClient(alias_languages=alias_langs, overview_language=overview_lang)
     details = None
 
     # 2. Пробуем получить детали по metadata_id

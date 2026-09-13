@@ -523,8 +523,11 @@ async def import_show(
             else:
                 source = MetadataSource(name="SkyHook (Sonarr)", type="skyhook", base_url="https://skyhook.sonarr.tv/v1/tvdb", enabled=True)
 
+        app_settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+        overview_lang = getattr(app_settings, "metadata_overview_language", "ru") or "ru"
+
         try:
-            client = get_metadata_client(source)
+            client = get_metadata_client(source, overview_language=overview_lang)
             details = await client.get_details(payload.external_id)
         except Exception as exc:
             logger.warning("Ошибка получения деталей через %s (%s): %s. Пробуем fallback...", getattr(source, 'name', 'unknown'), payload.external_id, exc)
@@ -532,7 +535,7 @@ async def import_show(
                 fallback_source = MetadataSource(name="Radarr SkyHook (Movie Cloud)", type="radarr", base_url="https://api.radarr.video/v1", enabled=True)
             else:
                 fallback_source = MetadataSource(name="SkyHook (Sonarr)", type="skyhook", base_url="https://skyhook.sonarr.tv/v1/tvdb", enabled=True)
-            client = get_metadata_client(fallback_source)
+            client = get_metadata_client(fallback_source, overview_language=overview_lang)
             details = await client.get_details(payload.external_id)
 
         # Гарантия наличия названия и метаданных для фильмов
@@ -540,7 +543,7 @@ async def import_show(
             clean_id = ext_str.replace("movie:", "").replace("tmdb:", "").strip()
             from app.services.metadata import TMDBClient, RadarrClient
             try:
-                tmdb = TMDBClient(api_key=RadarrClient.RADARR_TMDB_TOKEN)
+                tmdb = TMDBClient(api_key=RadarrClient.RADARR_TMDB_TOKEN, overview_language=overview_lang)
                 details = await tmdb._get_movie_details(clean_id)
             except Exception as e:
                 logger.warning("TMDb emergency details fetch failed: %s", e)

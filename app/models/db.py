@@ -558,6 +558,7 @@ class AppSettings(Base):
     metadata_refresh_interval_hours: Mapped[int] = mapped_column(Integer, default=12)  # 6, 12, 24, 72, 168
     metadata_sources_seeded: Mapped[bool] = mapped_column(Boolean, default=False)
     metadata_refresh_aliases: Mapped[bool] = mapped_column(Boolean, default=True)
+    metadata_overview_language: Mapped[str] = mapped_column(String(20), default="ru")
 
     # Таймаут сессии авторизации в минутах (по умолчанию 30 дней = 43200 минут)
     session_timeout_minutes: Mapped[int] = mapped_column(Integer, default=43200)
