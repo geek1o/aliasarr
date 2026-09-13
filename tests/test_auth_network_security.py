@@ -5,15 +5,19 @@ import os
 import unittest
 from unittest.mock import patch
 
-from fastapi import Response
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from starlette.requests import Request
+try:
+    from fastapi import Response
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from starlette.requests import Request
 
-from app.api.auth_routes import LoginRequest, auth_status, login
-from app.auth import get_client_ip
-from app.models.db import Base, Session as SessionModel, User
-from app.services.settings_service import get_or_create_settings, hash_password
+    from app.api.auth_routes import LoginRequest, auth_status, login
+    from app.auth import get_client_ip
+    from app.models.db import Base, Session as SessionModel, User
+    from app.services.settings_service import get_or_create_settings, hash_password
+    HAS_DEPS = True
+except ImportError:
+    HAS_DEPS = False
 
 
 def make_request(peer_ip: str, forwarded_for: str | None = None) -> Request:
@@ -35,6 +39,7 @@ def make_request(peer_ip: str, forwarded_for: str | None = None) -> Request:
     )
 
 
+@unittest.skipUnless(HAS_DEPS, "FastAPI / SQLAlchemy dependencies not installed in host runner")
 class TestTrustedProxyHandling(unittest.TestCase):
     def test_untrusted_client_cannot_spoof_forwarded_ip(self):
         with patch.dict(os.environ, {}, clear=False):
@@ -48,6 +53,7 @@ class TestTrustedProxyHandling(unittest.TestCase):
             self.assertEqual(get_client_ip(request), "198.51.100.20")
 
 
+@unittest.skipUnless(HAS_DEPS, "FastAPI / SQLAlchemy dependencies not installed in host runner")
 class TestLocalAuthBehavior(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")

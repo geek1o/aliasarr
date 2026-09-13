@@ -17,7 +17,10 @@ import threading
 import time
 from typing import Optional, List, Dict, Any
 
-from sqlalchemy.orm import Session
+try:
+    from sqlalchemy.orm import Session
+except ImportError:
+    Session = Any  # type: ignore
 
 # In-memory кеш для информации о коллекциях/сагах TMDb (24 часа)
 _COLLECTION_DETAILS_CACHE: dict[str, tuple[float, dict]] = {}

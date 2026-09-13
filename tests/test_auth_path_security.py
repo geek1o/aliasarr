@@ -5,13 +5,17 @@ import inspect
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from fastapi.params import Depends
-from starlette.requests import Request
+try:
+    from fastapi.params import Depends
+    from starlette.requests import Request
 
-from app.api.blocklist_routes import get_blocked_shows_summary, list_blocklist_entries
-from app.api.dataset_routes import get_dataset_data, get_harvest_status
-from app.api.operations import get_health_check
-from app.auth import ApiKeyMiddleware
+    from app.api.blocklist_routes import get_blocked_shows_summary, list_blocklist_entries
+    from app.api.dataset_routes import get_dataset_data, get_harvest_status
+    from app.api.operations import get_health_check
+    from app.auth import ApiKeyMiddleware
+    HAS_DEPS = True
+except ImportError:
+    HAS_DEPS = False
 
 
 def _request(path: str, host: bytes = b"testserver") -> Request:
@@ -32,6 +36,7 @@ def _request(path: str, host: bytes = b"testserver") -> Request:
     )
 
 
+@unittest.skipUnless(HAS_DEPS, "FastAPI / Starlette dependencies not installed in host runner")
 class TestAuthPathSecurity(unittest.TestCase):
     def _dispatch(self, request: Request):
         middleware = ApiKeyMiddleware(app=MagicMock())
