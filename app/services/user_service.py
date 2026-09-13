@@ -188,6 +188,11 @@ def get_current_user_optional(request: Request, db: Session = Depends(get_db)) -
     settings = get_or_create_settings(db)
     if not settings.login_enabled:
         return ensure_master_admin(db)
+    if getattr(settings, "auth_disabled_for_local_addresses", False):
+        from app.auth import get_client_ip, is_private_ip
+
+        if is_private_ip(get_client_ip(request)):
+            return ensure_master_admin(db)
 
     return None
 

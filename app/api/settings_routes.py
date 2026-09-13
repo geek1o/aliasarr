@@ -43,7 +43,6 @@ class SettingsOut(BaseModel):
     extra_file_extensions: str = "srt, ass, sub, idx, vtt, nfo, mka, ttf, otf, woff"
     use_hardlinks: bool = True
 
-    auth_enabled: bool
     login_enabled: bool
     username: str
 
@@ -112,8 +111,6 @@ class SettingsUpdate(BaseModel):
     extra_file_extensions: Optional[str] = None
     use_hardlinks: Optional[bool] = None
 
-    auth_enabled: Optional[bool] = None
-
     language: Optional[str] = None
     theme: Optional[str] = None
     scrollbar_mode: Optional[str] = None
@@ -177,7 +174,6 @@ def _to_settings_out(settings, is_owner: bool = False) -> SettingsOut:
         import_extra_files=getattr(settings, "import_extra_files", True),
         extra_file_extensions=getattr(settings, "extra_file_extensions", "srt, ass, sub, idx, vtt, nfo, mka, ttf, otf, woff") or "srt, ass, sub, idx, vtt, nfo, mka, ttf, otf, woff",
         use_hardlinks=getattr(settings, "use_hardlinks", True),
-        auth_enabled=settings.auth_enabled,
         login_enabled=settings.login_enabled,
         username=settings.username,
         language=settings.language,
@@ -300,9 +296,6 @@ def update_settings(
         settings.extra_file_extensions = payload.extra_file_extensions
     if payload.use_hardlinks is not None:
         settings.use_hardlinks = payload.use_hardlinks
-
-    if payload.auth_enabled is not None:
-        settings.auth_enabled = payload.auth_enabled
 
     if payload.language is not None:
         if payload.language not in ("ru", "en"):

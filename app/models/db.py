@@ -512,6 +512,7 @@ class AppSettings(Base):
     # Использовать Hardlinks (жесткие ссылки) вместо копирования для сидируемых раздач (0 байт лишнего места)
     use_hardlinks: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # Legacy column kept for existing databases. Authentication is controlled by login_enabled.
     auth_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Логин по паре логин/пароль (независимо от API-ключа)
@@ -715,4 +716,3 @@ class Blocklist(Base):
 
 # Alias for backward-compatibility and alternative naming
 BlocklistEntry = Blocklist
-
