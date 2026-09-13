@@ -1298,7 +1298,9 @@ const TRANSLATIONS = {
 
     // Add Video Wizard
     "wizard.step_search": "1. Поиск",
+    "wizard.step_search_sub": "Выбор тайтла",
     "wizard.step_setup": "2. Настройка",
+    "wizard.step_setup_sub": "Параметры и профиль",
     "wizard.search_placeholder": "Название фильма, сериала или аниме…",
     "wizard.search_empty_title": "Найдите фильм, сериал или аниме",
     "wizard.search_empty_desc": "Введите название на русском, английском или языке оригинала для поиска через подключенные базы метаданных.",
@@ -1307,9 +1309,16 @@ const TRANSLATIONS = {
     "wizard.already_in_library": "В медиатеке",
     "wizard.category_label": "Категория",
     "wizard.category_hint": "(определяет папку и шаблон переименования после скачивания)",
+    "wizard.category_tooltip": "Определяет папку хранения на диске и шаблон автопереименования файлов после скачивания",
+    "wizard.library_params": "Параметры медиатеки",
+    "wizard.library_params_sub": "Категория хранения и профиль качества",
+    "wizard.automation_title": "Автоматизация",
+    "wizard.automation_sub": "Действия сразу после добавления тайтла",
     "wizard.path_label": "Путь к папке (необязательно)",
     "wizard.monitor_immediately": "Начать мониторинг сразу после добавления",
+    "wizard.monitor_desc": "Отслеживать статус выхода и обновлений в медиатеке",
     "wizard.autosearch_after_add": "Запустить автопоиск после добавления",
+    "wizard.autosearch_desc": "Автоматически искать и отправлять в загрузку лучшие релизы",
     "wizard.finish_btn": "Добавить видео",
     "wizard.toast_no_metadata_source": "Сначала добавьте источник метаданных в Настройках",
     "wizard.title_lang": "Язык названия:",
@@ -2718,7 +2727,9 @@ const TRANSLATIONS = {
 
     // Add Video Wizard
     "wizard.step_search": "1. Search",
+    "wizard.step_search_sub": "Select title",
     "wizard.step_setup": "2. Setup",
+    "wizard.step_setup_sub": "Parameters and profile",
     "wizard.search_placeholder": "Movie, series, or anime title…",
     "wizard.search_empty_title": "Find movies, series, or anime",
     "wizard.search_empty_desc": "Enter a title in English, Russian, or native language to search via configured metadata sources.",
@@ -2727,9 +2738,16 @@ const TRANSLATIONS = {
     "wizard.already_in_library": "In Library",
     "wizard.category_label": "Category",
     "wizard.category_hint": "(determines download folder and rename template)",
+    "wizard.category_tooltip": "Determines download destination folder and rename template after download",
+    "wizard.library_params": "Library Parameters",
+    "wizard.library_params_sub": "Storage category and quality profile",
+    "wizard.automation_title": "Automation",
+    "wizard.automation_sub": "Actions immediately after adding title",
     "wizard.path_label": "Folder path (optional)",
     "wizard.monitor_immediately": "Start monitoring immediately after adding",
+    "wizard.monitor_desc": "Track release status and upcoming episodes in library",
     "wizard.autosearch_after_add": "Start auto search for missing after adding",
+    "wizard.autosearch_desc": "Automatically search and grab best available releases",
     "wizard.finish_btn": "Add Video",
     "wizard.toast_no_metadata_source": "Add a metadata source in Settings first",
     "wizard.title_lang": "Title language:",
@@ -12457,6 +12475,14 @@ function openAddShowWizard() {
   }, 100);
 }
 
+function onWizardStepItemClick(step) {
+  if (step === 1) {
+    renderWizardStep(1);
+  } else if (step === 2 && WIZARD_STATE.selectedResult) {
+    renderWizardStep(2);
+  }
+}
+
 function setWizardStepIndicator(step) {
   [1, 2].forEach(n => {
     const el = document.getElementById(`wizard-step-${n}`);
@@ -12465,6 +12491,13 @@ function setWizardStepIndicator(step) {
       el.classList.toggle("done", n < step);
     }
   });
+  const connector = document.getElementById("wizard-stepper-connector");
+  if (connector) {
+    connector.classList.toggle("active", step >= 2);
+  }
+  if (window.lucide) {
+    lucide.createIcons();
+  }
 }
 
 function onWizardSourceSelectChange(selectEl) {
@@ -12690,7 +12723,7 @@ function renderWizardStep2Content() {
   const typeLabel = isMovie 
     ? (CURRENT_LANG === 'en' ? 'Movie' : 'Фильм') 
     : (isAnime ? (CURRENT_LANG === 'en' ? 'Anime' : 'Аниме') : (CURRENT_LANG === 'en' ? 'Series' : 'Сериал'));
-  const typeIco = isMovie ? "film" : (isAnime ? "sparkles" : "tv");
+  const typeIco = isMovie ? "film" : (isAnime ? "clapperboard" : "tv");
   const typeClass = isMovie ? "meta-badge-type-movie" : (isAnime ? "meta-badge-type-anime" : "meta-badge-type-series");
   const initialLetter = (WIZARD_STATE.selectedTitle || r.title || "?").trim()[0]?.toUpperCase() || "?";
   const posterStyle = r.poster_url ? `style="background-image: url('${r.poster_url}');"` : "";
@@ -12731,12 +12764,14 @@ function renderWizardStep2Content() {
         ${r.poster_url ? "" : escapeHtml(initialLetter)}
       </div>
       <div class="wizard-selected-info">
-        <h3 class="wizard-selected-title" id="wizard-selected-title">${escapeHtml(formatShowTitleWithYear(WIZARD_STATE.selectedTitle || r.title, r.year))}</h3>
+        <div class="wizard-selected-header-row">
+          <h3 class="wizard-selected-title" id="wizard-selected-title">${escapeHtml(formatShowTitleWithYear(WIZARD_STATE.selectedTitle || r.title, r.year))}</h3>
+        </div>
         ${langSwitcherHtml}
         <div class="wizard-selected-badges">
           ${r.content_type ? `<span class="meta-badge meta-badge-type ${typeClass}"><i data-lucide="${typeIco}" class="ico-xs"></i>${escapeHtml(typeLabel)}</span>` : ""}
           ${r.year ? `<span class="meta-badge mono"><i data-lucide="calendar" class="ico-xs"></i> ${r.year}</span>` : ""}
-          ${r.rating ? `<span class="meta-badge meta-badge-rating"><i data-lucide="star" class="ico-xs"></i> ${Number(r.rating).toFixed(1)}</span>` : ""}
+          ${r.rating ? `<span class="meta-badge meta-badge-rating"><i data-lucide="trending-up" class="ico-xs"></i> ${Number(r.rating).toFixed(1)}</span>` : ""}
           ${r.country ? `<span class="meta-badge"><i data-lucide="globe" class="ico-xs"></i> ${escapeHtml(r.country)}</span>` : ""}
           ${r.genre ? `<span class="meta-badge"><i data-lucide="tag" class="ico-xs"></i> ${escapeHtml(r.genre)}</span>` : ""}
         </div>
@@ -12744,32 +12779,91 @@ function renderWizardStep2Content() {
       </div>
     </div>
 
-    <div class="form-col">
-      <label>${t("wizard.category_label")} <span class="hint">${t("wizard.category_hint")}</span></label>
-      ${isMovie ? `
-        <div style="display:flex; align-items:center; min-height:36px; margin:4px 0;">
-          <span class="category-badge-chip category-badge-movies">
-            <i data-lucide="film" class="ico-xs"></i> ${CURRENT_LANG === 'en' ? 'Movie' : 'Фильм'}
-          </span>
+    <div class="wizard-config-grid">
+      <!-- Карточка 1: Параметры медиатеки -->
+      <div class="wizard-config-card">
+        <div class="wizard-config-card-header">
+          <div class="wizard-config-icon-badge">
+            <i data-lucide="folder-tree"></i>
+          </div>
+          <div class="wizard-config-title-wrap">
+            <h4>${t("wizard.library_params") || "Параметры медиатеки"}</h4>
+            <p class="subtitle">${t("wizard.library_params_sub") || "Категория хранения и профиль качества"}</p>
+          </div>
         </div>
-      ` : `
-        <div class="chip-select" id="wizard-content-type-chips">
-          <button type="button" class="chip ${currentType === "series" ? "chip-selected" : ""}" data-value="series"
-            onclick="selectWizardContentType('series')">${t("settings.cat_series")}</button>
-          <button type="button" class="chip ${currentType === "anime" ? "chip-selected" : ""}" data-value="anime"
-            onclick="selectWizardContentType('anime')">${t("settings.cat_anime")}</button>
+
+        <div class="wizard-field-group">
+          <div class="settings-field-label-row">
+            <label class="settings-field-label">${t("wizard.category_label") || "Категория"}</label>
+            <div class="field-info-tip-wrap" tabindex="0" title="${escapeHtml(t("wizard.category_tooltip") || "Определяет папку хранения на диске и шаблон автопереименования файлов после скачивания")}">
+              <i data-lucide="info" class="field-info-tip-icon"></i>
+              <div class="field-info-tooltip">
+                ${escapeHtml(t("wizard.category_tooltip") || "Определяет папку хранения на диске и шаблон автопереименования файлов после скачивания")}
+              </div>
+            </div>
+          </div>
+          ${isMovie ? `
+            <div class="wizard-category-single">
+              <span class="category-badge-chip category-badge-movies">
+                <i data-lucide="film" class="ico-xs"></i> ${CURRENT_LANG === 'en' ? 'Movie' : 'Фильм'}
+              </span>
+            </div>
+          ` : `
+            <div class="chip-select wizard-chip-select" id="wizard-content-type-chips">
+              <button type="button" class="chip ${currentType === "series" ? "chip-selected" : ""}" data-value="series"
+                onclick="selectWizardContentType('series')">
+                <i data-lucide="tv" class="ico-xs"></i> <span>${t("settings.cat_series")}</span>
+              </button>
+              <button type="button" class="chip ${currentType === "anime" ? "chip-selected" : ""}" data-value="anime"
+                onclick="selectWizardContentType('anime')">
+                <i data-lucide="clapperboard" class="ico-xs"></i> <span>${t("settings.cat_anime")}</span>
+              </button>
+            </div>
+          `}
         </div>
-      `}
 
-      <label style="margin-top:8px;">${t("library.col_profile")}</label>
-      <select id="wizard-quality-profile" class="input">
-        <option value="" ${!defaultQpId ? "selected" : ""}>${t("common.any_quality")}</option>
-        ${CACHED_QUALITY_PROFILES.map(qp => `<option value="${qp.id}" ${String(qp.id) === String(defaultQpId) ? "selected" : ""}>${escapeHtml(qp.name)}</option>`).join("")}
-      </select>
+        <div class="wizard-field-group" style="margin-top:14px;">
+          <label class="settings-field-label">${t("library.col_profile")}</label>
+          <div class="select-wrapper">
+            <select id="wizard-quality-profile" class="input">
+              <option value="" ${!defaultQpId ? "selected" : ""}>${t("common.any_quality")}</option>
+              ${CACHED_QUALITY_PROFILES.map(qp => `<option value="${qp.id}" ${String(qp.id) === String(defaultQpId) ? "selected" : ""}>${escapeHtml(qp.name)}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+      </div>
 
-      <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
-        <label class="checkbox-row"><input id="wizard-monitored" type="checkbox" checked> <span>${t("wizard.monitor_immediately")}</span></label>
-        <label class="checkbox-row"><input id="wizard-autosearch" type="checkbox" checked> <span>${t("wizard.autosearch_after_add")}</span></label>
+      <!-- Карточка 2: Автоматизация -->
+      <div class="wizard-config-card">
+        <div class="wizard-config-card-header">
+          <div class="wizard-config-icon-badge">
+            <i data-lucide="zap"></i>
+          </div>
+          <div class="wizard-config-title-wrap">
+            <h4>${t("wizard.automation_title") || "Автоматизация"}</h4>
+            <p class="subtitle">${t("wizard.automation_sub") || "Действия сразу после добавления тайтла"}</p>
+          </div>
+        </div>
+
+        <div class="wizard-switches-list">
+          <label class="switch-toggle wizard-switch-card">
+            <input id="wizard-monitored" type="checkbox">
+            <span class="switch-slider"></span>
+            <span class="switch-label-wrap">
+              <span class="switch-title">${t("wizard.monitor_immediately")}</span>
+              <span class="switch-desc">${t("wizard.monitor_desc") || "Отслеживать статус выхода и обновлений в медиатеке"}</span>
+            </span>
+          </label>
+
+          <label class="switch-toggle wizard-switch-card">
+            <input id="wizard-autosearch" type="checkbox" checked>
+            <span class="switch-slider"></span>
+            <span class="switch-label-wrap">
+              <span class="switch-title">${t("wizard.autosearch_after_add")}</span>
+              <span class="switch-desc">${t("wizard.autosearch_desc") || "Автоматически искать и отправлять в загрузку лучшие релизы"}</span>
+            </span>
+          </label>
+        </div>
       </div>
     </div>
 
@@ -12807,7 +12901,7 @@ function selectWizardContentType(value) {
 async function finishWizard(button) {
   await withLoading(button, async () => {
     const qualityProfileId = document.getElementById("wizard-quality-profile")?.value;
-    const monitored = document.getElementById("wizard-monitored") ? document.getElementById("wizard-monitored").checked : true;
+    const monitored = document.getElementById("wizard-monitored") ? document.getElementById("wizard-monitored").checked : false;
     const runAutoSearch = document.getElementById("wizard-autosearch") ? document.getElementById("wizard-autosearch").checked : true;
     const isMovie = WIZARD_STATE.selectedResult?.content_type === "movie";
     const contentType = isMovie ? "movie" : (WIZARD_STATE.contentType || "series");

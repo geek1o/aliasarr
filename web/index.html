@@ -4213,10 +4213,30 @@
 <!-- Мастер добавления видео -->
 <div id="wizard-modal" class="modal-overlay">
   <div class="modal modal-large wizard-modal-container">
-    <button class="modal-close" onclick="closeModal('wizard-modal')">×</button>
-    <div class="wizard-steps">
-      <span class="wizard-step active" id="wizard-step-1" data-i18n="wizard.step_search">1. Поиск</span>
-      <span class="wizard-step" id="wizard-step-2" data-i18n="wizard.step_setup">2. Настройка</span>
+    <button class="modal-close" onclick="closeModal('wizard-modal')" aria-label="Закрыть"><i data-lucide="x"></i></button>
+    <div class="wizard-header">
+      <div class="wizard-stepper-track" id="wizard-steps">
+        <button type="button" class="wizard-step-item wizard-step active" id="wizard-step-1" onclick="onWizardStepItemClick(1)">
+          <span class="wizard-step-badge">
+            <span class="wizard-step-num">1</span>
+            <i data-lucide="check" class="wizard-step-check"></i>
+          </span>
+          <span class="wizard-step-meta">
+            <span class="wizard-step-title" data-i18n="wizard.step_search">1. Поиск</span>
+            <span class="wizard-step-sub" data-i18n="wizard.step_search_sub">Выбор тайтла</span>
+          </span>
+        </button>
+        <div class="wizard-stepper-connector" id="wizard-stepper-connector"></div>
+        <button type="button" class="wizard-step-item wizard-step" id="wizard-step-2" onclick="onWizardStepItemClick(2)">
+          <span class="wizard-step-badge">
+            <span class="wizard-step-num">2</span>
+          </span>
+          <span class="wizard-step-meta">
+            <span class="wizard-step-title" data-i18n="wizard.step_setup">2. Настройка</span>
+            <span class="wizard-step-sub" data-i18n="wizard.step_setup_sub">Параметры и профиль</span>
+          </span>
+        </button>
+      </div>
     </div>
     <div id="wizard-content"></div>
   </div>
