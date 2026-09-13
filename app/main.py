@@ -65,7 +65,7 @@ app = FastAPI(
     title="Aliasarr API",
     description="Backend API для Aliasarr — системы управления медиатекой с мультиязычными алиасами, парсером сезонов и контролем торрент-клиентов.",
     version="2.9.0",
-    docs_url="/docs",
+    docs_url="/api/docs",
     redoc_url=None,
     openapi_url="/openapi.json",
     openapi_tags=None,
@@ -549,6 +549,7 @@ def quality_guide():
 
 @app.get("/wiki")
 @app.get("/wiki.html")
+@app.get("/docs")
 def wiki_page(request: Request):
     db = SessionLocal()
     try:
