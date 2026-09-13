@@ -8,12 +8,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/ui/static/css/style.css?v=20260909-12">
+<link rel="stylesheet" href="/ui/static/css/style.css?v=20260913-13">
 <script>
   (function () {
     try {
       var theme = localStorage.getItem("vbeacon_theme") || "dark";
       document.documentElement.setAttribute("data-theme", theme);
+      document.documentElement.setAttribute("data-glass", localStorage.getItem("aliasarr_glass") || "off");
       var design = localStorage.getItem("aliasarr_design") || "classic";
       document.documentElement.setAttribute("data-design", design);
       var scrollbar = localStorage.getItem("aliasarr_scrollbar") || "autohide";
@@ -38,6 +39,9 @@
   })();
 </script>
 <style>
+  :root { --glass-blur: none; }
+  :root[data-glass="on"] { --glass-blur: initial; }
+
   :root {
     --wiki-max-width: 1480px;
     --wiki-sidebar-width: 330px;
@@ -94,8 +98,8 @@
     position: sticky;
     top: 0;
     z-index: 100;
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: var(--glass-blur, blur(16px));
+    -webkit-backdrop-filter: var(--glass-blur, blur(16px));
     transition: background 0.2s ease, border-color 0.2s ease;
   }
   .wiki-header-inner {

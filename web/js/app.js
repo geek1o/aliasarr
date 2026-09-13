@@ -137,6 +137,28 @@ function selectScrollbarMode(mode) {
   applyScrollbarMode(mode, true);
 }
 
+// ---------- ЭФФЕКТЫ СТЕКЛА (backdrop-filter) ----------
+// backdrop-filter заставляет браузер пересобирать и заново размывать подложку
+// каждый кадр, пока под элементом что-то меняется. На постоянных крупных
+// поверхностях (сайдбар, липкая шапка, таблицы) этого хватает, чтобы обычный
+// спиннер фоновых задач держал GPU на 100%. Поэтому по умолчанию выключено.
+function applyGlassMode(mode, isUserAction = false) {
+  const m = mode === "on" ? "on" : "off";
+  document.documentElement.setAttribute("data-glass", m);
+  try { localStorage.setItem("aliasarr_glass", m); } catch (e) {}
+
+  const select = document.getElementById("setting-glass");
+  if (select && select.value !== m) select.value = m;
+
+  if (isUserAction) {
+    const labels = {
+      off: CURRENT_LANG === "en" ? "Off (recommended)" : "Выключены (рекомендуется)",
+      on: CURRENT_LANG === "en" ? "On (backdrop blur)" : "Включены (размытие подложки)",
+    };
+    toast((CURRENT_LANG === "en" ? "Glass effects: " : "Эффекты стекла: ") + labels[m]);
+  }
+}
+
 // ---------- ЯЗЫК (ru/en) ----------
 const TRANSLATIONS = {
   ru: {
@@ -677,6 +699,10 @@ const TRANSLATIONS = {
     "settings.scrollbar_styled": "Стилизованные (всегда видны)",
     "settings.scrollbar_hidden": "Скрытые (без полос)",
     "settings.scrollbar_native": "Системные (по умолчанию)",
+    "settings.glass": "Эффекты стекла",
+    "settings.glass_hint": "(размытие подложки, нагружает видеокарту)",
+    "settings.glass_off": "Выключено (рекомендуется)",
+    "settings.glass_on": "Включено (размытие подложки)",
     "settings.timezone": "Часовой пояс",
     "settings.timezone_hint": "(единый для календаря, журнала и событий)",
     "settings.folders_title": "Папки и переименование по категориям",
@@ -2093,6 +2119,10 @@ const TRANSLATIONS = {
     "settings.scrollbar_styled": "Themed (Always visible)",
     "settings.scrollbar_hidden": "Hidden (No bars)",
     "settings.scrollbar_native": "Native (Browser default)",
+    "settings.glass": "Glass effects",
+    "settings.glass_hint": "(backdrop blur, heavy on the GPU)",
+    "settings.glass_off": "Off (recommended)",
+    "settings.glass_on": "On (backdrop blur)",
     "settings.timezone": "Timezone",
     "settings.timezone_hint": "(unified for calendar, journal, and events)",
     "settings.folders_title": "Folders & Category Renaming",
@@ -21561,6 +21591,7 @@ try {
   applyTheme(localStorage.getItem("vbeacon_theme") || "dark");
   applyDesign(localStorage.getItem("aliasarr_design") || "classic");
   applyScrollbarMode(localStorage.getItem("aliasarr_scrollbar") || "autohide");
+  applyGlassMode(localStorage.getItem("aliasarr_glass") || "off");
   applyLanguage(localStorage.getItem("vbeacon_lang") || "ru");
   updateMobileState();
 } catch (e) {}
