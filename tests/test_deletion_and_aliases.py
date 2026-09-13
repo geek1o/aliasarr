@@ -10,7 +10,7 @@ import datetime as dt
 try:
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from app.models.db import Base, Show, Episode, Alias, EpisodeStatus, AliasLanguage, User
+    from app.models.db import AppSettings, Base, Show, Episode, Alias, EpisodeStatus, AliasLanguage, User
     from app.schemas import AliasCreate, ShowCreate, DeleteContentPayload
     from app.api.shows import add_alias, create_show, delete_content
     from app.services.metadata import should_refresh_show, trigger_show_metadata_refresh_if_needed
@@ -37,6 +37,14 @@ class TestDeletionAndAliases(unittest.TestCase):
             password_hash="hash",
         )
         self.db.add(self.user)
+        self.db.add(AppSettings(
+            id=1,
+            api_key="test-key",
+            root_folder=self.temp_dir,
+            root_folder_movies=self.temp_dir,
+            root_folder_series=self.temp_dir,
+            root_folder_anime=self.temp_dir,
+        ))
         self.db.commit()
 
     def tearDown(self):
@@ -44,7 +52,7 @@ class TestDeletionAndAliases(unittest.TestCase):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_alias_priority_autoincrement(self):
-        # 1. Создаем шоу с 2 алиасами без явного приоритета -> должны получить 1 и 2
+        # Создание также добавляет исходный заголовок как auto-алиас.
         payload = ShowCreate(
             title="Test Show",
             aliases=[
@@ -54,9 +62,11 @@ class TestDeletionAndAliases(unittest.TestCase):
         )
         show = asyncio.run(create_show(payload, db=self.db, current_user=self.user))
         aliases = self.db.query(Alias).filter(Alias.show_id == show.id).order_by(Alias.priority).all()
-        self.assertEqual(len(aliases), 2)
-        self.assertEqual(aliases[0].priority, 1)
-        self.assertEqual(aliases[1].priority, 2)
+        self.assertEqual(len(aliases), 3)
+        aliases_by_text = {alias.text: alias for alias in aliases}
+        self.assertEqual(aliases_by_text["Test Alias 1"].priority, 1)
+        self.assertEqual(aliases_by_text["Test Alias 2"].priority, 2)
+        self.assertEqual(aliases_by_text["Test Show"].source, "auto")
 
         # 2. Добавляем новый алиас через add_alias без явного приоритета -> должен получить 3
         new_alias = add_alias(show.id, AliasCreate(text="Test Alias 3"), db=self.db, current_user=self.user)
