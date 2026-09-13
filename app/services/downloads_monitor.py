@@ -569,6 +569,7 @@ async def check_downloads(db: Session) -> list[dict]:
                     ep.download_progress = 0.0
                     if getattr(ep, "file_path", None):
                         ep.status = EpisodeStatus.DOWNLOADED
+                        ep.monitored = False
                     else:
                         air_d = getattr(ep, "air_date", None)
                         if isinstance(air_d, dt.datetime):
@@ -606,6 +607,7 @@ async def check_downloads(db: Session) -> list[dict]:
                     ep.download_progress = 0.0
                     if getattr(ep, "file_path", None):
                         ep.status = EpisodeStatus.DOWNLOADED
+                        ep.monitored = False
                     else:
                         air_d = getattr(ep, "air_date", None)
                         if isinstance(air_d, dt.datetime):
@@ -748,6 +750,7 @@ async def check_downloads(db: Session) -> list[dict]:
                                 air_d = air_d.date()
                             if getattr(u_ep, "file_path", None):
                                 u_ep.status = EpisodeStatus.DOWNLOADED
+                                u_ep.monitored = False
                             elif air_d and air_d > today:
                                 u_ep.status = EpisodeStatus.UNAIRED
                             else:
@@ -1163,6 +1166,7 @@ async def check_downloads(db: Session) -> list[dict]:
                                 has_existing_file = bool(fp and os.path.exists(fp))
                                 if has_existing_file:
                                     ep.status = EpisodeStatus.DOWNLOADED
+                                    ep.monitored = False
                                     ep.download_progress = 0.0
                                     ep.torrent_hash = None
                                     ep.download_client_id = None

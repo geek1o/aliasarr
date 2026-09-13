@@ -565,6 +565,9 @@ class AppSettings(Base):
     backup_retention_count: Mapped[int] = mapped_column(Integer, default=10)    # сколько последних копий хранить
     backup_default_type: Mapped[str] = mapped_column(String(20), default="full")  # full | config
 
+    # Разовая миграция: автоматическое снятие отслеживания с уже скачанных серий
+    unmonitor_downloaded_migrated: Mapped[bool] = mapped_column(Boolean, default=False)
+
 
 class User(Base):
     """Модель пользователя с поддержкой ролей и прав доступа (RBAC)."""

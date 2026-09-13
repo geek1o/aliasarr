@@ -1070,6 +1070,7 @@ def process_download(
         for ep in eps_for_show:
             if ep.file_path and os.path.exists(ep.file_path) and ep.status == EpisodeStatus.DOWNLOADING:
                 ep.status = EpisodeStatus.DOWNLOADED
+                ep.monitored = False
                 ep.download_progress = 1.0
                 db.add(ep)
                 updated_any = True
@@ -1686,6 +1687,7 @@ def process_download(
 
             if episode:
                 episode.status = EpisodeStatus.DOWNLOADED
+                episode.monitored = False
                 episode.file_path = dest_video_path
                 episode.download_progress = 1.0
                 episode.downloaded_quality = quality
@@ -1729,6 +1731,7 @@ def process_download(
                     episode_number=actual_ep_num,
                     title=episode_title or f"Серия {actual_ep_num}",
                     status=EpisodeStatus.DOWNLOADED,
+                    monitored=False,
                     file_path=dest_video_path,
                     download_progress=1.0,
                     downloaded_quality=quality,
@@ -1954,6 +1957,7 @@ def process_movie_download(
         # Проверяем, возможно файл уже был перенесён и находится в целевой папке фильма
         if old_ep and old_ep.file_path and os.path.exists(old_ep.file_path):
             old_ep.status = EpisodeStatus.DOWNLOADED
+            old_ep.monitored = False
             old_ep.download_progress = 1.0
             db.add(old_ep)
             db.commit()
@@ -1965,6 +1969,7 @@ def process_movie_download(
                     full_p = os.path.join(movie_root, f)
                     if old_ep:
                         old_ep.status = EpisodeStatus.DOWNLOADED
+                        old_ep.monitored = False
                         old_ep.file_path = full_p
                         old_ep.download_progress = 1.0
                         old_ep.downloaded_quality = parse_quality(f).name
@@ -2199,6 +2204,7 @@ def process_movie_download(
             episode_number=1,
             title=show.title,
             status=EpisodeStatus.DOWNLOADED,
+            monitored=False,
             file_path=dest_video_path,
             download_progress=1.0,
             downloaded_quality=quality,
@@ -2215,6 +2221,7 @@ def process_movie_download(
         db.add(episode)
     else:
         episode.status = EpisodeStatus.DOWNLOADED
+        episode.monitored = False
         episode.file_path = dest_video_path
         episode.download_progress = 1.0
         episode.downloaded_quality = quality

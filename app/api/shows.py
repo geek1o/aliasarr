@@ -320,6 +320,7 @@ def get_show(show_id: int, db: Session = Depends(get_db), current_user: User = D
                 if file_exists:
                     if ep.status != EpisodeStatus.DOWNLOADED and ep.status != EpisodeStatus.DOWNLOADING:
                         ep.status = EpisodeStatus.DOWNLOADED
+                        ep.monitored = False
                         ep.download_progress = 1.0
                         needs_commit = True
                     if not ep.downloaded_quality and ep.file_path:
@@ -1434,6 +1435,7 @@ def sync_show_disk(
             )
             if not is_active_download:
                 episode.status = EpisodeStatus.DOWNLOADED
+                episode.monitored = False
                 episode.download_progress = 1.0
             episode.file_path = main_file
             episode.downloaded_quality = q_info.name
@@ -1477,6 +1479,7 @@ def sync_show_disk(
                 )
                 if not is_active_download:
                     matched_ep.status = EpisodeStatus.DOWNLOADED
+                    matched_ep.monitored = False
                     matched_ep.download_progress = 1.0
                 matched_ep.file_path = file_path
                 matched_ep.downloaded_quality = q_info.name
@@ -2199,6 +2202,7 @@ def execute_manual_import(
 
                 q_info = parse_quality(os.path.basename(dest_video_path))
                 episode.status = EpisodeStatus.DOWNLOADED
+                episode.monitored = False
                 episode.file_path = dest_video_path
                 episode.download_progress = 1.0
                 episode.downloaded_quality = quality
@@ -2717,6 +2721,7 @@ def execute_global_manual_import(
 
                 q_info = parse_quality(os.path.basename(dest_video_path))
                 episode.status = EpisodeStatus.DOWNLOADED
+                episode.monitored = False
                 episode.file_path = dest_video_path
                 episode.download_progress = 1.0
                 episode.downloaded_quality = quality

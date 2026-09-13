@@ -1511,7 +1511,12 @@ def set_episode_status(
     if monitored is not None:
         target_monitored = monitored
     elif status is not None:
-        target_monitored = (status != "ignored")
+        target_monitored = (
+            status != "ignored"
+            and status != "downloaded"
+            and status != EpisodeStatus.DOWNLOADED
+            and status != EpisodeStatus.IGNORED
+        )
     else:
         target_monitored = True
 

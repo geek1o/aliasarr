@@ -1448,21 +1448,24 @@ async def _do_search_and_grab(
             # независимо от того, наступила ли уже дата премьеры (WANTED или UNAIRED), плюс апгрейды
             if show.monitored:
                 status_filter = or_(
-                    Episode.status.in_([EpisodeStatus.WANTED, EpisodeStatus.UNAIRED]),
+                    and_(Episode.status.in_([EpisodeStatus.WANTED, EpisodeStatus.UNAIRED]), Episode.monitored == True),
                     upgrade_eligible,
                 )
             else:
-                status_filter = or_(Episode.status == EpisodeStatus.WANTED, upgrade_eligible)
+                status_filter = or_(
+                    and_(Episode.status == EpisodeStatus.WANTED, Episode.monitored == True),
+                    upgrade_eligible,
+                )
         else:
             if show.monitored:
                 status_filter = or_(
-                    Episode.status == EpisodeStatus.WANTED,
+                    and_(Episode.status == EpisodeStatus.WANTED, Episode.monitored == True),
                     upgrade_eligible,
                 )
             else:
                 status_filter = or_(
-                    Episode.status == EpisodeStatus.WANTED,
-                    and_(Episode.upgrade_requested == True, Episode.status == EpisodeStatus.DOWNLOADED),
+                    and_(Episode.status == EpisodeStatus.WANTED, Episode.monitored == True),
+                    and_(Episode.upgrade_requested == True, Episode.status == EpisodeStatus.DOWNLOADED, Episode.monitored == True),
                 )
         wanted_episodes = db.query(Episode).filter(Episode.show_id == show.id, status_filter).all()
 

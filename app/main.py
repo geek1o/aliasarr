@@ -195,6 +195,23 @@ async def on_startup():
 
         _seed_default_metadata_sources(db)
         seed_default_custom_formats(db)
+
+        # 4. Разовая миграция: снятие мониторинга со скачанных серий без активного апгрейда
+        if not getattr(settings, "unmonitor_downloaded_migrated", False):
+            try:
+                from app.models.db import Episode, EpisodeStatus
+                updated_count = db.query(Episode).filter(
+                    Episode.status == EpisodeStatus.DOWNLOADED,
+                    Episode.upgrade_requested == False,
+                ).update({Episode.monitored: False}, synchronize_session=False)
+                settings.unmonitor_downloaded_migrated = True
+                db.commit()
+                if updated_count > 0:
+                    logger.info("Миграция: успешно снят мониторинг с %d скачанных серий", updated_count)
+            except Exception as e_mig:
+                logger.warning("Ошибка при выполнении миграции unmonitor_downloaded: %s", e_mig)
+                db.rollback()
+
         monitor_interval = settings.monitor_interval_minutes or 15
         tracker_interval = getattr(settings, "tracker_check_interval_minutes", 30) or 30
         unaired_interval = getattr(settings, "unaired_check_interval_minutes", 10) or 10
