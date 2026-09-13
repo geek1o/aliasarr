@@ -155,7 +155,10 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         forbidden_response = None
         unauthorized_response = None
 
-        is_docs_request = path in ("/docs", "/redoc", "/openapi.json") or path.startswith(("/docs", "/redoc"))
+        is_docs_request = (
+            path in ("/docs", "/redoc", "/openapi.json", "/api/docs", "/api/docs.html")
+            or path.startswith(("/docs", "/redoc", "/api/docs"))
+        )
         is_page_request = (
             is_docs_request
             or path in ("/quality-guide", "/quality-guide.html", "/wiki", "/wiki.html")

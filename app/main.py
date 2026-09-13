@@ -17,7 +17,7 @@ except ImportError:
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.api import (
@@ -59,59 +59,21 @@ except Exception:
 _active_server = None
 _restart_requested = False
 
-from fastapi.openapi.utils import get_openapi
+from app.services.openapi_service import get_localized_openapi
 
 app = FastAPI(
     title="Aliasarr API",
     description="Backend API для Aliasarr — системы управления медиатекой с мультиязычными алиасами, парсером сезонов и контролем торрент-клиентов.",
     version="2.9.0",
-    docs_url="/api/docs",
+    docs_url=None,
     redoc_url=None,
-    openapi_url="/openapi.json",
+    openapi_url=None,
     openapi_tags=None,
 )
 
 
 def custom_openapi():
-    if app.openapi_schema:
-        return app.openapi_schema
-    lang = "ru"
-    try:
-        from app.database import SessionLocal
-        with SessionLocal() as db:
-            s = get_or_create_settings(db)
-            lang = s.language or "ru"
-    except Exception:
-        pass
-
-    if lang == "en":
-        desc = "*arr-like movie/series/anime manager with multi-language aliases, universal episode parser and release tracker"
-    else:
-        desc = "*arr-подобный менеджер фильмов/сериалов/аниме с алиасами, универсальным парсером серий и слежением за раздачей"
-
-    schema = get_openapi(
-        title="Aliasarr",
-        version="2.9.0",
-        description=desc,
-        routes=app.routes,
-    )
-    schema["components"] = schema.get("components", {})
-    schema["components"]["securitySchemes"] = {
-        "ApiKeyAuth": {
-            "type": "apiKey",
-            "in": "header",
-            "name": "X-Api-Key",
-            "description": "Системный или пользовательский API-ключ Aliasarr",
-        },
-        "CookieAuth": {
-            "type": "apiKey",
-            "in": "cookie",
-            "name": "aliasarr_session",
-            "description": "Сессионный Cookie после авторизации в веб-интерфейсе",
-        },
-    }
-    schema["security"] = [{"ApiKeyAuth": []}, {"CookieAuth": []}]
-    return schema
+    return get_localized_openapi(app, lang="ru")
 
 
 app.openapi = custom_openapi
@@ -582,6 +544,61 @@ def wiki_page(request: Request):
         return HTMLResponse(html)
     finally:
         db.close()
+
+
+@app.get("/api/docs")
+@app.get("/api/docs.html")
+def api_docs_page(request: Request):
+    db = SessionLocal()
+    try:
+        settings = get_or_create_settings(db)
+        user = None
+        if settings.login_enabled:
+            user = get_current_user_optional(request, db)
+            if not user:
+                return RedirectResponse(url="/?redirect=/api/docs", status_code=302)
+
+        docs_path = os.path.join(_WEB_DIR, "api-docs.html")
+        if not os.path.isfile(docs_path):
+            raise HTTPException(404, "API Documentation page not found")
+        with open(docs_path, encoding="utf-8") as f:
+            html = f.read()
+
+        import json
+        lang = getattr(settings, "language", "ru") or "ru"
+        theme = getattr(settings, "theme", "dark") or "dark"
+        inject_script = (
+            f'<script>'
+            f'window.__ALIASARR_SETTINGS_LANG__ = {json.dumps(lang)};'
+            f'window.__ALIASARR_SETTINGS_THEME__ = {json.dumps(theme)};'
+        )
+        if not settings.login_enabled and getattr(settings, "api_key", None):
+            inject_script += f'window.__ALIASARR_BOOTSTRAP_KEY__ = {json.dumps(settings.api_key)};'
+        elif user and getattr(user, "api_key", None):
+            inject_script += f'window.__ALIASARR_BOOTSTRAP_KEY__ = {json.dumps(user.api_key)};'
+        inject_script += '</script>'
+        html = html.replace("</head>", inject_script + "</head>")
+
+        return HTMLResponse(html)
+    finally:
+        db.close()
+
+
+@app.get("/openapi.json", include_in_schema=False)
+def openapi_json_endpoint(request: Request, lang: Optional[str] = None):
+    target_lang = lang
+    if not target_lang:
+        target_lang = request.cookies.get("aliasarr_lang")
+    if not target_lang:
+        db = SessionLocal()
+        try:
+            settings = get_or_create_settings(db)
+            target_lang = getattr(settings, "language", "ru") or "ru"
+        except Exception:
+            target_lang = "ru"
+        finally:
+            db.close()
+    return JSONResponse(get_localized_openapi(app, lang=target_lang))
 
 
 @app.get("/")

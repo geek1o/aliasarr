@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title id="api-page-title">Справочник API — Aliasarr</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='17' fill='%230f1048'/%3E%3Cpath d='M32 14L43 36' stroke='%232a197c' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M15 49L32 14' stroke='%236838f7' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M21 36H43L49 49' stroke='%236838f7' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ui/static/css/swagger-ui.css" />
+
+  <script>
+    (function () {
+      try {
+        var theme = localStorage.getItem("vbeacon_theme") || "dark";
+        if (theme !== "light") theme = "dark";
+        document.documentElement.setAttribute("data-theme", theme);
+        var lang = localStorage.getItem("aliasarr_lang") || "ru";
+        document.documentElement.setAttribute("lang", lang);
+        document.title = lang === "en" ? "API Reference — Aliasarr" : "Справочник API — Aliasarr";
+      } catch (e) {}
+    })();
+  </script>
+
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --panel: #121824;
+      --panel-alt: #171e2e;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-hover: rgba(255, 255, 255, 0.16);
+      --text: #f0f6fc;
+      --text-muted: #8b949e;
+      --teal: #00F0FF;
+      --violet: #6366f1;
+      --primary: #00F0FF;
+      --accent: #6366f1;
+      --danger: #FF2A4D;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --radius-lg: 16px;
+      --font-display: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --brand-icon-bg: #0f1048;
+      --brand-icon-fg: #6c3ef8;
+      --brand-icon-shadow: #2a197c;
+      --header-h: 68px;
+    }
+
+    [data-theme="light"] {
+      --bg: #f8fafc;
+      --panel: #ffffff;
+      --panel-alt: #f1f5f9;
+      --border: #e2e8f0;
+      --border-hover: #cbd5e1;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --teal: #0284c7;
+      --violet: #6366f1;
+      --primary: #0284c7;
+      --accent: #6366f1;
+      --danger: #dc2626;
+      --success: #059669;
+      --warning: #d97706;
+      --brand-icon-bg: #e0e7ff;
+      --brand-icon-fg: #4f46e5;
+      --brand-icon-shadow: #a5b4fc;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-display);
+      min-height: 100vh;
+      overflow-x: hidden;
+      transition: background-color 0.25s ease, color 0.25s ease;
+    }
+
+    body[data-lang="ru"] .lang-en { display: none !important; }
+    body[data-lang="en"] .lang-ru { display: none !important; }
+
+    /* TOPBAR */
+    .api-header {
+      position: sticky;
+      top: 0;
+      z-index: 999;
+      height: var(--header-h);
+      background: rgba(11, 15, 25, 0.82);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      transition: background 0.25s ease, border-color 0.25s ease;
+    }
+
+    [data-theme="light"] .api-header {
+      background: rgba(255, 255, 255, 0.88);
+    }
+
+    .api-header-inner {
+      width: 100%;
+      max-width: 1440px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .api-header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .brand-mark-logo {
+      width: 34px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .brand-icon-svg {
+      width: 34px;
+      height: 34px;
+    }
+
+    .brand-icon-bg { fill: var(--brand-icon-bg); }
+    .brand-icon-fg { stroke: var(--brand-icon-fg); }
+    .brand-icon-shadow { stroke: var(--brand-icon-shadow); }
+
+    .brand-name {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .api-badge-sub {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(99, 102, 241, 0.12);
+      border: 1px solid rgba(99, 102, 241, 0.28);
+      color: #818cf8;
+    }
+
+    .api-badge-version {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: rgba(0, 240, 255, 0.1);
+      border: 1px solid rgba(0, 240, 255, 0.25);
+      color: var(--teal);
+    }
+
+    .api-header-center {
+      flex: 1;
+      max-width: 480px;
+      margin: 0 16px;
+    }
+
+    .api-search-box {
+      position: relative;
+      width: 100%;
+      display: flex;
+      align-items: center;
+    }
+
+    .api-search-box i {
+      position: absolute;
+      left: 14px;
+      width: 16px;
+      height: 16px;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .api-search-box input {
+      width: 100%;
+      height: 38px;
+      padding: 0 14px 0 40px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: var(--font-display);
+      font-size: 13px;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    [data-theme="light"] .api-search-box input {
+      background: #f1f5f9;
+    }
+
+    .api-search-box input:focus {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: var(--teal);
+      box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.15);
+    }
+
+    .api-header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .api-action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      height: 36px;
+      padding: 0 13px;
+      border-radius: 9px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+
+    [data-theme="light"] .api-action-btn {
+      background: #ffffff;
+      border-color: #cbd5e1;
+    }
+
+    .api-action-btn:hover {
+      background: rgba(255, 255, 255, 0.09);
+      border-color: var(--border-hover);
+      color: var(--teal);
+      transform: translateY(-1px);
+    }
+
+    [data-theme="light"] .api-action-btn:hover {
+      background: #f8fafc;
+      border-color: #94a3b8;
+      color: var(--teal);
+    }
+
+    .api-action-btn i {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* MAIN CONTAINER */
+    .api-main-container {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px 20px 80px 20px;
+    }
+
+    /* HIDE DEFAULT SWAGGER TOPBAR */
+    .swagger-ui .topbar {
+      display: none !important;
+    }
+
+    /* BASE SWAGGER OVERRIDES */
+    .swagger-ui {
+      font-family: var(--font-display) !important;
+      color: var(--text) !important;
+    }
+
+    .swagger-ui .wrapper {
+      max-width: 100% !important;
+      padding: 0 !important;
+    }
+
+    /* DARK THEME SWAGGER UI OVERRIDES */
+    [data-theme="dark"] .swagger-ui {
+      color: #f0f6fc !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .info {
+      margin: 0 0 28px 0 !important;
+      padding: 24px !important;
+      background: var(--panel) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: var(--radius) !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .info .title {
+      font-family: var(--font-display) !important;
+      color: #f8fafc !important;
+      font-size: 28px !important;
+      font-weight: 800 !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .info p,
+    [data-theme="dark"] .swagger-ui .info li {
+      color: #94a3b8 !important;
+      font-size: 14px !important;
+      line-height: 1.6 !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .info h1,
+    [data-theme="dark"] .swagger-ui .info h2,
+    [data-theme="dark"] .swagger-ui .info h3 {
+      color: #f8fafc !important;
+      margin-top: 14px !important;
+      font-weight: 700 !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .info a {
+      color: var(--teal) !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .scheme-container {
+      background: var(--panel) !important;
+      box-shadow: none !important;
+      border: 1px solid var(--border) !important;
+      border-radius: var(--radius) !important;
+      padding: 16px 20px !important;
+      margin-bottom: 24px !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .schemes > label {
+      color: #cbd5e1 !important;
+      font-size: 13px !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .opblock-tag {
+      font-family: var(--font-display) !important;
+      font-size: 18px !important;
+      font-weight: 700 !important;
+      color: #f8fafc !important;
+      border-bottom: 1px solid var(--border) !important;
+      padding: 14px 0 !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .opblock-tag small {
+      color: #94a3b8 !important;
+      font-size: 13px !important;
+      font-weight: 400 !important;
+      margin-left: 10px !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .opblock-tag svg {
+      fill: #94a3b8 !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .opblock {
+      background: var(--panel) !important;
+      border: 1px solid var(--border) !important;
+      box-shadow: none !important;
+      border-radius: var(--radius-sm) !important;
+      margin-bottom: 12px !important;
+      transition: border-color 0.2s ease, transform 0.15s ease;
+    }
+
+    [data-theme="dark"] .swagger-ui .opblock:hover {
+      border-color: var(--border-hover) !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .opblock-summary {
+      padding: 8px 16px !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .opblock-summary-path {
+      font-family: var(--font-mono) !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      color: #f8fafc !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .opblock-summary-description {
+      color: #94a3b8 !important;
+      font-size: 13px !important;
+    }
+
+    /* Method Badges */
+    .swagger-ui .opblock-summary-method {
+      font-family: var(--font-mono) !important;
+      font-weight: 700 !important;
+      font-size: 12px !important;
+      border-radius: 6px !important;
+      padding: 5px 12px !important;
+      min-width: 74px !important;
+      text-align: center !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .opblock.opblock-get .opblock-summary-method {
+      background: rgba(2, 132, 199, 0.2) !important;
+      border: 1px solid rgba(56, 189, 248, 0.4) !important;
+      color: #38bdf8 !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .opblock.opblock-post .opblock-summary-method {
+      background: rgba(5, 150, 105, 0.2) !important;
+      border: 1px solid rgba(52, 211, 153, 0.4) !important;
+      color: #34d399 !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .opblock.opblock-put .opblock-summary-method,
+    [data-theme="dark"] .swagger-ui .opblock.opblock-patch .opblock-summary-method {
+      background: rgba(217, 119, 6, 0.2) !important;
+      border: 1px solid rgba(251, 191, 36, 0.4) !important;
+      color: #fbbf24 !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .opblock.opblock-delete .opblock-summary-method {
+      background: rgba(220, 38, 38, 0.2) !important;
+      border: 1px solid rgba(248, 113, 113, 0.4) !important;
+      color: #f87171 !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .opblock-body {
+      background: var(--panel-alt) !important;
+      border-top: 1px solid var(--border) !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .opblock-section-header {
+      background: rgba(0, 0, 0, 0.2) !important;
+      box-shadow: none !important;
+      border-bottom: 1px solid var(--border) !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .opblock-section-header h4 {
+      color: #e2e8f0 !important;
+      font-size: 13px !important;
+      font-weight: 700 !important;
+    }
+
+    [data-theme="dark"] .swagger-ui table thead tr th,
+    [data-theme="dark"] .swagger-ui table thead tr td {
+      color: #94a3b8 !important;
+      border-bottom: 1px solid var(--border) !important;
+      font-size: 12px !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .parameters-col_name {
+      color: #f8fafc !important;
+      font-family: var(--font-mono) !important;
+      font-size: 13px !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .parameters-col_description {
+      color: #94a3b8 !important;
+      font-size: 13px !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .parameter__name.required:after {
+      color: #f87171 !important;
+    }
+
+    [data-theme="dark"] .swagger-ui input[type="text"],
+    [data-theme="dark"] .swagger-ui textarea,
+    [data-theme="dark"] .swagger-ui select {
+      background: rgba(255, 255, 255, 0.05) !important;
+      border: 1px solid var(--border) !important;
+      color: #f8fafc !important;
+      border-radius: 6px !important;
+      font-family: var(--font-mono) !important;
+      font-size: 12px !important;
+      padding: 6px 10px !important;
+    }
+
+    [data-theme="dark"] .swagger-ui input[type="text"]:focus,
+    [data-theme="dark"] .swagger-ui textarea:focus,
+    [data-theme="dark"] .swagger-ui select:focus {
+      border-color: var(--teal) !important;
+      outline: none !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .responses-inner {
+      padding: 16px 20px !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .response-col_status {
+      font-family: var(--font-mono) !important;
+      font-weight: 700 !important;
+      color: #f8fafc !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .response-col_description__inner div.markdown p {
+      color: #94a3b8 !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .highlight-code,
+    [data-theme="dark"] .swagger-ui .microlight {
+      background: #080a0f !important;
+      border: 1px solid var(--border) !important;
+      border-radius: 8px !important;
+      color: #38bdf8 !important;
+      font-family: var(--font-mono) !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .btn {
+      font-family: var(--font-display) !important;
+      font-weight: 600 !important;
+      border-radius: 8px !important;
+      box-shadow: none !important;
+      transition: all 0.2s ease !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .btn.authorize {
+      background: rgba(16, 185, 129, 0.15) !important;
+      border: 1px solid rgba(16, 185, 129, 0.35) !important;
+      color: #34d399 !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .btn.authorize svg {
+      fill: #34d399 !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .btn.execute {
+      background: var(--teal) !important;
+      border-color: var(--teal) !important;
+      color: #05070e !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .btn.try-out__btn {
+      background: rgba(255, 255, 255, 0.06) !important;
+      border: 1px solid var(--border) !important;
+      color: #f8fafc !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .btn.btn-clear {
+      background: rgba(255, 255, 255, 0.05) !important;
+      border: 1px solid var(--border) !important;
+      color: #94a3b8 !important;
+    }
+
+    [data-theme="dark"] .swagger-ui section.models {
+      background: var(--panel) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: var(--radius) !important;
+    }
+
+    [data-theme="dark"] .swagger-ui section.models h4 {
+      color: #f8fafc !important;
+      border-bottom: 1px solid var(--border) !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .model-title {
+      font-family: var(--font-mono) !important;
+      color: #cbd5e1 !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .model-box {
+      background: rgba(0, 0, 0, 0.25) !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .dialog-ux .modal-ux {
+      background: var(--panel) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: var(--radius-lg) !important;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7) !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .dialog-ux .modal-ux-header {
+      border-bottom: 1px solid var(--border) !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .dialog-ux .modal-ux-header h3 {
+      color: #f8fafc !important;
+    }
+
+    [data-theme="dark"] .swagger-ui .dialog-ux .modal-ux-content {
+      color: #cbd5e1 !important;
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 900px) {
+      .api-header-center {
+        display: none;
+      }
+      .brand-name {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body data-lang="ru">
+
+<header class="api-header">
+  <div class="api-header-inner">
+    <div class="api-header-left">
+      <a href="/" class="brand-mark-logo" title="Aliasarr Home">
+        <svg class="brand-icon-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="32" height="32" rx="8.5" class="brand-icon-bg"/>
+          <path d="M16 7L21.5 18" class="brand-icon-shadow" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M7.5 24.5L16 7" class="brand-icon-fg" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M10.5 18H21.5L24.5 24.5" class="brand-icon-fg" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </a>
+      <a href="/" class="brand-name">Aliasarr</a>
+      <span class="api-badge-sub">
+        <span class="lang-ru">Справочник API</span>
+        <span class="lang-en">API Reference</span>
+      </span>
+      <span class="api-badge-version">v2.9.0</span>
+    </div>
+
+    <div class="api-header-center">
+      <div class="api-search-box">
+        <i data-lucide="search"></i>
+        <input type="text" id="api-search-input" placeholder="Поиск по методам и тегам..." oninput="filterEndpoints(this.value)" />
+      </div>
+    </div>
+
+    <div class="api-header-right">
+      <button class="api-action-btn" onclick="toggleApiLang()" title="Сменить язык / Switch Language" id="btn-lang">
+        <i data-lucide="globe"></i>
+        <span id="api-lang-text">RU</span>
+      </button>
+      <button class="api-action-btn" onclick="toggleApiTheme()" title="Сменить тему оформления / Switch Theme" id="btn-theme">
+        <i data-lucide="moon" id="api-theme-icon"></i>
+        <span id="api-theme-text">
+          <span class="lang-ru">Тёмная</span>
+          <span class="lang-en">Dark</span>
+        </span>
+      </button>
+      <a href="/docs" class="api-action-btn" title="Wiki & Документация">
+        <i data-lucide="book-open"></i>
+        <span>Wiki</span>
+      </a>
+      <a href="/" class="api-action-btn" title="Открыть веб-интерфейс">
+        <i data-lucide="arrow-left"></i>
+        <span class="lang-ru">В приложение</span>
+        <span class="lang-en">Open App</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main class="api-main-container">
+  <div id="swagger-ui"></div>
+</main>
+
+<script src="/ui/static/js/lucide.min.js"></script>
+<script src="/ui/static/js/swagger-ui-bundle.js"></script>
+<script src="/ui/static/js/swagger-ui-standalone-preset.js"></script>
+
+<script>
+  var currentLang = localStorage.getItem("aliasarr_lang") || "ru";
+  if (currentLang !== "en") currentLang = "ru";
+
+  var currentTheme = localStorage.getItem("vbeacon_theme") || "dark";
+  if (currentTheme !== "light") currentTheme = "dark";
+
+  document.body.setAttribute("data-lang", currentLang);
+  document.documentElement.setAttribute("data-theme", currentTheme);
+
+  // Initialize Lucide icons
+  function refreshIcons() {
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+  }
+
+  // Update button states
+  function updateHeaderControls() {
+    var langLabel = document.getElementById("api-lang-text");
+    if (langLabel) langLabel.textContent = currentLang.toUpperCase();
+
+    var themeIcon = document.getElementById("api-theme-icon");
+    if (themeIcon) {
+      themeIcon.setAttribute("data-lucide", currentTheme === "light" ? "sun" : "moon");
+    }
+
+    var searchInput = document.getElementById("api-search-input");
+    if (searchInput) {
+      searchInput.placeholder = currentLang === "ru" ? "Поиск по методам и тегам..." : "Filter methods and tags...";
+    }
+
+    var title = document.getElementById("api-page-title");
+    if (title) {
+      title.textContent = currentLang === "ru" ? "Справочник API — Aliasarr" : "API Reference — Aliasarr";
+    }
+
+    refreshIcons();
+  }
+
+  // Toggle Theme
+  function toggleApiTheme() {
+    currentTheme = currentTheme === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", currentTheme);
+    localStorage.setItem("vbeacon_theme", currentTheme);
+    updateHeaderControls();
+  }
+
+  // Toggle Language
+  function toggleApiLang() {
+    currentLang = currentLang === "ru" ? "en" : "ru";
+    document.body.setAttribute("data-lang", currentLang);
+    document.documentElement.setAttribute("lang", currentLang);
+    localStorage.setItem("aliasarr_lang", currentLang);
+    updateHeaderControls();
+
+    // Reload Swagger spec with new language
+    if (window.ui && window.ui.specActions) {
+      var nextSpecUrl = "/openapi.json?lang=" + currentLang;
+      window.ui.specActions.updateUrl(nextSpecUrl);
+      window.ui.specActions.download(nextSpecUrl);
+    }
+    setTimeout(translateSwaggerDom, 300);
+  }
+
+  // Live filter for Swagger UI operations and tags
+  function filterEndpoints(query) {
+    var q = (query || "").trim().toLowerCase();
+    var tagSections = document.querySelectorAll(".opblock-tag-section");
+    tagSections.forEach(function(section) {
+      var tagMatch = false;
+      var tagEl = section.querySelector(".opblock-tag");
+      if (tagEl && tagEl.textContent.toLowerCase().includes(q)) {
+        tagMatch = true;
+      }
+
+      var opblocks = section.querySelectorAll(".opblock");
+      var anyOpMatch = false;
+      opblocks.forEach(function(op) {
+        if (!q || tagMatch) {
+          op.style.display = "";
+          anyOpMatch = true;
+        } else {
+          var text = op.textContent.toLowerCase();
+          if (text.includes(q)) {
+            op.style.display = "";
+            anyOpMatch = true;
+          } else {
+            op.style.display = "none";
+          }
+        }
+      });
+
+      if (!q || tagMatch || anyOpMatch) {
+        section.style.display = "";
+      } else {
+        section.style.display = "none";
+      }
+    });
+  }
+
+  // Client-side translation of Swagger UI chrome strings
+  function translateSwaggerDom() {
+    if (currentLang !== "ru") return;
+
+    var translations = [
+      { sel: ".btn.try-out__btn", from: "Try it out", to: "Попробовать" },
+      { sel: ".btn.try-out__btn.cancel", from: "Cancel", to: "Отмена" },
+      { sel: ".btn.execute", from: "Execute", to: "Выполнить запрос" },
+      { sel: ".btn.btn-clear", from: "Clear", to: "Очистить" },
+      { sel: ".btn.authorize span", from: "Authorize", to: "Авторизация" },
+      { sel: ".opblock-section-header h4", from: "Parameters", to: "Параметры" },
+      { sel: ".opblock-section-header h4", from: "Responses", to: "Ответы сервера" },
+      { sel: ".opblock-description-wrapper p", from: "No parameters", to: "Нет обязательных параметров" },
+      { sel: "section.models h4 span", from: "Schemas", to: "Схемы данных" }
+    ];
+
+    translations.forEach(function(item) {
+      document.querySelectorAll(item.sel).forEach(function(el) {
+        if (el.textContent.trim() === item.from) {
+          el.textContent = item.to;
+        }
+      });
+    });
+  }
+
+  // Initialize Swagger UI
+  window.addEventListener("DOMContentLoaded", function() {
+    updateHeaderControls();
+
+    var specUrl = "/openapi.json?lang=" + currentLang;
+
+    window.ui = SwaggerUIBundle({
+      url: specUrl,
+      dom_id: "#swagger-ui",
+      deepLinking: true,
+      presets: [
+        SwaggerUIBundle.presets.apis,
+        SwaggerUIStandalonePreset
+      ],
+      plugins: [
+        SwaggerUIBundle.plugins.DownloadUrl
+      ],
+      layout: "BaseLayout",
+      displayRequestDuration: true,
+      docExpansion: "list",
+      defaultModelsExpandDepth: 1,
+      defaultModelExpandDepth: 1,
+      onComplete: function() {
+        // Auto pre-authorize if bootstrap key is provided
+        if (window.__ALIASARR_BOOTSTRAP_KEY__) {
+          try {
+            window.ui.preauthorizeApiKey("ApiKeyAuth", window.__ALIASARR_BOOTSTRAP_KEY__);
+          } catch(e) {}
+        }
+        translateSwaggerDom();
+      }
+    });
+
+    // Observe DOM changes to maintain Russian translations dynamically
+    var observer = new MutationObserver(function() {
+      if (currentLang === "ru") {
+        translateSwaggerDom();
+      }
+    });
+
+    var container = document.getElementById("swagger-ui");
+    if (container) {
+      observer.observe(container, { childList: true, subtree: true });
+    }
+  });
+</script>
+</body>
+</html>
