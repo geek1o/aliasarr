@@ -190,9 +190,9 @@ async def create_show(
     settings = get_or_create_settings(db)
     qp_id = payload.quality_profile_id
     if qp_id is None:
-        if payload.content_type == ContentType.MOVIE:
+        if payload.content_type == "movie":
             qp_id = getattr(settings, "default_quality_profile_movie_id", None)
-        elif payload.content_type == ContentType.ANIME:
+        elif payload.content_type == "anime":
             qp_id = getattr(settings, "default_quality_profile_anime_id", None)
         else:
             qp_id = getattr(settings, "default_quality_profile_series_id", None)
@@ -926,6 +926,10 @@ def add_alias(
         language=payload.language,
         source=payload.source,
         priority=priority,
+        season_number=payload.season_number,
+        episode_start=payload.episode_start,
+        episode_end=payload.episode_end,
+        episode_offset=payload.episode_offset,
     )
     db.add(alias)
     db.commit()
@@ -957,6 +961,9 @@ def update_alias(
         alias.language = dumped["language"]
     if "priority" in dumped:
         alias.priority = dumped["priority"]
+    for field in ("season_number", "episode_start", "episode_end", "episode_offset"):
+        if field in dumped:
+            setattr(alias, field, dumped[field])
     db.add(alias)
     db.commit()
     db.refresh(alias)
@@ -1054,11 +1061,13 @@ def update_season_split(
         split.season_number = payload.season_number
 
     if payload.parts is not None:
-        db.query(SeasonSplitPart).filter(SeasonSplitPart.split_id == split_id).delete()
+        # Обновляем relationship как единое целое. Bulk DELETE оставляет уже
+        # загруженные объекты в split.parts и последующий db.add(split) пытается
+        # повторно сохранить экземпляры, помеченные как deleted.
+        split.parts.clear()
         db.flush()
         for p in payload.parts:
             part = SeasonSplitPart(
-                split_id=split.id,
                 part_type=p.part_type or "season",
                 target_number=p.target_number or 1,
                 episode_start=p.episode_start or 1,
@@ -1066,7 +1075,7 @@ def update_season_split(
                 episode_offset=p.episode_offset if p.episode_offset is not None else 0,
                 aliases=(p.aliases or "").strip(),
             )
-            db.add(part)
+            split.parts.append(part)
 
     db.add(split)
     db.commit()
