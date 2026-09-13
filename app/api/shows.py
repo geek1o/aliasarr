@@ -1051,11 +1051,13 @@ def update_season_split(
         split.season_number = payload.season_number
 
     if payload.parts is not None:
-        db.query(SeasonSplitPart).filter(SeasonSplitPart.split_id == split_id).delete()
+        # Обновляем relationship как единое целое. Bulk DELETE оставляет уже
+        # загруженные объекты в split.parts и последующий db.add(split) пытается
+        # повторно сохранить экземпляры, помеченные как deleted.
+        split.parts.clear()
         db.flush()
         for p in payload.parts:
             part = SeasonSplitPart(
-                split_id=split.id,
                 part_type=p.part_type or "season",
                 target_number=p.target_number or 1,
                 episode_start=p.episode_start or 1,
@@ -1063,7 +1065,7 @@ def update_season_split(
                 episode_offset=p.episode_offset if p.episode_offset is not None else 0,
                 aliases=(p.aliases or "").strip(),
             )
-            db.add(part)
+            split.parts.append(part)
 
     db.add(split)
     db.commit()

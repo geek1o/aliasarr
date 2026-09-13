@@ -6,9 +6,16 @@ import unittest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.api.shows import add_alias, create_show, update_alias
-from app.models.db import Alias, Base, User
-from app.schemas import AliasCreate, AliasUpdate, ShowCreate
+from app.api.shows import add_alias, create_season_split, create_show, update_alias, update_season_split
+from app.models.db import Alias, Base, SeasonSplitPart, User
+from app.schemas import (
+    AliasCreate,
+    AliasUpdate,
+    SeasonSplitCreate,
+    SeasonSplitPartCreate,
+    SeasonSplitUpdate,
+    ShowCreate,
+)
 
 
 class TestShowCreationRegressions(unittest.TestCase):
@@ -85,6 +92,47 @@ class TestShowCreationRegressions(unittest.TestCase):
         self.assertEqual(updated.episode_start, 25)
         self.assertEqual(updated.episode_end, 36)
         self.assertEqual(updated.episode_offset, 24)
+
+    def test_replace_loaded_season_split_parts(self):
+        show = asyncio.run(
+            create_show(
+                ShowCreate(title="Split Show", quality_profile_id=10),
+                db=self.db,
+                current_user=self.user,
+            )
+        )
+        created = create_season_split(
+            show.id,
+            SeasonSplitCreate(
+                name="Two cours",
+                season_number=1,
+                parts=[
+                    SeasonSplitPartCreate(episode_start=1, episode_end=12),
+                    SeasonSplitPartCreate(episode_start=13, episode_end=24, episode_offset=12),
+                ],
+            ),
+            db=self.db,
+            current_user=self.user,
+        )
+        self.assertEqual(len(created.parts), 2)
+
+        updated = update_season_split(
+            show.id,
+            created.id,
+            SeasonSplitUpdate(
+                name="Single cour",
+                parts=[SeasonSplitPartCreate(episode_start=1, episode_end=12)],
+            ),
+            db=self.db,
+            current_user=self.user,
+        )
+
+        self.assertEqual(updated.name, "Single cour")
+        self.assertEqual(len(updated.parts), 1)
+        self.assertEqual(
+            self.db.query(SeasonSplitPart).filter_by(split_id=created.id).count(),
+            1,
+        )
 
 
 if __name__ == "__main__":
