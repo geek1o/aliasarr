@@ -73,6 +73,25 @@ class MetadataSearchResultOut(BaseModel):
     content_type: Optional[str] = None
     already_added: bool = False
     existing_show_id: Optional[int] = None
+    original_title: Optional[str] = None
+    titles_by_lang: dict[str, str] = {}
+
+
+class MetadataDetailsOut(BaseModel):
+    external_id: str
+    title: str
+    original_title: Optional[str] = None
+    titles_by_lang: dict[str, str] = {}
+    year: Optional[int] = None
+    overview: Optional[str] = None
+    poster_url: Optional[str] = None
+    rating: Optional[float] = None
+    country: Optional[str] = None
+    genre: Optional[str] = None
+    content_type: Optional[str] = None
+    network: Optional[str] = None
+    premiere_date: Optional[str] = None
+    aliases: list[str] = []
 
 
 class ImportShowRequest(BaseModel):
@@ -81,6 +100,8 @@ class ImportShowRequest(BaseModel):
     path: Optional[str] = None
     # Категория контента (movie | series | anime), выбранная пользователем при добавлении
     content_type: Optional[str] = None
+    # Локализованное название, выбранное пользователем (RU / EN / Original)
+    title: Optional[str] = None
 
 
 def _parse_date(value: Optional[str]) -> Optional[dt.datetime]:
@@ -353,10 +374,13 @@ async def search_all_metadata_sources(
     seen_ids: set[str] = set()
     seen_keys: set[tuple[str, str, int | None]] = set()
 
+    app_settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+    overview_lang = getattr(app_settings, "metadata_overview_language", "ru") or "ru"
+
     # 1. ПЕРВАЯ ОЧЕРЕДЬ: Radarr Cloud Hook (фильмы) + Sonarr SkyHook (сериалы/аниме)
     primary_tasks = [
-        ("radarr", RadarrClient().search(clean_query)),
-        ("skyhook", SkyHookClient().search(clean_query)),
+        ("radarr", RadarrClient(overview_language=overview_lang).search(clean_query)),
+        ("skyhook", SkyHookClient(overview_language=overview_lang).search(clean_query)),
     ]
     try:
         primary_responses = await asyncio.gather(*[t[1] for t in primary_tasks], return_exceptions=True)
@@ -412,7 +436,7 @@ async def search_all_metadata_sources(
         sec_tasks = []
         for s in secondary_sources:
             try:
-                client = get_metadata_client(s)
+                client = get_metadata_client(s, overview_language=overview_lang)
                 sec_tasks.append((s, client.search(clean_query)))
             except Exception as e:
                 logger.debug("Failed creating metadata client for source %s: %s", s.name, e)
@@ -508,7 +532,9 @@ async def search_metadata(
     source = db.get(MetadataSource, source_id)
     if not source:
         raise HTTPException(404, "Source not found")
-    client = get_metadata_client(source)
+    app_settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+    overview_lang = getattr(app_settings, "metadata_overview_language", "ru") or "ru"
+    client = get_metadata_client(source, overview_language=overview_lang)
     results: list[MetadataResult] = await client.search(query)
 
     source_type_str = source.type.value if hasattr(source.type, "value") else str(source.type)
@@ -634,18 +660,30 @@ async def import_show(
         import re as _re
 
         settings = get_or_create_settings(db)
-        title_no_year = _re.sub(r"\s*\(\d{4}\)$|\s+\d{4}$", "", details.title or "").strip()
+        # Определение основного названия тайтла
+        chosen_title = payload.title.strip() if (payload.title and payload.title.strip()) else None
+        if not chosen_title:
+            norm_ov = normalize_metadata_lang_code(overview_lang) or overview_lang
+            titles_map = getattr(details, "titles_by_lang", {}) or {}
+            if norm_ov in ("ru", "rus") and titles_map.get("ru"):
+                chosen_title = titles_map["ru"]
+            elif norm_ov == "original" and titles_map.get("original"):
+                chosen_title = titles_map["original"]
+            else:
+                chosen_title = details.title
+
+        title_no_year = _re.sub(r"\s*\(\d{4}\)$|\s+\d{4}$", "", chosen_title or "").strip()
         if payload.path:
             p = payload.path.strip().rstrip("/\\")
             base_p = _os.path.basename(p).lower()
             if base_p in ("test", "movies", "films", "downloads", "data", "media", "video") or not base_p:
-                subfolder = sanitize_filename(f"{title_no_year} ({show_year})" if show_year else details.title)
+                subfolder = sanitize_filename(f"{title_no_year} ({show_year})" if show_year else chosen_title)
                 final_path = _os.path.join(p, subfolder)
             else:
                 final_path = payload.path.strip()
         else:
             final_path = get_show_default_path(
-                Show(title=details.title, year=show_year, content_type=content_type),
+                Show(title=chosen_title, year=show_year, content_type=content_type),
                 settings,
             )
 
@@ -712,7 +750,7 @@ async def import_show(
             target_qp_id = getattr(settings, "default_quality_profile_series_id", None)
 
         show = Show(
-            title=details.title,
+            title=chosen_title,
             year=show_year,
             collection_id=coll_id_to_set,
             quality_profile_id=target_qp_id,
@@ -742,12 +780,30 @@ async def import_show(
 
         added_aliases = set()
         clean_title = (details.title or "").strip()
-        if clean_title:
-            db.add(Alias(show_id=show.id, text=clean_title, language="en", source=source_type_str, priority=1))
-            added_aliases.add(clean_title.lower())
+        chosen_clean = (chosen_title or "").strip()
+
+        # 1. Выбранное пользователем название (приоритет 1)
+        if chosen_clean:
+            ch_lang = detect_alias_language(chosen_clean)
+            db.add(Alias(show_id=show.id, text=chosen_clean, language=ch_lang, source=source_type_str, priority=1))
+            added_aliases.add(chosen_clean.lower())
             if title_no_year and title_no_year.lower() not in added_aliases:
                 added_aliases.add(title_no_year.lower())
-                db.add(Alias(show_id=show.id, text=title_no_year, language="en", source=source_type_str, priority=1))
+                db.add(Alias(show_id=show.id, text=title_no_year, language=ch_lang, source=source_type_str, priority=1))
+
+        # 2. Исходное каноническое название details.title (приоритет 2)
+        if clean_title and clean_title.lower() not in added_aliases:
+            c_lang = detect_alias_language(clean_title)
+            db.add(Alias(show_id=show.id, text=clean_title, language=c_lang, source=source_type_str, priority=2))
+            added_aliases.add(clean_title.lower())
+
+        # 3. Все альтернативные языковые версии из titles_by_lang (приоритет 3)
+        for l_code, t_val in (getattr(details, "titles_by_lang", {}) or {}).items():
+            if t_val and t_val.strip() and t_val.strip().lower() not in added_aliases:
+                t_str = t_val.strip()
+                added_aliases.add(t_str.lower())
+                det_l = detect_alias_language(t_str)
+                db.add(Alias(show_id=show.id, text=t_str, language=det_l, source=source_type_str, priority=3))
 
         allowed_langs = get_allowed_metadata_languages(db, show)
         for i, alias_text in enumerate(details.aliases):
@@ -757,7 +813,7 @@ async def import_show(
                     continue
                 added_aliases.add(clean_alias.lower())
                 lang = detect_alias_language(clean_alias)
-                db.add(Alias(show_id=show.id, text=clean_alias, language=lang, source=source_type_str, priority=2 + i))
+                db.add(Alias(show_id=show.id, text=clean_alias, language=lang, source=source_type_str, priority=4 + i))
 
 
         now = dt.datetime.utcnow()
@@ -857,6 +913,64 @@ async def import_show(
     except Exception as e:
         logger.error(f"Ошибка при импорте шоу (external_id={payload.external_id}): {e}", exc_info=True)
         raise HTTPException(500, f"Внутренняя ошибка при импорте: {e}")
+
+
+@router.get("/details", response_model=MetadataDetailsOut)
+async def get_metadata_details(
+    external_id: str,
+    content_type: Optional[str] = None,
+    source_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("manage_library")),
+):
+    """Получение детальных локализованных метаданных тайтла для предпросмотра на шаге настройки."""
+    ext_str = str(external_id).strip()
+    source = None
+    if ext_str.startswith("tvdb:") or ext_str.startswith("skyhook:"):
+        source = db.query(MetadataSource).filter(MetadataSource.type.in_([MetadataSourceType.SKYHOOK, MetadataSourceType.THETVDB]), MetadataSource.enabled == True).first()
+    elif ext_str.startswith("movie:") or ext_str.startswith("radarr:") or content_type == "movie":
+        source = db.query(MetadataSource).filter(MetadataSource.type.in_([MetadataSourceType.RADARR, MetadataSourceType.TMDB]), MetadataSource.enabled == True).first()
+    elif ext_str.startswith("tv:") or (ext_str.startswith("tmdb:") and content_type in ("series", "anime")):
+        source = db.query(MetadataSource).filter(MetadataSource.type == MetadataSourceType.TMDB, MetadataSource.enabled == True).first()
+
+    if not source and source_id:
+        source = db.get(MetadataSource, source_id)
+
+    if not source:
+        if content_type == "movie" or ext_str.startswith("movie:") or ext_str.startswith("radarr:"):
+            source = MetadataSource(name="Radarr SkyHook (Movie Cloud)", type="radarr", base_url="https://api.radarr.video/v1", enabled=True)
+        else:
+            source = MetadataSource(name="SkyHook (Sonarr)", type="skyhook", base_url="https://skyhook.sonarr.tv/v1/tvdb", enabled=True)
+
+    app_settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+    overview_lang = getattr(app_settings, "metadata_overview_language", "ru") or "ru"
+    client = get_metadata_client(source, overview_language=overview_lang)
+    details = await client.get_details(ext_str)
+
+    titles_map = dict(getattr(details, "titles_by_lang", {}) or {})
+    norm_ov = normalize_metadata_lang_code(overview_lang) or overview_lang
+    display_title = details.title
+    if norm_ov in ("ru", "rus") and titles_map.get("ru"):
+        display_title = titles_map["ru"]
+    elif norm_ov == "original" and titles_map.get("original"):
+        display_title = titles_map["original"]
+
+    return MetadataDetailsOut(
+        external_id=details.external_id,
+        title=display_title,
+        original_title=getattr(details, "original_title", None),
+        titles_by_lang=titles_map,
+        year=details.year,
+        overview=details.overview,
+        poster_url=details.poster_url,
+        rating=details.rating,
+        country=details.country,
+        genre=details.genre,
+        content_type=details.content_type or content_type,
+        network=details.network,
+        premiere_date=details.premiere_date,
+        aliases=details.aliases,
+    )
 
 
 @router.post("/cleanup-aliases")

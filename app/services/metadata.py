@@ -110,6 +110,8 @@ class MetadataResult:
     country: Optional[str] = None
     genre: Optional[str] = None
     content_type: Optional[str] = None  # "series" | "movie"
+    original_title: Optional[str] = None
+    titles_by_lang: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -143,6 +145,8 @@ class MetadataShowDetails:
     collection_tmdb_id: Optional[int] = None
     collection_name: Optional[str] = None
     collection_overview: Optional[str] = None
+    original_title: Optional[str] = None
+    titles_by_lang: dict[str, str] = field(default_factory=dict)
     collection_poster_url: Optional[str] = None
     collection_backdrop_url: Optional[str] = None
     collection_order: Optional[int] = None
@@ -878,6 +882,16 @@ class TMDBClient(BaseMetadataClient):
             elif not norm_l and is_latin_text(t_name) and t_name.strip() not in eng_candidates:
                 eng_candidates.append(t_name.strip())
 
+        titles_by_lang: dict[str, str] = {}
+        if ru_title:
+            titles_by_lang["ru"] = ru_title
+        if eng_candidates:
+            titles_by_lang["en"] = eng_candidates[0]
+        elif is_latin_text(raw_title):
+            titles_by_lang["en"] = raw_title
+        if raw_title:
+            titles_by_lang["original"] = raw_title
+
         if is_latin_text(raw_title):
             title = raw_title
         elif eng_candidates:
@@ -995,6 +1009,8 @@ class TMDBClient(BaseMetadataClient):
             imdb_id=imdb_id_val,
             tmdb_id=tmdb_id_int,
             trailer_url=trailer_url_val,
+            original_title=raw_title or None,
+            titles_by_lang=titles_by_lang,
         )
 
     async def get_collection_details(
@@ -1505,6 +1521,84 @@ class SkyHookClient(BaseMetadataClient):
         self.alias_countries = [c.upper() for c in alias_countries] if alias_countries else None
         self.overview_language = (overview_language or "ru").strip().lower()
 
+    def _map_skyhook_item(
+        self,
+        item: dict,
+        seen_ids: set[str],
+        tmdb_map: dict[int, dict],
+        tmdb_name_map: dict[str, dict],
+    ) -> Optional[MetadataResult]:
+        tvdb_id = item.get("tvdbId")
+        if not tvdb_id:
+            return None
+        ext_id = f"tvdb:{tvdb_id}"
+        if ext_id in seen_ids:
+            return None
+        seen_ids.add(ext_id)
+
+        poster_url = extract_skyhook_poster(item.get("images", []))
+        genres = item.get("genres", [])
+        country = item.get("originalCountry")
+        is_anime = ("Anime" in genres or "Animation" in genres) and (country in ("Japan", "JP", "JPN"))
+        c_type = "anime" if is_anime else "series"
+        rating_val = (item.get("rating") or {}).get("value")
+
+        raw_title = item.get("title") or ""
+        orig_title = item.get("originalTitle") or ""
+        tmdb_id_item = item.get("tmdbId")
+
+        # Поиск локализации в TMDb данных
+        tmdb_match = None
+        if tmdb_id_item and int(tmdb_id_item) in tmdb_map:
+            tmdb_match = tmdb_map[int(tmdb_id_item)]
+        elif raw_title.lower() in tmdb_name_map:
+            tmdb_match = tmdb_name_map[raw_title.lower()]
+        elif orig_title and orig_title.lower() in tmdb_name_map:
+            tmdb_match = tmdb_name_map[orig_title.lower()]
+
+        ru_title = None
+        ru_overview = None
+        if tmdb_match:
+            t_n = tmdb_match.get("name")
+            if t_n and (any('\u0400' <= c <= '\u04ff' for c in t_n) or not raw_title):
+                ru_title = t_n
+            t_ov = tmdb_match.get("overview")
+            if t_ov and str(t_ov).strip():
+                ru_overview = str(t_ov).strip()
+            if not orig_title and tmdb_match.get("original_name"):
+                orig_title = tmdb_match.get("original_name")
+
+        titles_by_lang: dict[str, str] = {}
+        if raw_title:
+            titles_by_lang["en"] = raw_title
+        if ru_title:
+            titles_by_lang["ru"] = ru_title
+        if orig_title:
+            titles_by_lang["original"] = orig_title
+
+        norm_pref = normalize_metadata_lang_code(self.overview_language) or self.overview_language
+        display_title = raw_title
+        if norm_pref in ("ru", "rus") and ru_title:
+            display_title = ru_title
+        elif norm_pref == "original" and orig_title:
+            display_title = orig_title
+
+        display_overview = ru_overview if (norm_pref in ("ru", "rus") and ru_overview) else item.get("overview")
+
+        return MetadataResult(
+            external_id=ext_id,
+            title=display_title,
+            year=item.get("year"),
+            overview=display_overview,
+            poster_url=poster_url,
+            rating=float(rating_val) if rating_val is not None else None,
+            country=country,
+            genre=", ".join(genres) if genres else None,
+            content_type=c_type,
+            original_title=orig_title or None,
+            titles_by_lang=titles_by_lang,
+        )
+
     async def search(self, query: str) -> list[MetadataResult]:
         if not query or not query.strip():
             return []
@@ -1518,45 +1612,54 @@ class SkyHookClient(BaseMetadataClient):
 
         # 1. Поиск сериалов и аниме через официальный Sonarr Skyhook
         async with httpx.AsyncClient(timeout=25, headers={"User-Agent": "Aliasarr/1.0.0 (Sonarr SkyHook Proxy)"}) as client:
-            try:
-                resp = await client.get(
-                    f"{self.base_url}/search/en/",
-                    params={"term": clean_query},
-                )
-                if resp.status_code == 200:
-                    items = resp.json()
-                    if isinstance(items, list):
-                        for item in items:
-                            tvdb_id = item.get("tvdbId")
-                            if not tvdb_id:
-                                continue
-                            ext_id = f"tvdb:{tvdb_id}"
-                            if ext_id in seen_ids:
-                                continue
-                            seen_ids.add(ext_id)
+            norm_ov_lang = normalize_metadata_lang_code(self.overview_language) or self.overview_language
+            needs_tmdb = norm_ov_lang in ("ru", "rus") or any('\u0400' <= c <= '\u04ff' for c in clean_query)
 
-                            poster_url = extract_skyhook_poster(item.get("images", []))
+            tmdb_map: dict[int, dict] = {}
+            tmdb_name_map: dict[str, dict] = {}
 
-                            genres = item.get("genres", [])
-                            country = item.get("originalCountry")
-                            is_anime = ("Anime" in genres or "Animation" in genres) and (country in ("Japan", "JP", "JPN"))
-                            c_type = "anime" if is_anime else "series"
+            skyhook_task = client.get(f"{self.base_url}/search/en/", params={"term": clean_query})
+            tmdb_task = client.get(
+                f"{self.TMDB_URL}/search/tv",
+                params={"query": clean_query, "language": "ru-RU", "include_adult": "false"},
+                headers={"Authorization": f"Bearer {self.TMDB_TOKEN}", "accept": "application/json"},
+            ) if needs_tmdb else None
 
-                            rating_val = (item.get("rating") or {}).get("value")
+            resp = None
+            if tmdb_task:
+                gather_res = await asyncio.gather(skyhook_task, tmdb_task, return_exceptions=True)
+                resp = gather_res[0] if not isinstance(gather_res[0], Exception) else None
+                tmdb_resp = gather_res[1] if not isinstance(gather_res[1], Exception) else None
+                if tmdb_resp and hasattr(tmdb_resp, "status_code") and tmdb_resp.status_code == 200:
+                    try:
+                        t_data = tmdb_resp.json()
+                        t_results = t_data.get("results", []) if isinstance(t_data, dict) else (t_data if isinstance(t_data, list) else [])
+                        for t_item in t_results:
+                            if isinstance(t_item, dict):
+                                tid = t_item.get("id") or t_item.get("tmdbId")
+                                if tid:
+                                    tmdb_map[int(tid)] = t_item
+                                t_name = (t_item.get("name") or t_item.get("title") or "").strip().lower()
+                                t_orig = (t_item.get("original_name") or t_item.get("originalTitle") or "").strip().lower()
+                                if t_name:
+                                    tmdb_name_map[t_name] = t_item
+                                if t_orig:
+                                    tmdb_name_map[t_orig] = t_item
+                    except Exception:
+                        pass
+            else:
+                try:
+                    resp = await skyhook_task
+                except Exception as e:
+                    logger.warning("Skyhook search error on %s for '%s': %s", self.base_url, clean_query, e)
 
-                            results.append(MetadataResult(
-                                external_id=ext_id,
-                                title=item.get("title") or "",
-                                year=item.get("year"),
-                                overview=item.get("overview"),
-                                poster_url=poster_url,
-                                rating=float(rating_val) if rating_val is not None else None,
-                                country=country,
-                                genre=", ".join(genres) if genres else None,
-                                content_type=c_type,
-                            ))
-            except Exception as e:
-                logger.warning("Skyhook search error on %s for '%s': %s", self.base_url, clean_query, e)
+            if resp and hasattr(resp, "status_code") and resp.status_code == 200:
+                items = resp.json()
+                if isinstance(items, list):
+                    for item in items:
+                        r = self._map_skyhook_item(item, seen_ids, tmdb_map, tmdb_name_map)
+                        if r:
+                            results.append(r)
 
             # 2. Резервный шлюз Skyhook Servarr
             if not results and self.BACKUP_URL != self.base_url:
@@ -1569,32 +1672,9 @@ class SkyHookClient(BaseMetadataClient):
                         items = resp.json()
                         if isinstance(items, list):
                             for item in items:
-                                tvdb_id = item.get("tvdbId")
-                                if not tvdb_id:
-                                    continue
-                                ext_id = f"tvdb:{tvdb_id}"
-                                if ext_id in seen_ids:
-                                    continue
-                                seen_ids.add(ext_id)
-
-                                poster_url = extract_skyhook_poster(item.get("images", []))
-                                genres = item.get("genres", [])
-                                country = item.get("originalCountry")
-                                is_anime = ("Anime" in genres or "Animation" in genres) and (country in ("Japan", "JP", "JPN"))
-                                c_type = "anime" if is_anime else "series"
-                                rating_val = (item.get("rating") or {}).get("value")
-
-                                results.append(MetadataResult(
-                                    external_id=ext_id,
-                                    title=item.get("title") or "",
-                                    year=item.get("year"),
-                                    overview=item.get("overview"),
-                                    poster_url=poster_url,
-                                    rating=float(rating_val) if rating_val is not None else None,
-                                    country=country,
-                                    genre=", ".join(genres) if genres else None,
-                                    content_type=c_type,
-                                ))
+                                r = self._map_skyhook_item(item, seen_ids, tmdb_map, tmdb_name_map)
+                                if r:
+                                    results.append(r)
                 except Exception as e:
                     logger.warning("Skyhook backup search error on %s for '%s': %s", self.BACKUP_URL, clean_query, e)
 
@@ -1631,9 +1711,22 @@ class SkyHookClient(BaseMetadataClient):
 
                             poster = f"https://image.tmdb.org/t/p/w500{item['poster_path']}" if item.get("poster_path") else None
 
+                            ru_title = item.get("name") or ""
+                            orig_name = item.get("original_name") or ""
+                            titles_by_lang: dict[str, str] = {}
+                            if ru_title:
+                                if any('\u0400' <= c <= '\u04ff' for c in ru_title):
+                                    titles_by_lang["ru"] = ru_title
+                                else:
+                                    titles_by_lang["en"] = ru_title
+                            if orig_name:
+                                titles_by_lang["original"] = orig_name
+                            if "en" not in titles_by_lang and orig_name and is_latin_text(orig_name):
+                                titles_by_lang["en"] = orig_name
+
                             results.append(MetadataResult(
                                 external_id=ext_id,
-                                title=item.get("name") or item.get("original_name") or "",
+                                title=ru_title or orig_name or "",
                                 year=year,
                                 overview=item.get("overview"),
                                 poster_url=poster,
@@ -1641,6 +1734,8 @@ class SkyHookClient(BaseMetadataClient):
                                 country=", ".join(origin_countries) if origin_countries else None,
                                 genre=None,
                                 content_type=c_type,
+                                original_title=orig_name or None,
+                                titles_by_lang=titles_by_lang,
                             ))
                 except Exception as e:
                     logger.warning("TMDb TV search fallback error for '%s': %s", clean_query, e)
@@ -1813,6 +1908,28 @@ class SkyHookClient(BaseMetadataClient):
             except Exception as e:
                 logger.debug("TMDb TV enrichment failed for tvdb %s (tmdb %s): %s", tvdb_id, tmdb_id_val, e)
 
+        orig_title = data.get("originalTitle") or ""
+        titles_by_lang: dict[str, str] = {}
+        if raw_title:
+            titles_by_lang["en"] = raw_title
+        if orig_title:
+            titles_by_lang["original"] = orig_title
+
+        ru_title = None
+        for a in aliases:
+            if any('\u0400' <= c <= '\u04ff' for c in a):
+                ru_title = a
+                break
+        if ru_title:
+            titles_by_lang["ru"] = ru_title
+
+        chosen_title = raw_title
+        norm_pref = normalize_metadata_lang_code(self.overview_language) or self.overview_language
+        if norm_pref in ("ru", "rus") and ru_title:
+            chosen_title = ru_title
+        elif norm_pref == "original" and orig_title:
+            chosen_title = orig_title
+
         return MetadataShowDetails(
             external_id=f"tvdb:{tvdb_id}",
             title=raw_title,
@@ -1830,6 +1947,8 @@ class SkyHookClient(BaseMetadataClient):
             tmdb_id=tmdb_id_val,
             tvdb_id=tvdb_id_int,
             tvmaze_id=tvmaze_id_val,
+            original_title=orig_title or None,
+            titles_by_lang=titles_by_lang,
         )
 
     async def _get_movie_details(self, tmdb_id: str) -> MetadataShowDetails:
@@ -1960,17 +2079,31 @@ class RadarrClient(BaseMetadataClient):
                                     year = int(d_str[:4])
                                 except ValueError:
                                     pass
-                            poster = f"https://image.tmdb.org/t/p/w500{item['poster_path']}" if item.get("poster_path") else None
+                            t_title = item.get("title") or ""
+                            t_orig = item.get("original_title") or ""
+                            titles_by_lang: dict[str, str] = {}
+                            if t_title:
+                                if any('\u0400' <= c <= '\u04ff' for c in t_title):
+                                    titles_by_lang["ru"] = t_title
+                                else:
+                                    titles_by_lang["en"] = t_title
+                            if t_orig:
+                                titles_by_lang["original"] = t_orig
+                                if "en" not in titles_by_lang and is_latin_text(t_orig):
+                                    titles_by_lang["en"] = t_orig
+
                             results.append(MetadataResult(
                                 external_id=ext_id,
-                                title=item.get("title") or item.get("original_title") or "",
+                                title=t_title or t_orig or "",
                                 year=year,
                                 overview=item.get("overview"),
                                 poster_url=poster,
                                 rating=item.get("vote_average"),
-                                country=None,
+                                country=item.get("original_language"),
                                 genre=None,
                                 content_type="movie",
+                                original_title=t_orig or None,
+                                titles_by_lang=titles_by_lang,
                             ))
                 except Exception:
                     pass
@@ -1990,10 +2123,39 @@ class RadarrClient(BaseMetadataClient):
         elif isinstance(ratings, list) and ratings:
             rating_val = ratings[0].get("value")
 
+        m_title = m_item.get("title") or ""
+        m_orig = m_item.get("originalTitle") or ""
+        titles_by_lang: dict[str, str] = {}
+        if m_title:
+            if any('\u0400' <= c <= '\u04ff' for c in m_title):
+                titles_by_lang["ru"] = m_title
+            else:
+                titles_by_lang["en"] = m_title
+        if m_orig:
+            titles_by_lang["original"] = m_orig
+            if "en" not in titles_by_lang and is_latin_text(m_orig):
+                titles_by_lang["en"] = m_orig
+
+        for tr in (m_item.get("translations") or []):
+            if isinstance(tr, dict):
+                tr_l = (tr.get("language") or tr.get("iso_639_1") or "").lower()
+                tr_t = tr.get("title") or tr.get("name")
+                if tr_t and tr_l in ("ru", "rus") and "ru" not in titles_by_lang:
+                    titles_by_lang["ru"] = tr_t.strip()
+                elif tr_t and tr_l in ("en", "eng") and "en" not in titles_by_lang:
+                    titles_by_lang["en"] = tr_t.strip()
+
+        norm_pref = normalize_metadata_lang_code(self.overview_language) or self.overview_language
+        display_title = m_title or m_orig or ""
+        if norm_pref in ("ru", "rus") and titles_by_lang.get("ru"):
+            display_title = titles_by_lang["ru"]
+        elif norm_pref == "original" and titles_by_lang.get("original"):
+            display_title = titles_by_lang["original"]
+
         genres = m_item.get("genres", [])
         return MetadataResult(
             external_id=ext_id,
-            title=m_item.get("title") or m_item.get("originalTitle") or "",
+            title=display_title,
             year=m_item.get("year"),
             overview=m_item.get("overview"),
             poster_url=poster_url,
@@ -2001,6 +2163,8 @@ class RadarrClient(BaseMetadataClient):
             country=m_item.get("originalLanguage"),
             genre=", ".join(genres) if genres else None,
             content_type="movie",
+            original_title=m_orig or None,
+            titles_by_lang=titles_by_lang,
         )
 
     async def _get_movie_by_imdb(self, imdb_id: str) -> Optional[MetadataResult]:
@@ -2095,8 +2259,17 @@ class RadarrClient(BaseMetadataClient):
 
                 # Собираем переводы (Translations) и описания на разрешенных языках
                 overviews_by_lang: dict[str, str] = {}
-                if data.get("overview") and str(data.get("overview")).strip():
-                    overviews_by_lang["en"] = str(data.get("overview")).strip()
+                titles_by_lang: dict[str, str] = {}
+                if title:
+                    if any('\u0400' <= c <= '\u04ff' for c in title):
+                        titles_by_lang["ru"] = title
+                    else:
+                        titles_by_lang["en"] = title
+                if original_title:
+                    titles_by_lang["original"] = original_title
+                    if "en" not in titles_by_lang and is_latin_text(original_title):
+                        titles_by_lang["en"] = original_title
+
                 for tr in (data.get("translations", []) or []):
                     if isinstance(tr, dict):
                         tr_title = tr.get("title") or tr.get("name")
@@ -2106,9 +2279,20 @@ class RadarrClient(BaseMetadataClient):
                             tr_clean = tr_title.strip()
                             if tr_clean != title and tr_clean not in aliases:
                                 aliases.append(tr_clean)
+                            if norm_tr_lang in ("ru", "rus") and "ru" not in titles_by_lang:
+                                titles_by_lang["ru"] = tr_clean
+                            elif norm_tr_lang in ("en", "eng") and "en" not in titles_by_lang:
+                                titles_by_lang["en"] = tr_clean
                         tr_ov = tr.get("overview")
                         if norm_tr_lang and tr_ov and str(tr_ov).strip():
                             overviews_by_lang[norm_tr_lang] = str(tr_ov).strip()
+
+                norm_pref = normalize_metadata_lang_code(self.overview_language) or self.overview_language
+                chosen_title = title
+                if norm_pref in ("ru", "rus") and titles_by_lang.get("ru"):
+                    chosen_title = titles_by_lang["ru"]
+                elif norm_pref == "original" and titles_by_lang.get("original"):
+                    chosen_title = titles_by_lang["original"]
 
                 overview = select_overview(overviews_by_lang, data.get("overview"), self.overview_language)
 
@@ -2166,6 +2350,8 @@ class RadarrClient(BaseMetadataClient):
                         imdb_id=imdb_id_val,
                         tmdb_id=tmdb_id_val,
                         trailer_url=trailer_url_val,
+                        original_title=original_title or None,
+                        titles_by_lang=titles_by_lang,
                     )
 
         # 3. Fallback на TMDB с сервисным токеном

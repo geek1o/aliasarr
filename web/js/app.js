@@ -1280,6 +1280,9 @@ const TRANSLATIONS = {
     "wizard.autosearch_after_add": "Запустить автопоиск после добавления",
     "wizard.finish_btn": "Добавить видео",
     "wizard.toast_no_metadata_source": "Сначала добавьте источник метаданных в Настройках",
+    "wizard.title_lang": "Язык названия:",
+    "show.title_updated": "Основное название обновлено: {title}",
+    "show.switch_title": "Сделать основным названием",
     "tracker.checking": "Проверка раздач",
     "search.searching": "Поиск",
     "md.updating": "Метаданные",
@@ -2684,6 +2687,9 @@ const TRANSLATIONS = {
     "wizard.autosearch_after_add": "Start auto search for missing after adding",
     "wizard.finish_btn": "Add Video",
     "wizard.toast_no_metadata_source": "Add a metadata source in Settings first",
+    "wizard.title_lang": "Title language:",
+    "show.title_updated": "Main title updated: {title}",
+    "show.switch_title": "Set as main title",
     "tracker.checking": "Checking releases",
     "search.searching": "Searching",
     "md.updating": "Metadata",
@@ -4895,6 +4901,296 @@ function renderShowTitleHtml(title, year) {
   return `${escapeHtml(t)} <span class="hint">(${escapeHtml(y)})</span>`;
 }
 
+// ---------- TITLE LOCALIZATION & LANGUAGE SWITCHING HELPERS ----------
+
+function getTitleVariantsFromResult(r) {
+  if (!r) return [];
+  const variants = [];
+  const addedTitles = new Set();
+  const tbl = r.titles_by_lang || {};
+
+  function addVariant(langKey, title, label) {
+    if (!title || typeof title !== "string") return;
+    const clean = title.trim();
+    if (!clean || addedTitles.has(clean.toLowerCase())) return;
+    addedTitles.add(clean.toLowerCase());
+    variants.push({
+      langKey: langKey,
+      langTag: label || langKey.toUpperCase(),
+      title: clean,
+    });
+  }
+
+  // 1. RU
+  if (tbl.ru) {
+    addVariant("ru", tbl.ru, "RU");
+  } else if (/[а-яёА-ЯЁ]/.test(r.title || "")) {
+    addVariant("ru", r.title, "RU");
+  }
+
+  // 2. EN
+  if (tbl.en) {
+    addVariant("en", tbl.en, "EN");
+  } else if (!/[а-яёА-ЯЁ]/.test(r.title || "") && !/[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf]/.test(r.title || "")) {
+    addVariant("en", r.title, "EN");
+  }
+
+  // 3. Original / Native / JP
+  const orig = tbl.original || r.original_title;
+  if (orig) {
+    const isJp = /[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf]/.test(orig);
+    addVariant("original", orig, isJp ? "JP" : "ORIG");
+  }
+
+  // 4. Other languages in tbl
+  for (const [k, v] of Object.entries(tbl)) {
+    if (k !== "ru" && k !== "en" && k !== "original") {
+      addVariant(k, v, k.toUpperCase());
+    }
+  }
+
+  // 5. Fallback for search title if not yet added
+  if (r.title && !addedTitles.has(r.title.trim().toLowerCase())) {
+    addVariant("other", r.title, "DEF");
+  }
+
+  return variants;
+}
+
+function getTitleVariantsFromShow(show) {
+  if (!show) return [];
+  const variants = [];
+  const addedTitles = new Set();
+
+  function addVariant(langKey, title, label) {
+    if (!title || typeof title !== "string") return;
+    const clean = title.trim();
+    if (!clean || addedTitles.has(clean.toLowerCase())) return;
+    addedTitles.add(clean.toLowerCase());
+    variants.push({
+      langKey: langKey,
+      langTag: label || langKey.toUpperCase(),
+      title: clean,
+    });
+  }
+
+  const currentTitle = (show.title || "").trim();
+  let currentLang = "en";
+  if (/[а-яёА-ЯЁ]/.test(currentTitle)) currentLang = "ru";
+  else if (/[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf]/.test(currentTitle)) currentLang = "jp";
+
+  const aliases = show.aliases || [];
+
+  // RU candidate
+  const ruAlias = aliases.find(a => a.language === "ru" || /[а-яёА-ЯЁ]/.test(a.text));
+  if (currentLang === "ru") {
+    addVariant("ru", currentTitle, "RU");
+  } else if (ruAlias) {
+    addVariant("ru", ruAlias.text, "RU");
+  }
+
+  // EN candidate
+  const enAlias = aliases.find(a => a.language === "en" || (!/[а-яёА-ЯЁ]/.test(a.text) && !/[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf]/.test(a.text)));
+  if (currentLang === "en") {
+    addVariant("en", currentTitle, "EN");
+  } else if (enAlias) {
+    addVariant("en", enAlias.text, "EN");
+  }
+
+  // JP / Original candidate
+  const jpAlias = aliases.find(a => ["jp", "romaji", "original"].includes(a.language) || /[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf]/.test(a.text));
+  if (currentLang === "jp") {
+    addVariant("jp", currentTitle, "JP");
+  } else if (jpAlias) {
+    const isJp = /[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf]/.test(jpAlias.text);
+    addVariant(jpAlias.language || "original", jpAlias.text, isJp ? "JP" : "ORIG");
+  }
+
+  // Remaining aliases
+  aliases.forEach(a => {
+    if (a.text && !addedTitles.has(a.text.trim().toLowerCase())) {
+      addVariant(a.language || "alt", a.text, (a.language || "alt").toUpperCase());
+    }
+  });
+
+  if (currentTitle && !addedTitles.has(currentTitle.toLowerCase())) {
+    addVariant(currentLang, currentTitle, currentLang.toUpperCase());
+  }
+
+  return variants;
+}
+
+function renderShowTitleLangSwitcher(show, canManageLib = true) {
+  const variants = getTitleVariantsFromShow(show);
+  if (variants.length <= 1) return "";
+
+  const currentTitleLower = (show.title || "").trim().toLowerCase();
+
+  return `
+    <div class="show-title-lang-bar">
+      <span class="show-title-lang-icon" title="${CURRENT_LANG === 'en' ? 'Switch main title' : 'Переключить основное название'}">
+        <i data-lucide="languages" class="ico-xs"></i>
+      </span>
+      <div class="show-title-lang-chips">
+        ${variants.map(v => {
+          const isActive = v.title.toLowerCase() === currentTitleLower;
+          return `
+            <button type="button" class="title-lang-chip ${isActive ? 'active' : ''}" 
+              data-title="${escapeHtml(v.title)}" 
+              ${canManageLib ? `onclick="onTitleLangChipClick(this, ${show.id})"` : 'disabled'}
+              title="${escapeHtml(v.title)}">
+              <span class="title-lang-tag">${v.langTag}</span>
+              <span class="title-lang-val">${escapeHtml(v.title)}</span>
+            </button>
+          `;
+        }).join("")}
+      </div>
+    </div>
+  `;
+}
+
+async function onTitleLangChipClick(btn, showId) {
+  const newTitle = btn?.dataset?.title;
+  if (!newTitle) return;
+  await switchShowMainTitle(showId, newTitle);
+}
+
+async function onAliasCardChipClick(event, showId, el) {
+  if (event) event.stopPropagation();
+  const title = el?.dataset?.title;
+  if (!title) return;
+  await switchShowMainTitle(showId, title);
+}
+
+async function switchShowMainTitle(showId, newTitle) {
+  if (!showId || !newTitle) return;
+  const cleanTitle = newTitle.trim();
+  try {
+    await api(`/api/v1/shows/${showId}`, {
+      method: "PUT",
+      body: JSON.stringify({ title: cleanTitle })
+    });
+    if (Array.isArray(CACHED_SHOWS)) {
+      const s = CACHED_SHOWS.find(x => x.id === showId);
+      if (s) s.title = cleanTitle;
+    }
+    const msg = (t("show.title_updated") || (CURRENT_LANG === "en" ? "Main title updated: {title}" : "Основное название обновлено: {title}")).replace("{title}", cleanTitle);
+    toast(msg);
+
+    if (CURRENT_SHOW_ID === showId && document.getElementById("show-modal")?.classList.contains("active")) {
+      await refreshShowModal();
+    }
+
+    const card = document.getElementById(`show-card-${showId}`);
+    if (card) {
+      const titleEl = card.querySelector(".show-title");
+      const showObj = (CACHED_SHOWS || []).find(x => x.id === showId);
+      if (titleEl) {
+        titleEl.textContent = formatShowTitleWithYear(cleanTitle, showObj ? showObj.year : null);
+      }
+    }
+    const row = document.getElementById(`show-row-${showId}`);
+    if (row) {
+      const rowTitleEl = row.querySelector(".table-show-title");
+      if (rowTitleEl) {
+        rowTitleEl.textContent = cleanTitle;
+      }
+    }
+  } catch (err) {
+    toast(err.message || (CURRENT_LANG === "en" ? "Failed to update title" : "Не удалось обновить название"), true);
+  }
+}
+
+function selectWizardTitle(btn) {
+  const chosen = btn?.dataset?.title;
+  if (!chosen) return;
+  WIZARD_STATE.selectedTitle = chosen;
+  const titleEl = document.getElementById("wizard-selected-title");
+  if (titleEl && WIZARD_STATE.selectedResult) {
+    titleEl.textContent = formatShowTitleWithYear(chosen, WIZARD_STATE.selectedResult.year);
+  }
+  document.querySelectorAll("#wizard-title-lang-switcher .title-lang-chip").forEach(el => {
+    el.classList.toggle("active", el.dataset.title === chosen);
+  });
+}
+
+async function loadWizardDetails(r) {
+  if (!r || r._detailsLoading || r._detailsLoaded) return;
+  r._detailsLoading = true;
+  try {
+    const q = new URLSearchParams();
+    if (WIZARD_STATE.sourceId) q.set("source_id", String(WIZARD_STATE.sourceId));
+    q.set("external_id", String(r.external_id));
+    const details = await api(`/api/v1/metadata-sources/details?${q.toString()}`);
+    r._detailsLoaded = true;
+    if (details) {
+      if (details.titles_by_lang) {
+        r.titles_by_lang = Object.assign({}, details.titles_by_lang, r.titles_by_lang || {});
+      }
+      if (details.original_title && !r.original_title) {
+        r.original_title = details.original_title;
+      }
+      if (details.overview && (!r.overview || r.overview.length < details.overview.length)) {
+        r.overview = details.overview;
+        const overviewEl = document.getElementById("wizard-selected-overview");
+        if (overviewEl) overviewEl.textContent = details.overview;
+      }
+      const variants = getTitleVariantsFromResult(r);
+      if (variants.length > 1) {
+        const switcherWrap = document.getElementById("wizard-title-lang-wrap");
+        if (switcherWrap) {
+          const chipsContainer = document.getElementById("wizard-title-lang-switcher");
+          if (chipsContainer) {
+            chipsContainer.innerHTML = variants.map(v => {
+              const isActive = v.title.toLowerCase() === (WIZARD_STATE.selectedTitle || r.title || "").toLowerCase();
+              return `
+                <button type="button" class="title-lang-chip ${isActive ? 'active' : ''}" 
+                  data-title="${escapeHtml(v.title)}" 
+                  onclick="selectWizardTitle(this)">
+                  <span class="title-lang-tag">${v.langTag}</span>
+                  <span class="title-lang-val">${escapeHtml(v.title)}</span>
+                </button>
+              `;
+            }).join("");
+          }
+        } else {
+          const titleEl = document.getElementById("wizard-selected-title");
+          if (titleEl) {
+            const wrap = document.createElement("div");
+            wrap.className = "wizard-title-lang-wrap";
+            wrap.id = "wizard-title-lang-wrap";
+            wrap.innerHTML = `
+              <span class="wizard-title-lang-label">
+                <i data-lucide="languages" class="ico-xs"></i>
+                <span>${t("wizard.title_lang") || "Язык названия:"}</span>
+              </span>
+              <div class="title-lang-switcher" id="wizard-title-lang-switcher">
+                ${variants.map(v => {
+                  const isActive = v.title.toLowerCase() === (WIZARD_STATE.selectedTitle || r.title || "").toLowerCase();
+                  return `
+                    <button type="button" class="title-lang-chip ${isActive ? 'active' : ''}" 
+                      data-title="${escapeHtml(v.title)}" 
+                      onclick="selectWizardTitle(this)">
+                      <span class="title-lang-tag">${v.langTag}</span>
+                      <span class="title-lang-val">${escapeHtml(v.title)}</span>
+                    </button>
+                  `;
+                }).join("")}
+              </div>
+            `;
+            titleEl.insertAdjacentElement("afterend", wrap);
+            if (window.lucide) lucide.createIcons();
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // Non-critical background enhancement
+  } finally {
+    r._detailsLoading = false;
+  }
+}
+
 function formatSize(bytes) {
   if (!bytes || bytes <= 0) return "0 B";
   const units = ["B", "KiB", "MiB", "GiB", "TiB"];
@@ -6728,8 +7024,9 @@ function scrollToLetter(char) {
 function renderShowCard(show) {
   const initial = (show.title || "?").trim()[0]?.toUpperCase() || "?";
   const posterStyle = show.poster_url ? `style="background-image:url('${show.poster_url}')"` : "";
+  const canManageLib = (typeof hasPermission === "function") ? hasPermission("manage_library") : true;
   const aliases = (show.aliases || []).slice(0, 4).map(
-    a => `<span class="alias-chip lang-${a.language}">${escapeHtml(a.text)}</span>`
+    a => `<span class="alias-chip lang-${a.language} ${canManageLib ? 'interactive' : ''}" ${canManageLib ? `data-title="${escapeHtml(a.text)}" onclick="onAliasCardChipClick(event, ${show.id}, this)" title="${CURRENT_LANG === 'en' ? 'Click to set as main title: ' + escapeHtml(a.text) : 'Нажмите, чтобы сделать основным названием: ' + escapeHtml(a.text)}"` : ''}>${escapeHtml(a.text)}</span>`
   ).join("");
   
   // Active Task overlay check
@@ -8003,6 +8300,7 @@ async function refreshShowModal() {
           <div class="show-hero-meta">
             <div class="show-hero-title-row">
               <h2 class="show-hero-title">${escapeHtml(formatShowTitleWithYear(show.title, show.year))}</h2>
+              ${renderShowTitleLangSwitcher(show, canManageLib)}
             </div>
 
             <div class="show-hero-meta-bar">
@@ -8379,6 +8677,7 @@ function renderAliasChips(show, canManageLib = true) {
         <span class="alias-chip-priority" title="${t("common.priority")}">#${a.priority ?? (idx + 1)}</span>
         <span class="alias-chip-text">${escapeHtml(a.text)}</span>
         ${canManageLib ? `<span class="alias-chip-actions">
+          ${(a.text || "").trim().toLowerCase() !== (show.title || "").trim().toLowerCase() ? `<button class="alias-chip-make-primary" data-title="${escapeHtml(a.text)}" onclick="onAliasCardChipClick(event, ${show.id}, this)" title="${t("show.switch_title") || (CURRENT_LANG === 'en' ? 'Set as main title' : 'Сделать основным названием')}"><i data-lucide="check" class="ico-xs"></i></button>` : ""}
           <button class="alias-chip-edit" onclick="openEditAliasModal(${show.id}, ${a.id})" title="${t("common.edit")}"><i data-lucide="edit-2" class="ico-xs"></i></button>
           <button class="alias-chip-remove" onclick="deleteAliasFromShow(${show.id}, ${a.id})" title="${t("common.delete")}"><i data-lucide="x" class="ico-xs"></i></button>
         </span>` : ""}
@@ -12234,6 +12533,7 @@ function chooseWizardMetadataResultByIndex(index) {
   WIZARD_STATE.sourceId = sourceId;
   WIZARD_STATE.selectedResult = result;
   WIZARD_STATE.contentType = guessContentTypeFromMetadata(result);
+  WIZARD_STATE.selectedTitle = result.title;
   renderWizardStep(2);
 }
 
@@ -12255,6 +12555,9 @@ function renderWizardStep2Content() {
   if (!content || !WIZARD_STATE.selectedResult) return;
 
   const r = WIZARD_STATE.selectedResult;
+  if (!WIZARD_STATE.selectedTitle) {
+    WIZARD_STATE.selectedTitle = r.title;
+  }
   const isMovie = r.content_type === "movie";
   const isAnime = r.content_type === "anime";
   const currentType = isMovie ? "movie" : (isAnime ? "anime" : (WIZARD_STATE.contentType || "series"));
@@ -12264,7 +12567,7 @@ function renderWizardStep2Content() {
     : (isAnime ? (CURRENT_LANG === 'en' ? 'Anime' : 'Аниме') : (CURRENT_LANG === 'en' ? 'Series' : 'Сериал'));
   const typeIco = isMovie ? "film" : (isAnime ? "sparkles" : "tv");
   const typeClass = isMovie ? "meta-badge-type-movie" : (isAnime ? "meta-badge-type-anime" : "meta-badge-type-series");
-  const initialLetter = (r.title || "?").trim()[0]?.toUpperCase() || "?";
+  const initialLetter = (WIZARD_STATE.selectedTitle || r.title || "?").trim()[0]?.toUpperCase() || "?";
   const posterStyle = r.poster_url ? `style="background-image: url('${r.poster_url}');"` : "";
 
   let defaultQpId = "";
@@ -12274,13 +12577,37 @@ function renderWizardStep2Content() {
     else defaultQpId = CACHED_APP_SETTINGS.default_quality_profile_series_id || "";
   }
 
+  const variants = getTitleVariantsFromResult(r);
+  const langSwitcherHtml = variants.length > 1 ? `
+    <div class="wizard-title-lang-wrap" id="wizard-title-lang-wrap">
+      <span class="wizard-title-lang-label">
+        <i data-lucide="languages" class="ico-xs"></i>
+        <span>${t("wizard.title_lang") || "Язык названия:"}</span>
+      </span>
+      <div class="title-lang-switcher" id="wizard-title-lang-switcher">
+        ${variants.map(v => {
+          const isActive = v.title.toLowerCase() === (WIZARD_STATE.selectedTitle || r.title || "").toLowerCase();
+          return `
+            <button type="button" class="title-lang-chip ${isActive ? 'active' : ''}" 
+              data-title="${escapeHtml(v.title)}" 
+              onclick="selectWizardTitle(this)">
+              <span class="title-lang-tag">${v.langTag}</span>
+              <span class="title-lang-val">${escapeHtml(v.title)}</span>
+            </button>
+          `;
+        }).join("")}
+      </div>
+    </div>
+  ` : "";
+
   content.innerHTML = `
     <div class="wizard-selected-banner">
       <div class="wizard-selected-poster" ${posterStyle}>
         ${r.poster_url ? "" : escapeHtml(initialLetter)}
       </div>
       <div class="wizard-selected-info">
-        <h3 class="wizard-selected-title">${escapeHtml(formatShowTitleWithYear(r.title, r.year))}</h3>
+        <h3 class="wizard-selected-title" id="wizard-selected-title">${escapeHtml(formatShowTitleWithYear(WIZARD_STATE.selectedTitle || r.title, r.year))}</h3>
+        ${langSwitcherHtml}
         <div class="wizard-selected-badges">
           ${r.content_type ? `<span class="meta-badge meta-badge-type ${typeClass}"><i data-lucide="${typeIco}" class="ico-xs"></i>${escapeHtml(typeLabel)}</span>` : ""}
           ${r.year ? `<span class="meta-badge mono"><i data-lucide="calendar" class="ico-xs"></i> ${r.year}</span>` : ""}
@@ -12288,7 +12615,7 @@ function renderWizardStep2Content() {
           ${r.country ? `<span class="meta-badge"><i data-lucide="globe" class="ico-xs"></i> ${escapeHtml(r.country)}</span>` : ""}
           ${r.genre ? `<span class="meta-badge"><i data-lucide="tag" class="ico-xs"></i> ${escapeHtml(r.genre)}</span>` : ""}
         </div>
-        ${r.overview ? `<p class="wizard-selected-overview">${escapeHtml(r.overview)}</p>` : ""}
+        <p class="wizard-selected-overview" id="wizard-selected-overview">${escapeHtml(r.overview || t("show.no_overview") || "Нет описания")}</p>
       </div>
     </div>
 
@@ -12331,6 +12658,10 @@ function renderWizardStep2Content() {
     </div>`;
 
   if (window.lucide) lucide.createIcons();
+
+  if (!r._detailsLoaded) {
+    loadWizardDetails(r);
+  }
 }
 
 function selectWizardContentType(value) {
@@ -12368,6 +12699,7 @@ async function finishWizard(button) {
           external_id: String(WIZARD_STATE.selectedResult.external_id),
           path: null,
           content_type: contentType,
+          title: WIZARD_STATE.selectedTitle || undefined,
         }),
       });
       const showId = result.show_id;
