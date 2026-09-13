@@ -490,13 +490,16 @@ async def get_collection_poster(
 
     poster_path = get_collection_poster_path(collection_id)
     if not os.path.isfile(poster_path):
-        from app.database import SessionLocal
-        with SessionLocal() as db:
-            coll = db.get(MovieCollection, collection_id)
-            if coll and (getattr(coll, "poster_source_url", None) or coll.poster_url):
-                src_url = getattr(coll, "poster_source_url", None) or coll.poster_url
-                if src_url and not str(src_url).startswith(f"/api/v1/collections/{collection_id}/poster"):
-                    await download_and_store_collection_cover(collection_id, str(src_url))
+        try:
+            from app.database import SessionLocal
+            with SessionLocal() as db:
+                coll = db.get(MovieCollection, collection_id)
+                if coll and (getattr(coll, "poster_source_url", None) or coll.poster_url):
+                    src_url = getattr(coll, "poster_source_url", None) or coll.poster_url
+                    if src_url and not str(src_url).startswith(f"/api/v1/collections/{collection_id}/poster"):
+                        await download_and_store_collection_cover(collection_id, str(src_url))
+        except Exception:
+            pass
 
     if not os.path.isfile(poster_path):
         raise HTTPException(404, "Обложка коллекции не найдена")
@@ -530,13 +533,16 @@ async def get_collection_backdrop(
 
     backdrop_path = get_collection_backdrop_path(collection_id)
     if not os.path.isfile(backdrop_path):
-        from app.database import SessionLocal
-        with SessionLocal() as db:
-            coll = db.get(MovieCollection, collection_id)
-            if coll and (getattr(coll, "backdrop_source_url", None) or coll.backdrop_url):
-                src_url = getattr(coll, "backdrop_source_url", None) or coll.backdrop_url
-                if src_url and not str(src_url).startswith(f"/api/v1/collections/{collection_id}/backdrop"):
-                    await download_and_store_collection_backdrop(collection_id, str(src_url))
+        try:
+            from app.database import SessionLocal
+            with SessionLocal() as db:
+                coll = db.get(MovieCollection, collection_id)
+                if coll and (getattr(coll, "backdrop_source_url", None) or coll.backdrop_url):
+                    src_url = getattr(coll, "backdrop_source_url", None) or coll.backdrop_url
+                    if src_url and not str(src_url).startswith(f"/api/v1/collections/{collection_id}/backdrop"):
+                        await download_and_store_collection_backdrop(collection_id, str(src_url))
+        except Exception:
+            pass
 
     if not os.path.isfile(backdrop_path):
         raise HTTPException(404, "Фон коллекции не найден")

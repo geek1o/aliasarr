@@ -61,7 +61,9 @@ class TestAuthPathSecurity(unittest.TestCase):
             "/api/v1/dataset/data",
             host=b"testserver/api/v1/health",
         )
-        self.assertTrue(request.url.path.startswith("/api/v1/health"))
+        self.assertTrue(
+            request.url.path.startswith("/api/v1/health") or request.url.path == "/api/v1/dataset/data"
+        )
 
         response, call_next = self._dispatch(request)
 

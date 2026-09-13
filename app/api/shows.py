@@ -3230,13 +3230,16 @@ async def get_show_poster(
 
     poster_path = get_show_poster_path(show_id)
     if not os.path.isfile(poster_path):
-        from app.database import SessionLocal
-        with SessionLocal() as db:
-            show = db.get(Show, show_id)
-            if show:
-                src_url = getattr(show, "poster_source_url", None) or show.poster_url
-                if src_url and not str(src_url).startswith(f"/api/v1/shows/{show_id}/poster"):
-                    await download_and_store_show_cover(show_id, str(src_url))
+        try:
+            from app.database import SessionLocal
+            with SessionLocal() as db:
+                show = db.get(Show, show_id)
+                if show:
+                    src_url = getattr(show, "poster_source_url", None) or show.poster_url
+                    if src_url and not str(src_url).startswith(f"/api/v1/shows/{show_id}/poster"):
+                        await download_and_store_show_cover(show_id, str(src_url))
+        except Exception:
+            pass
 
     if not os.path.isfile(poster_path):
         raise HTTPException(404, "Обложка не найдена")

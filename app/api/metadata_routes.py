@@ -1038,6 +1038,10 @@ async def get_metadata_details(
     )
 
 
+# Совместимость для вызовов и тестов
+get_source_details = get_metadata_details
+
+
 @router.post("/cleanup-aliases")
 async def cleanup_unallowed_aliases(
     request: Request,

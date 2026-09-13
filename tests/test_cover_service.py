@@ -205,7 +205,11 @@ class TestCoverServiceEndpointsAndDb(unittest.TestCase):
         self.db.add(self.user)
         self.db.commit()
 
+        self.patch_session = patch("app.database.SessionLocal", self.Session)
+        self.patch_session.start()
+
     def tearDown(self):
+        self.patch_session.stop()
         self.db.close()
         if self.orig_env is not None:
             os.environ["MEDIA_COVER_DIR"] = self.orig_env
@@ -267,14 +271,14 @@ class TestCoverServiceEndpointsAndDb(unittest.TestCase):
 
         # 1. 404 when file and source url not present
         with self.assertRaises(HTTPException) as ctx:
-            asyncio.run(get_show_poster(s.id, req_mock, db=self.db))
+            asyncio.run(get_show_poster(s.id, req_mock))
         self.assertEqual(ctx.exception.status_code, 404)
 
         # 2. Save file and get 200 FileResponse with ETag
         sample_img = b"endpoint_test_jpeg"
         asyncio.run(save_show_poster(s.id, sample_img))
 
-        resp = asyncio.run(get_show_poster(s.id, req_mock, db=self.db))
+        resp = asyncio.run(get_show_poster(s.id, req_mock))
         self.assertEqual(resp.media_type, "image/jpeg")
         self.assertIn("Cache-Control", resp.headers)
         etag = resp.headers.get("ETag")
@@ -283,7 +287,7 @@ class TestCoverServiceEndpointsAndDb(unittest.TestCase):
         # 3. 304 Not Modified when If-None-Match matches ETag
         req_mock_cached = MagicMock()
         req_mock_cached.headers = {"if-none-match": etag}
-        resp304 = asyncio.run(get_show_poster(s.id, req_mock_cached, db=self.db))
+        resp304 = asyncio.run(get_show_poster(s.id, req_mock_cached))
         self.assertEqual(resp304.status_code, 304)
 
     def test_upload_show_cover_endpoint(self):
@@ -318,18 +322,18 @@ class TestCoverServiceEndpointsAndDb(unittest.TestCase):
         req_mock.headers = {}
 
         with self.assertRaises(HTTPException) as ctx:
-            asyncio.run(get_collection_poster(coll.id, req_mock, db=self.db))
+            asyncio.run(get_collection_poster(coll.id, req_mock))
         self.assertEqual(ctx.exception.status_code, 404)
 
         asyncio.run(save_collection_poster(coll.id, b"coll_image_content"))
-        resp = asyncio.run(get_collection_poster(coll.id, req_mock, db=self.db))
+        resp = asyncio.run(get_collection_poster(coll.id, req_mock))
         self.assertEqual(resp.media_type, "image/jpeg")
         etag = resp.headers.get("ETag")
         self.assertIsNotNone(etag)
 
         req_cached = MagicMock()
         req_cached.headers = {"if-none-match": etag}
-        resp304 = asyncio.run(get_collection_poster(coll.id, req_cached, db=self.db))
+        resp304 = asyncio.run(get_collection_poster(coll.id, req_cached))
         self.assertEqual(resp304.status_code, 304)
 
     def test_get_collection_backdrop_endpoint(self):
@@ -343,18 +347,18 @@ class TestCoverServiceEndpointsAndDb(unittest.TestCase):
         req_mock.headers = {}
 
         with self.assertRaises(HTTPException) as ctx:
-            asyncio.run(get_collection_backdrop(coll.id, req_mock, db=self.db))
+            asyncio.run(get_collection_backdrop(coll.id, req_mock))
         self.assertEqual(ctx.exception.status_code, 404)
 
         asyncio.run(save_collection_backdrop(coll.id, b"coll_backdrop_content"))
-        resp = asyncio.run(get_collection_backdrop(coll.id, req_mock, db=self.db))
+        resp = asyncio.run(get_collection_backdrop(coll.id, req_mock))
         self.assertEqual(resp.media_type, "image/jpeg")
         etag = resp.headers.get("ETag")
         self.assertIsNotNone(etag)
 
         req_cached = MagicMock()
         req_cached.headers = {"if-none-match": etag}
-        resp304 = asyncio.run(get_collection_backdrop(coll.id, req_cached, db=self.db))
+        resp304 = asyncio.run(get_collection_backdrop(coll.id, req_cached))
         self.assertEqual(resp304.status_code, 304)
 
     def test_delete_show_deletes_cover_folder(self):

@@ -502,7 +502,7 @@ class TestTitleLanguageAndBulkSwitch(unittest.TestCase):
 
     @patch("app.api.metadata_routes.get_metadata_client")
     def test_get_source_details_normalizes_language(self, mock_get_client):
-        from app.api.metadata_routes import get_source_details
+        from app.api.metadata_routes import get_metadata_details as get_source_details
 
         mock_client = AsyncMock()
         mock_details = MagicMock()
@@ -521,6 +521,12 @@ class TestTitleLanguageAndBulkSwitch(unittest.TestCase):
         mock_details.runtime = 45
         mock_details.total_seasons = 1
         mock_details.seasons = []
+        mock_details.rating = 8.5
+        mock_details.country = "US"
+        mock_details.genre = "Drama"
+        mock_details.content_type = "series"
+        mock_details.premiere_date = "2024-01-01"
+        mock_details.aliases = []
         mock_client.get_details.return_value = mock_details
         mock_get_client.return_value = mock_client
 
