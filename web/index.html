@@ -525,6 +525,17 @@
                 <i data-lucide="folder-sync" class="ico-xs"></i> <span data-i18n="library.bulk_change">Сменить</span>
               </button>
             </div>
+            <!-- Title Language dropdown & apply -->
+            <div class="bulk-action-item">
+              <select id="library-bulk-title-lang-select" class="input input-small" style="max-width: 155px;">
+                <option value="" data-i18n="library.bulk_title_lang_placeholder">— Язык названий —</option>
+                <option value="ru" data-i18n="library.bulk_title_lang_ru">Русский (RU)</option>
+                <option value="en" data-i18n="library.bulk_title_lang_en">Английский (EN)</option>
+              </select>
+              <button class="btn btn-secondary btn-small" onclick="applyBulkTitleLangToShows()" title="Сменить язык названий для выбранных тайтлов" data-i18n-title="library.bulk_apply">
+                <i data-lucide="languages" class="ico-xs"></i> <span data-i18n="library.bulk_apply">Применить</span>
+              </button>
+            </div>
             <!-- Monitored buttons -->
             <div class="bulk-action-item">
               <button class="btn btn-secondary btn-small" onclick="applyBulkMonitoringToShows(true)" title="Включить мониторинг" data-i18n-title="library.bulk_monitor">
@@ -3035,6 +3046,19 @@
                     </p>
                   </div>
                 </div>
+              </div>
+
+              <div class="settings-field-group" style="margin-bottom: 20px; max-width: 580px;">
+                <label class="settings-field-label" for="setting-metadata-title-language">
+                  <span data-i18n="md.title_language_label">Основной язык названий при поиске</span>
+                </label>
+                <p class="field-hint" style="margin: 0 0 8px 0; color: var(--text-muted); font-size: 12.5px; line-height: 1.4;" data-i18n="md.title_language_desc">
+                  Определяет, на каком языке отображать названия тайтлов в результатах поиска метаданных по умолчанию.
+                </p>
+                <select id="setting-metadata-title-language" class="input" style="max-width: 320px;" onchange="changeMetadataTitleLanguage(this.value)">
+                  <option value="ru" data-i18n="md.title_language_ru">Русский (если доступен в базах)</option>
+                  <option value="en" data-i18n="md.title_language_en">Английский / Оригинальный (как в Skyhook/Radarr)</option>
+                </select>
               </div>
 
               <div class="settings-field-group" style="margin-bottom: 16px;">

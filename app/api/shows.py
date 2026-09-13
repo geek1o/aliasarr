@@ -294,6 +294,161 @@ async def create_show(
     return ShowOut.model_validate(show)
 
 
+class BulkSwitchTitleLanguageRequest(BaseModel):
+    show_ids: list[int]
+    target_language: str  # "ru" | "en"
+
+
+class UpdatedShowTitleItem(BaseModel):
+    id: int
+    title: str
+    old_title: str
+
+
+class BulkSwitchTitleLanguageResponse(BaseModel):
+    total: int
+    updated: int
+    skipped: int
+    not_found: int
+    updated_shows: list[UpdatedShowTitleItem]
+
+
+@router.post(
+    "/bulk-switch-title-language",
+    response_model=BulkSwitchTitleLanguageResponse,
+    summary="Массовое переключение языка названий выбранных тайтлов (RU / EN)",
+)
+async def bulk_switch_title_language(
+    payload: BulkSwitchTitleLanguageRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("manage_library")),
+):
+    target_lang = (payload.target_language or "").strip().lower()
+    if target_lang not in ("ru", "en"):
+        raise HTTPException(400, "Поддерживаются только языки 'ru' и 'en'")
+
+    updated_shows: list[UpdatedShowTitleItem] = []
+    skipped_count = 0
+    not_found_count = 0
+
+    from app.services.metadata import SkyHookClient, RadarrClient
+
+    for s_id in payload.show_ids:
+        show = db.get(Show, s_id)
+        if not show:
+            continue
+
+        curr_title = (show.title or "").strip()
+        is_curr_cyrillic = any('\u0400' <= c <= '\u04ff' for c in curr_title)
+
+        if target_lang == "ru":
+            if is_curr_cyrillic:
+                skipped_count += 1
+                continue
+
+            candidate_ru = None
+            candidate_alias_obj = None
+            for a in (show.aliases or []):
+                if a.text and any('\u0400' <= c <= '\u04ff' for c in a.text):
+                    candidate_ru = a.text.strip()
+                    candidate_alias_obj = a
+                    break
+
+            if not candidate_ru:
+                try:
+                    ext_id = show.metadata_id or (f"tvdb:{show.tvdb_id}" if show.tvdb_id else None) or (f"tmdb:{show.tmdb_id}" if show.tmdb_id else None)
+                    if ext_id:
+                        if show.content_type == "movie":
+                            client = RadarrClient(overview_language="ru", title_language="ru")
+                        else:
+                            client = SkyHookClient(overview_language="ru", title_language="ru")
+                        details = await client.get_details(ext_id)
+                        if details and details.titles_by_lang and details.titles_by_lang.get("ru"):
+                            candidate_ru = details.titles_by_lang["ru"].strip()
+                        elif details and details.title and any('\u0400' <= c <= '\u04ff' for c in details.title):
+                            candidate_ru = details.title.strip()
+                        elif details and details.original_title and any('\u0400' <= c <= '\u04ff' for c in details.original_title):
+                            candidate_ru = details.original_title.strip()
+                except Exception:
+                    pass
+
+            if candidate_ru and candidate_ru.lower() != curr_title.lower():
+                old_title = show.title
+                show.title = candidate_ru
+                existing_texts = {a.text.strip().lower() for a in show.aliases}
+                if old_title.strip().lower() not in existing_texts:
+                    db.add(Alias(show_id=show.id, text=old_title, language="en"))
+                if candidate_alias_obj:
+                    db.delete(candidate_alias_obj)
+                else:
+                    for a in list(show.aliases):
+                        if a.text.strip().lower() == candidate_ru.lower():
+                            db.delete(a)
+                db.add(show)
+                updated_shows.append(UpdatedShowTitleItem(id=show.id, title=candidate_ru, old_title=old_title))
+            else:
+                not_found_count += 1
+
+        elif target_lang == "en":
+            if not is_curr_cyrillic:
+                skipped_count += 1
+                continue
+
+            candidate_en = None
+            candidate_alias_obj = None
+            for a in (show.aliases or []):
+                if a.text and not any('\u0400' <= c <= '\u04ff' for c in a.text):
+                    candidate_en = a.text.strip()
+                    candidate_alias_obj = a
+                    break
+
+            if not candidate_en:
+                try:
+                    ext_id = show.metadata_id or (f"tvdb:{show.tvdb_id}" if show.tvdb_id else None) or (f"tmdb:{show.tmdb_id}" if show.tmdb_id else None)
+                    if ext_id:
+                        if show.content_type == "movie":
+                            client = RadarrClient(overview_language="en", title_language="en")
+                        else:
+                            client = SkyHookClient(overview_language="en", title_language="en")
+                        details = await client.get_details(ext_id)
+                        if details and details.titles_by_lang and details.titles_by_lang.get("en"):
+                            candidate_en = details.titles_by_lang["en"].strip()
+                        elif details and details.title and not any('\u0400' <= c <= '\u04ff' for c in details.title):
+                            candidate_en = details.title.strip()
+                        elif details and details.original_title and not any('\u0400' <= c <= '\u04ff' for c in details.original_title):
+                            candidate_en = details.original_title.strip()
+                except Exception:
+                    pass
+
+            if candidate_en and candidate_en.lower() != curr_title.lower():
+                old_title = show.title
+                show.title = candidate_en
+                existing_texts = {a.text.strip().lower() for a in show.aliases}
+                if old_title.strip().lower() not in existing_texts:
+                    db.add(Alias(show_id=show.id, text=old_title, language="ru"))
+                if candidate_alias_obj:
+                    db.delete(candidate_alias_obj)
+                else:
+                    for a in list(show.aliases):
+                        if a.text.strip().lower() == candidate_en.lower():
+                            db.delete(a)
+                db.add(show)
+                updated_shows.append(UpdatedShowTitleItem(id=show.id, title=candidate_en, old_title=old_title))
+            else:
+                not_found_count += 1
+
+    if updated_shows:
+        db.commit()
+
+    return BulkSwitchTitleLanguageResponse(
+        total=len(payload.show_ids),
+        updated=len(updated_shows),
+        skipped=skipped_count,
+        not_found=not_found_count,
+        updated_shows=updated_shows,
+    )
+
+
 @router.get("/{show_id}", response_model=ShowOut, summary="Получить информацию о тайтле")
 def get_show(show_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_permission("view_library"))):
     """Возвращает подробную информацию о тайтле со списком серий, алиасов и прогрессом скачивания."""
@@ -717,7 +872,16 @@ async def update_show(
     if "title" in dumped or "year" in dumped:
         new_title, new_year = clean_show_title_and_year(dumped.get("title", show.title), dumped.get("year", show.year))
         if "title" in dumped:
+            old_title = (show.title or "").strip()
             dumped["title"] = new_title
+            if old_title and new_title and old_title.lower() != new_title.lower():
+                existing_texts = {a.text.strip().lower() for a in show.aliases}
+                if old_title.lower() not in existing_texts:
+                    old_lang = "ru" if any('\u0400' <= c <= '\u04ff' for c in old_title) else "en"
+                    db.add(Alias(show_id=show.id, text=old_title, language=old_lang))
+                for a in list(show.aliases):
+                    if a.text.strip().lower() == new_title.lower():
+                        db.delete(a)
         if "year" in dumped:
             dumped["year"] = new_year
     for field, value in dumped.items():

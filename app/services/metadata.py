@@ -743,6 +743,7 @@ class TMDBClient(BaseMetadataClient):
         alias_countries: Optional[list[str]] = None,
         alias_languages: Optional[list[str]] = None,
         overview_language: str = "ru",
+        title_language: str = "ru",
     ):
         import os as _os
         self.api_key = (api_key or _os.getenv("TMDB_API_KEY", "") or self.DEFAULT_TOKEN).strip()
@@ -756,6 +757,7 @@ class TMDBClient(BaseMetadataClient):
         self.alias_languages = langs
         self.alias_countries = [c.upper() for c in alias_countries] if alias_countries else None
         self.overview_language = (overview_language or "ru").strip().lower()
+        self.title_language = (title_language or "ru").strip().lower()
 
     def _headers(self) -> dict:
         return {
@@ -781,6 +783,29 @@ class TMDBClient(BaseMetadataClient):
             if media_type not in ("movie", "tv"):
                 continue
             title = item.get("title") or item.get("name") or ""
+            orig_title = item.get("original_title") or item.get("original_name") or ""
+            titles_by_lang: dict[str, str] = {}
+            if title:
+                if any('\u0400' <= c <= '\u04ff' for c in title):
+                    titles_by_lang["ru"] = title
+                elif is_latin_text(title):
+                    titles_by_lang["en"] = title
+            if orig_title:
+                titles_by_lang["original"] = orig_title
+                if "en" not in titles_by_lang and is_latin_text(orig_title):
+                    titles_by_lang["en"] = orig_title
+                elif "ru" not in titles_by_lang and any('\u0400' <= c <= '\u04ff' for c in orig_title):
+                    titles_by_lang["ru"] = orig_title
+
+            norm_t_pref = normalize_metadata_lang_code(self.title_language) or self.title_language
+            display_title = title
+            if norm_t_pref in ("en", "eng") and titles_by_lang.get("en"):
+                display_title = titles_by_lang["en"]
+            elif norm_t_pref in ("ru", "rus") and titles_by_lang.get("ru"):
+                display_title = titles_by_lang["ru"]
+            elif norm_t_pref in ("original", "orig") and orig_title:
+                display_title = orig_title
+
             year = None
             date_str = item.get("release_date") or item.get("first_air_date") or ""
             if date_str and len(date_str) >= 4:
@@ -793,7 +818,7 @@ class TMDBClient(BaseMetadataClient):
                 poster = f"{self.IMAGE_BASE}{poster}"
             results.append(MetadataResult(
                 external_id=f"{media_type}:{item['id']}",
-                title=title,
+                title=display_title,
                 year=year,
                 overview=item.get("overview"),
                 poster_url=poster,
@@ -801,6 +826,8 @@ class TMDBClient(BaseMetadataClient):
                 country=None,
                 genre=None,
                 content_type="movie" if media_type == "movie" else "series",
+                original_title=orig_title or None,
+                titles_by_lang=titles_by_lang,
             ))
         return results
 
@@ -1536,6 +1563,7 @@ class SkyHookClient(BaseMetadataClient):
         base_url: str = "",
         alias_languages: Optional[list[str]] = None,
         overview_language: str = "ru",
+        title_language: str = "ru",
     ):
         self.base_url = (base_url or self.BASE_URL).rstrip("/")
         langs = []
@@ -1548,6 +1576,7 @@ class SkyHookClient(BaseMetadataClient):
         self.alias_languages = langs
         self.alias_countries = [c.upper() for c in alias_countries] if alias_countries else None
         self.overview_language = (overview_language or "ru").strip().lower()
+        self.title_language = (title_language or "ru").strip().lower()
 
     def _map_skyhook_item(
         self,
@@ -1610,14 +1639,17 @@ class SkyHookClient(BaseMetadataClient):
         if orig_title:
             titles_by_lang["original"] = orig_title
 
-        norm_pref = normalize_metadata_lang_code(self.overview_language) or self.overview_language
+        norm_ov_pref = normalize_metadata_lang_code(self.overview_language) or self.overview_language
+        norm_title_pref = normalize_metadata_lang_code(self.title_language) or self.title_language
         display_title = raw_title
-        if norm_pref in ("ru", "rus") and ru_title:
+        if norm_title_pref in ("ru", "rus") and ru_title:
             display_title = ru_title
-        elif norm_pref == "original" and orig_title:
+        elif norm_title_pref in ("original", "orig") and orig_title:
             display_title = orig_title
+        elif norm_title_pref in ("en", "eng") and raw_title:
+            display_title = raw_title
 
-        display_overview = ru_overview if (norm_pref in ("ru", "rus") and ru_overview) else item.get("overview")
+        display_overview = ru_overview if (norm_ov_pref in ("ru", "rus") and ru_overview) else item.get("overview")
 
         return MetadataResult(
             external_id=ext_id,
@@ -2089,6 +2121,7 @@ class RadarrClient(BaseMetadataClient):
         base_url: str = "",
         alias_languages: Optional[list[str]] = None,
         overview_language: str = "ru",
+        title_language: str = "ru",
     ):
         self.base_url = (base_url or self.BASE_URL).rstrip("/")
         langs = []
@@ -2101,6 +2134,7 @@ class RadarrClient(BaseMetadataClient):
         self.alias_languages = langs
         self.alias_countries = [c.upper() for c in alias_countries] if alias_countries else None
         self.overview_language = (overview_language or "ru").strip().lower()
+        self.title_language = (title_language or "ru").strip().lower()
 
     async def search(self, query: str) -> list[MetadataResult]:
         if not query or not query.strip():
@@ -2257,12 +2291,14 @@ class RadarrClient(BaseMetadataClient):
                 elif tr_t and tr_l in ("en", "eng") and "en" not in titles_by_lang:
                     titles_by_lang["en"] = tr_t.strip()
 
-        norm_pref = normalize_metadata_lang_code(self.overview_language) or self.overview_language
+        norm_title_pref = normalize_metadata_lang_code(self.title_language) or self.title_language
         display_title = m_title or m_orig or ""
-        if norm_pref in ("ru", "rus") and titles_by_lang.get("ru"):
+        if norm_title_pref in ("ru", "rus") and titles_by_lang.get("ru"):
             display_title = titles_by_lang["ru"]
-        elif norm_pref == "original" and titles_by_lang.get("original"):
+        elif norm_title_pref in ("original", "orig") and titles_by_lang.get("original"):
             display_title = titles_by_lang["original"]
+        elif norm_title_pref in ("en", "eng") and titles_by_lang.get("en"):
+            display_title = titles_by_lang["en"]
 
         genres = m_item.get("genres", [])
         return MetadataResult(
@@ -2530,6 +2566,7 @@ class TheTVDBClient(BaseMetadataClient):
         base_url: str = "",
         alias_languages: Optional[list[str]] = None,
         overview_language: str = "ru",
+        title_language: str = "ru",
     ):
         self.api_key = (api_key or "").strip()
         self.pin = (pin or "").strip()
@@ -2539,6 +2576,7 @@ class TheTVDBClient(BaseMetadataClient):
         self.alias_languages = [l.lower() for l in alias_languages] if alias_languages else None
         self.base_url = (base_url or self.BASE_URL).rstrip("/")
         self.overview_language = (overview_language or "ru").strip().lower()
+        self.title_language = (title_language or "ru").strip().lower()
         self._token: Optional[str] = None
         self._token_expires_at: Optional[float] = None
 
@@ -3091,7 +3129,7 @@ class DummyClient(BaseMetadataClient):
         raise NotImplementedError("Этот источник устарел и больше не поддерживается.")
 
 
-def get_metadata_client(source_row, overview_language: Optional[str] = None) -> BaseMetadataClient:
+def get_metadata_client(source_row, overview_language: Optional[str] = None, title_language: Optional[str] = None) -> BaseMetadataClient:
     """source_row: модель MetadataSource из БД."""
     type_value = source_row.type.value if hasattr(source_row.type, "value") else str(source_row.type)
     
@@ -3105,16 +3143,17 @@ def get_metadata_client(source_row, overview_language: Optional[str] = None) -> 
         pin = source_row.field_mapping.get("pin", "")
     
     ov_lang = overview_language or "ru"
+    t_lang = title_language or "ru"
     if type_value in ("skyhook", "sonarr"):
-        return SkyHookClient(source_row.api_key or "", alias_countries=alias_countries, base_url=source_row.base_url or "", alias_languages=alias_languages, overview_language=ov_lang)
+        return SkyHookClient(source_row.api_key or "", alias_countries=alias_countries, base_url=source_row.base_url or "", alias_languages=alias_languages, overview_language=ov_lang, title_language=t_lang)
     elif type_value in ("radarr", "radarr_skyhook"):
-        return RadarrClient(source_row.api_key or "", alias_countries=alias_countries, base_url=source_row.base_url or "", alias_languages=alias_languages, overview_language=ov_lang)
+        return RadarrClient(source_row.api_key or "", alias_countries=alias_countries, base_url=source_row.base_url or "", alias_languages=alias_languages, overview_language=ov_lang, title_language=t_lang)
     elif type_value == "tmdb":
-        return TMDBClient(source_row.api_key or "", alias_countries=alias_countries, alias_languages=alias_languages, overview_language=ov_lang)
+        return TMDBClient(source_row.api_key or "", alias_countries=alias_countries, alias_languages=alias_languages, overview_language=ov_lang, title_language=t_lang)
     elif type_value == "tvmaze":
         return TVMazeClient(source_row.api_key or "", alias_countries)
     elif type_value == "thetvdb":
-        return TheTVDBClient(source_row.api_key or "", pin=pin, alias_countries=alias_countries, base_url=source_row.base_url or "", alias_languages=alias_languages, overview_language=ov_lang)
+        return TheTVDBClient(source_row.api_key or "", pin=pin, alias_countries=alias_countries, base_url=source_row.base_url or "", alias_languages=alias_languages, overview_language=ov_lang, title_language=t_lang)
     return DummyClient()
 
 

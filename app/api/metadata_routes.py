@@ -376,11 +376,12 @@ async def search_all_metadata_sources(
 
     app_settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
     overview_lang = getattr(app_settings, "metadata_overview_language", "ru") or "ru"
+    title_lang = getattr(app_settings, "metadata_title_language", "ru") or "ru"
 
     # 1. ПЕРВАЯ ОЧЕРЕДЬ: Radarr Cloud Hook (фильмы) + Sonarr SkyHook (сериалы/аниме)
     primary_tasks = [
-        ("radarr", RadarrClient(overview_language=overview_lang).search(clean_query)),
-        ("skyhook", SkyHookClient(overview_language=overview_lang).search(clean_query)),
+        ("radarr", RadarrClient(overview_language=overview_lang, title_language=title_lang).search(clean_query)),
+        ("skyhook", SkyHookClient(overview_language=overview_lang, title_language=title_lang).search(clean_query)),
     ]
     try:
         primary_responses = await asyncio.gather(*[t[1] for t in primary_tasks], return_exceptions=True)
@@ -436,7 +437,7 @@ async def search_all_metadata_sources(
         sec_tasks = []
         for s in secondary_sources:
             try:
-                client = get_metadata_client(s, overview_language=overview_lang)
+                client = get_metadata_client(s, overview_language=overview_lang, title_language=title_lang)
                 sec_tasks.append((s, client.search(clean_query)))
             except Exception as e:
                 logger.debug("Failed creating metadata client for source %s: %s", s.name, e)
@@ -534,7 +535,8 @@ async def search_metadata(
         raise HTTPException(404, "Source not found")
     app_settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
     overview_lang = getattr(app_settings, "metadata_overview_language", "ru") or "ru"
-    client = get_metadata_client(source, overview_language=overview_lang)
+    title_lang = getattr(app_settings, "metadata_title_language", "ru") or "ru"
+    client = get_metadata_client(source, overview_language=overview_lang, title_language=title_lang)
     results: list[MetadataResult] = await client.search(query)
 
     source_type_str = source.type.value if hasattr(source.type, "value") else str(source.type)
@@ -663,11 +665,14 @@ async def import_show(
         # Определение основного названия тайтла
         chosen_title = payload.title.strip() if (payload.title and payload.title.strip()) else None
         if not chosen_title:
-            norm_ov = normalize_metadata_lang_code(overview_lang) or overview_lang
+            title_lang = getattr(app_settings, "metadata_title_language", "ru") or "ru"
+            norm_t = normalize_metadata_lang_code(title_lang) or title_lang
             titles_map = getattr(details, "titles_by_lang", {}) or {}
-            if norm_ov in ("ru", "rus") and titles_map.get("ru"):
+            if norm_t in ("ru", "rus") and titles_map.get("ru"):
                 chosen_title = titles_map["ru"]
-            elif norm_ov == "original" and titles_map.get("original"):
+            elif norm_t in ("en", "eng") and titles_map.get("en"):
+                chosen_title = titles_map["en"]
+            elif norm_t == "original" and titles_map.get("original"):
                 chosen_title = titles_map["original"]
             else:
                 chosen_title = details.title

@@ -308,6 +308,186 @@ class TestSkyHookLocalizationEnrichment(unittest.TestCase):
             self.assertIn("Виктория Прутковская", details.overview)
             self.assertIn("Моя прекрасная няня", details.aliases)
 
+    def test_skyhook_search_respects_title_language(self):
+        skyhook_results = [
+            {
+                "title": "My Hero Academia",
+                "year": 2016,
+                "overview": "English overview",
+                "tvdbId": 305074,
+                "tmdbId": 65930,
+            }
+        ]
+        tmdb_results = {
+            "results": [
+                {
+                    "id": 65930,
+                    "name": "Моя геройская академия",
+                    "original_name": "僕のヒーローアカデミア",
+                    "first_air_date": "2016-04-03",
+                    "overview": "В мире, где 80% населения...",
+                }
+            ]
+        }
+
+        mock_client = AsyncMock()
+        async def mock_get(url, **kwargs):
+            m = MagicMock()
+            m.status_code = 200
+            if "skyhook" in url:
+                m.json.return_value = skyhook_results
+            elif "api.themoviedb.org" in url:
+                m.json.return_value = tmdb_results
+            return m
+
+        mock_client.get = mock_get
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        mock_httpx = MagicMock()
+        mock_httpx.AsyncClient.return_value = mock_client
+
+        with patch("app.services.metadata.httpx", mock_httpx):
+            # When title_language is 'ru'
+            client_ru = SkyHookClient(overview_language="ru", title_language="ru")
+            res_ru = asyncio.run(client_ru.search("My Hero Academia"))
+            self.assertEqual(res_ru[0].title, "Моя геройская академия")
+            self.assertEqual(res_ru[0].titles_by_lang["en"], "My Hero Academia")
+            self.assertEqual(res_ru[0].titles_by_lang["ru"], "Моя геройская академия")
+
+            # When title_language is 'en'
+            client_en = SkyHookClient(overview_language="ru", title_language="en")
+            res_en = asyncio.run(client_en.search("My Hero Academia"))
+            self.assertEqual(res_en[0].title, "My Hero Academia")
+            self.assertEqual(res_en[0].titles_by_lang["en"], "My Hero Academia")
+            self.assertEqual(res_en[0].titles_by_lang["ru"], "Моя геройская академия")
+
+
+try:
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.models.db import Base, Show, Alias, AppSettings, User, Role
+    from app.api.shows import bulk_switch_title_language, BulkSwitchTitleLanguageRequest, update_show
+    from app.schemas import ShowUpdate
+    HAS_DB = True
+except ImportError:
+    HAS_DB = False
+
+
+@unittest.skipUnless(HAS_DB, "Database dependencies not available in current environment")
+class TestTitleLanguageAndBulkSwitch(unittest.TestCase):
+    def setUp(self):
+        self.engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(self.engine)
+        self.Session = sessionmaker(bind=self.engine)
+        self.db = self.Session()
+
+        self.settings = AppSettings(id=1, metadata_overview_language="ru", metadata_title_language="ru")
+        self.db.add(self.settings)
+
+        self.user = User(id=1, username="admin", role=Role.ADMIN, password_hash="hash")
+        self.db.add(self.user)
+        self.db.commit()
+
+    def tearDown(self):
+        self.db.close()
+        Base.metadata.drop_all(self.engine)
+
+    def test_app_settings_metadata_title_language(self):
+        s = self.db.query(AppSettings).filter(AppSettings.id == 1).first()
+        self.assertEqual(s.metadata_title_language, "ru")
+
+        s.metadata_title_language = "en"
+        self.db.commit()
+
+        s_updated = self.db.query(AppSettings).filter(AppSettings.id == 1).first()
+        self.assertEqual(s_updated.metadata_title_language, "en")
+
+    def test_bulk_switch_to_russian_from_aliases(self):
+        from app.models.db import Show, Alias
+        from app.api.shows import bulk_switch_title_language, BulkSwitchTitleLanguageRequest
+
+        show1 = Show(id=1, title="My Hero Academia", year=2016, content_type="series")
+        self.db.add(show1)
+        self.db.flush()
+        alias1 = Alias(show_id=1, text="Моя геройская академия", language="ru")
+        self.db.add(alias1)
+
+        show2 = Show(id=2, title="Атака титанов", year=2013, content_type="series")
+        self.db.add(show2)
+        self.db.flush()
+        alias2 = Alias(show_id=2, text="Attack on Titan", language="en")
+        self.db.add(alias2)
+
+        self.db.commit()
+
+        req = BulkSwitchTitleLanguageRequest(show_ids=[1, 2], target_language="ru")
+        resp = asyncio.run(bulk_switch_title_language(req, db=self.db, current_user=self.user))
+
+        self.assertEqual(resp.total, 2)
+        self.assertEqual(resp.updated, 1)
+        self.assertEqual(resp.skipped, 1)
+
+        s1 = self.db.get(Show, 1)
+        self.assertEqual(s1.title, "Моя геройская академия")
+        alias_texts = {a.text for a in s1.aliases}
+        self.assertIn("My Hero Academia", alias_texts)
+        self.assertNotIn("Моя геройская академия", alias_texts)
+
+        s2 = self.db.get(Show, 2)
+        self.assertEqual(s2.title, "Атака титанов")
+
+    def test_bulk_switch_to_english_from_aliases(self):
+        from app.models.db import Show, Alias
+        from app.api.shows import bulk_switch_title_language, BulkSwitchTitleLanguageRequest
+
+        show1 = Show(id=1, title="Моя прекрасная няня", year=2004, content_type="series")
+        self.db.add(show1)
+        self.db.flush()
+        alias1 = Alias(show_id=1, text="Moya Prekrasnaya Nyanya", language="en")
+        self.db.add(alias1)
+
+        show2 = Show(id=2, title="Breaking Bad", year=2008, content_type="series")
+        self.db.add(show2)
+        self.db.flush()
+        alias2 = Alias(show_id=2, text="Во все тяжкие", language="ru")
+        self.db.add(alias2)
+
+        self.db.commit()
+
+        req = BulkSwitchTitleLanguageRequest(show_ids=[1, 2], target_language="en")
+        resp = asyncio.run(bulk_switch_title_language(req, db=self.db, current_user=self.user))
+
+        self.assertEqual(resp.total, 2)
+        self.assertEqual(resp.updated, 1)
+        self.assertEqual(resp.skipped, 1)
+
+        s1 = self.db.get(Show, 1)
+        self.assertEqual(s1.title, "Moya Prekrasnaya Nyanya")
+        alias_texts = {a.text for a in s1.aliases}
+        self.assertIn("Моя прекрасная няня", alias_texts)
+
+        s2 = self.db.get(Show, 2)
+        self.assertEqual(s2.title, "Breaking Bad")
+
+    def test_update_show_preserves_old_title_in_aliases(self):
+        from app.models.db import Show
+        from app.api.shows import update_show
+        from app.schemas import ShowUpdate
+
+        show = Show(id=1, title="Breaking Bad", year=2008, content_type="series")
+        self.db.add(show)
+        self.db.commit()
+
+        payload = ShowUpdate(title="Во все тяжкие")
+        res = asyncio.run(update_show(show_id=1, payload=payload, db=self.db, current_user=self.user))
+
+        self.assertEqual(res.title, "Во все тяжкие")
+        s = self.db.get(Show, 1)
+        self.assertEqual(s.title, "Во все тяжкие")
+        alias_texts = {a.text for a in s.aliases}
+        self.assertIn("Breaking Bad", alias_texts)
+
 
 if __name__ == "__main__":
     unittest.main()

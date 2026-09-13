@@ -973,6 +973,11 @@ const TRANSLATIONS = {
     "lang.en": "English (EN)",
     "lang.original": "Оригинальный язык тайтла",
     "md.overview_language_saved": "Язык описания сохранен",
+    "md.title_language_label": "Основной язык названий при поиске",
+    "md.title_language_desc": "Определяет, на каком языке отображать названия тайтлов в результатах поиска метаданных по умолчанию.",
+    "md.title_language_ru": "Русский (если доступен в базах)",
+    "md.title_language_en": "Английский / Оригинальный (как в Skyhook/Radarr)",
+    "md.title_language_saved": "Язык названий при поиске сохранен",
     "md.refresh_started": "Запущено фоновое обновление метаданных библиотеки...",
     "md.refresh_aliases_toggle": "Обновлять поисковые алиасы при синхронизации метаданных",
     "md.refresh_aliases_hint": "Автоматически актуализировать список альтернативных названий тайтла согласно разрешенным языкам при фоновом или ручном обновлении метаданных",
@@ -1435,6 +1440,9 @@ const TRANSLATIONS = {
     "library.bulk_deselect_all": "Снять выбор",
     "library.bulk_profile_placeholder": "— Профиль качества —",
     "library.bulk_category_placeholder": "— Категория —",
+    "library.bulk_title_lang_placeholder": "— Язык названий —",
+    "library.bulk_title_lang_ru": "Русский (RU)",
+    "library.bulk_title_lang_en": "Английский (EN)",
     "library.bulk_apply": "Применить",
     "library.bulk_change": "Сменить",
     "library.bulk_monitor": "Мониторить",
@@ -2380,6 +2388,11 @@ const TRANSLATIONS = {
     "lang.en": "English (EN)",
     "lang.original": "Original title language",
     "md.overview_language_saved": "Overview language saved",
+    "md.title_language_label": "Primary Title Language for Search",
+    "md.title_language_desc": "Determines default language for titles in metadata search results.",
+    "md.title_language_ru": "Russian (if available in sources)",
+    "md.title_language_en": "English / Original (as in Skyhook/Radarr)",
+    "md.title_language_saved": "Search title language saved",
     "md.refresh_started": "Background library metadata refresh started...",
     "md.refresh_aliases_toggle": "Update search aliases during metadata synchronization",
     "md.refresh_aliases_hint": "Automatically update title alternative names according to allowed languages during background or manual metadata refresh",
@@ -2842,6 +2855,9 @@ const TRANSLATIONS = {
     "library.bulk_deselect_all": "Deselect All",
     "library.bulk_profile_placeholder": "— Quality Profile —",
     "library.bulk_category_placeholder": "— Category —",
+    "library.bulk_title_lang_placeholder": "— Title Language —",
+    "library.bulk_title_lang_ru": "Russian (RU)",
+    "library.bulk_title_lang_en": "English (EN)",
     "library.bulk_apply": "Apply",
     "library.bulk_change": "Change",
     "library.bulk_monitor": "Monitor",
@@ -5136,9 +5152,16 @@ async function loadWizardDetails(r) {
         const overviewEl = document.getElementById("wizard-selected-overview");
         if (overviewEl) overviewEl.textContent = details.overview;
       }
-      if (!WIZARD_STATE.manuallySelectedTitle && details.titles_by_lang && details.titles_by_lang.ru) {
-        if (!/[а-яёА-ЯЁ]/.test(WIZARD_STATE.selectedTitle || "")) {
+      if (!WIZARD_STATE.manuallySelectedTitle && details.titles_by_lang) {
+        const prefLang = (CACHED_APP_SETTINGS && CACHED_APP_SETTINGS.metadata_title_language) || "ru";
+        if (prefLang === "ru" && details.titles_by_lang.ru && !/[а-яёА-ЯЁ]/.test(WIZARD_STATE.selectedTitle || "")) {
           WIZARD_STATE.selectedTitle = details.titles_by_lang.ru;
+          const titleEl = document.getElementById("wizard-selected-title");
+          if (titleEl && WIZARD_STATE.selectedResult) {
+            titleEl.textContent = formatShowTitleWithYear(WIZARD_STATE.selectedTitle, WIZARD_STATE.selectedResult.year);
+          }
+        } else if (prefLang === "en" && details.titles_by_lang.en && /[а-яёА-ЯЁ]/.test(WIZARD_STATE.selectedTitle || "")) {
+          WIZARD_STATE.selectedTitle = details.titles_by_lang.en;
           const titleEl = document.getElementById("wizard-selected-title");
           if (titleEl && WIZARD_STATE.selectedResult) {
             titleEl.textContent = formatShowTitleWithYear(WIZARD_STATE.selectedTitle, WIZARD_STATE.selectedResult.year);
@@ -7722,6 +7745,65 @@ async function applyBulkCategoryToShows() {
       }
     }
     toast(CURRENT_LANG === "en" ? `Category updated for ${successCount} show(s)` : `Категория обновлена для ${successCount} тайтлов`);
+    renderLibrary();
+  } catch (e) {
+    toast("Ошибка: " + e.message, true);
+  }
+}
+
+async function applyBulkTitleLangToShows() {
+  const langSelect = document.getElementById("library-bulk-title-lang-select");
+  if (!langSelect || !langSelect.value) {
+    toast(CURRENT_LANG === "en" ? "Please select a title language" : "Выберите язык названий", true);
+    return;
+  }
+  const targetLang = langSelect.value;
+  const selectedIds = Array.from(SELECTED_SHOW_IDS);
+  if (!selectedIds.length) {
+    toast(CURRENT_LANG === "en" ? "No shows selected" : "Не выбрано ни одного тайтла", true);
+    return;
+  }
+
+  const langLabel = targetLang === "ru" ? (CURRENT_LANG === "en" ? "Russian" : "русский") : (CURRENT_LANG === "en" ? "English / Original" : "английский / оригинал");
+  const confirmed = await confirmModal(
+    CURRENT_LANG === "en"
+      ? `Switch title language to ${langLabel} for ${selectedIds.length} selected show(s)?`
+      : `Переключить язык названий на ${langLabel} для ${selectedIds.length} выбранных тайтлов?`,
+    { danger: false }
+  );
+  if (!confirmed) return;
+
+  try {
+    const res = await api("/api/v1/shows/bulk-switch-title-language", {
+      method: "POST",
+      body: JSON.stringify({
+        show_ids: selectedIds,
+        target_language: targetLang,
+      }),
+    });
+
+    if (res && res.updated_shows && res.updated_shows.length) {
+      for (const item of res.updated_shows) {
+        const s = (CACHED_SHOWS || []).find(x => x.id === item.id);
+        if (s) s.title = item.title;
+        if (typeof ALL_SHOWS !== "undefined" && ALL_SHOWS) {
+          const sAll = ALL_SHOWS.find(x => x.id === item.id);
+          if (sAll) sAll.title = item.title;
+        }
+      }
+    }
+
+    let msg = "";
+    if (CURRENT_LANG === "en") {
+      msg = `Updated ${res.updated} of ${res.total} title(s)`;
+      if (res.skipped) msg += ` (${res.skipped} already in ${targetLang.toUpperCase()})`;
+      if (res.not_found) msg += ` (${res.not_found} translation not found)`;
+    } else {
+      msg = `Обновлено названий: ${res.updated} из ${res.total}`;
+      if (res.skipped) msg += ` (${res.skipped} уже на ${targetLang === "ru" ? "русском" : "английском"})`;
+      if (res.not_found) msg += ` (для ${res.not_found} перевод не найден)`;
+    }
+    toast(msg);
     renderLibrary();
   } catch (e) {
     toast("Ошибка: " + e.message, true);
@@ -17704,6 +17786,10 @@ async function loadMetadataSources() {
     if (overviewLangEl && s && s.metadata_overview_language) {
       overviewLangEl.value = s.metadata_overview_language;
     }
+    const titleLangEl = document.getElementById("setting-metadata-title-language");
+    if (titleLangEl && s && s.metadata_title_language) {
+      titleLangEl.value = s.metadata_title_language;
+    }
   } catch (_) {}
   const tbody = document.querySelector("#md-table tbody");
   if (!tbody) return;
@@ -17783,6 +17869,22 @@ async function changeMetadataOverviewLanguage(val) {
       CACHED_APP_SETTINGS.metadata_overview_language = langVal;
     }
     showToast(t("md.overview_language_saved") || "Язык описания сохранен");
+  } catch (e) {
+    showToast("Ошибка: " + e.message, "error");
+  }
+}
+
+async function changeMetadataTitleLanguage(val) {
+  try {
+    const langVal = String(val || "ru").trim().toLowerCase();
+    await api("/api/v1/settings", {
+      method: "PUT",
+      body: JSON.stringify({ metadata_title_language: langVal }),
+    });
+    if (CACHED_APP_SETTINGS) {
+      CACHED_APP_SETTINGS.metadata_title_language = langVal;
+    }
+    showToast(t("md.title_language_saved") || "Язык названий при поиске сохранен");
   } catch (e) {
     showToast("Ошибка: " + e.message, "error");
   }
