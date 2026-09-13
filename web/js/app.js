@@ -314,6 +314,11 @@ const TRANSLATIONS = {
     "release_logs.col_message": "Сообщение и принятое решение",
     "release_logs.modal_title": "Детали обработки релиза",
 
+    // Toast notifications
+    "toast.server_error_title": "Внутренняя ошибка сервера (500)",
+    "toast.copy_diagnostic": "Скопировать диагностику",
+    "toast.view_logs": "В журнал логов",
+
     // Common actions & words
     "common.save": "Сохранить",
     "common.details": "Подробнее",
@@ -1692,6 +1697,11 @@ const TRANSLATIONS = {
     "release_logs.col_message": "Message & Decision",
     "release_logs.modal_title": "Release Processing Details",
 
+    // Toast notifications
+    "toast.server_error_title": "Internal Server Error (500)",
+    "toast.copy_diagnostic": "Copy Diagnostic",
+    "toast.view_logs": "View in Logs",
+
     // Common actions & words
     "common.save": "Save",
     "common.details": "Details",
@@ -3041,8 +3051,9 @@ async function api(path, options = {}) {
   }
   if (!resp.ok) {
     let detail = "";
+    let body = null;
     try {
-      const body = await resp.json();
+      body = await resp.json();
       if (typeof body.detail === "object" && body.detail !== null) {
         detail = Array.isArray(body.detail)
           ? body.detail.map(d => (d && d.msg) ? d.msg : JSON.stringify(d)).join(", ")
@@ -3051,7 +3062,23 @@ async function api(path, options = {}) {
         detail = body.detail || body.error || body.message || "";
       }
     } catch (e) {}
-    throw new Error(detail || `HTTP ${resp.status}`);
+
+    const reqMethod = (opts.method || "GET").toUpperCase();
+    if (resp.status >= 500 && (!detail || detail.toLowerCase() === "internal server error")) {
+      detail = `[${reqMethod} ${path}] Внутренняя ошибка сервера (500)`;
+    }
+
+    const err = new Error(detail || `HTTP ${resp.status}`);
+    err.status = resp.status;
+    err.statusText = resp.statusText;
+    err.url = path;
+    err.endpoint = path;
+    err.method = reqMethod;
+    err.errorType = (body && body.error_type) ? body.error_type : "";
+    err.details = (body && (body.error || body.detail)) ? (body.error || body.detail) : (detail || `HTTP ${resp.status}`);
+    err.timestamp = (body && body.timestamp) ? body.timestamp : new Date().toISOString();
+    err.rawResponse = body;
+    throw err;
   }
   if (resp.status === 204) return null;
   return resp.json();
@@ -4122,9 +4149,18 @@ function parseToastData(rawInput, defaultType = "info") {
   let details = "";
   let type = defaultType;
   let duration = 4500;
+  let endpoint = "";
+  let method = "";
+  let errorType = "";
+  let isServerError500 = false;
 
   if (typeof rawInput === "object" && rawInput !== null) {
-    if (rawInput instanceof Error) {
+    if (rawInput instanceof Error || rawInput.status || rawInput.endpoint) {
+      if (rawInput.status === 500) isServerError500 = true;
+      if (rawInput.endpoint) endpoint = rawInput.endpoint;
+      if (rawInput.method) method = rawInput.method;
+      if (rawInput.errorType) errorType = rawInput.errorType;
+      if (rawInput.details && rawInput.details !== rawInput.message) details = rawInput.details;
       rawInput = rawInput.message || String(rawInput);
     } else {
       title = rawInput.title || "";
@@ -4132,12 +4168,18 @@ function parseToastData(rawInput, defaultType = "info") {
       details = rawInput.details || "";
       if (rawInput.type) type = rawInput.type;
       if (rawInput.duration) duration = rawInput.duration;
+      if (rawInput.endpoint) endpoint = rawInput.endpoint;
+      if (rawInput.method) method = rawInput.method;
+      if (rawInput.isServerError500) isServerError500 = true;
       return {
         title: sanitizeToastMessage(title),
         message: sanitizeToastMessage(message),
         details: sanitizeToastMessage(details),
         type,
-        duration: duration || (type === "error" ? 7000 : type === "warning" ? 5500 : 4500)
+        endpoint,
+        method,
+        isServerError500,
+        duration: duration || (type === "error" ? (isServerError500 ? 10000 : 7000) : type === "warning" ? 5500 : 4500)
       };
     }
   }
@@ -4145,8 +4187,52 @@ function parseToastData(rawInput, defaultType = "info") {
   let text = sanitizeToastMessage(String(rawInput || ""));
   text = formatToastMessage(text);
 
+  // Handle 500 Internal Server Error / Внутренняя ошибка сервера
+  if (isServerError500 || /500\b|Internal Server Error|Внутренняя ошибка сервера/i.test(text)) {
+    type = "error";
+    isServerError500 = true;
+    title = isEn ? "Internal Server Error (500)" : "Внутренняя ошибка сервера (500)";
+
+    if (!endpoint) {
+      const epMatch = text.match(/\[(GET|POST|PUT|DELETE|PATCH)\s+([^\]]+)\]/i) || text.match(/\[(GET|POST|PUT|DELETE|PATCH)\]\s*(\/[^\s:;,]+)/i) || text.match(/(GET|POST|PUT|DELETE|PATCH)\s+(\/[^\s:;,]+)/i);
+      if (epMatch) {
+        method = epMatch[1].toUpperCase();
+        endpoint = epMatch[2].trim();
+      } else {
+        const pathMatch = text.match(/(\/api\/v1\/[^\s:;,]+)/i);
+        if (pathMatch) endpoint = pathMatch[1];
+      }
+    }
+
+    let clean = text.replace(/^(?:Ошибка|Error):\s*/i, "").trim();
+    clean = clean.replace(/^\[(GET|POST|PUT|DELETE|PATCH)\s+[^\]]+\]\s*-?\s*/i, "").trim();
+
+    if (!clean || clean.toLowerCase() === "internal server error" || clean.toLowerCase() === "http 500" || clean === "500") {
+      message = isEn
+        ? "The server encountered an unexpected error while processing the request. Check the logs for details."
+        : "На сервере произошел сбой при обработке запроса. Подробности записаны в журнал логов.";
+    } else {
+      message = clean;
+    }
+
+    const detailLines = [];
+    if (method || endpoint) {
+      detailLines.push(`Endpoint: ${method ? `[${method}] ` : ""}${endpoint || "unknown"}`);
+    }
+    if (errorType) {
+      detailLines.push(`Type: ${errorType}`);
+    }
+    if (details && details !== message && !detailLines.includes(details)) {
+      detailLines.push(`Info: ${details}`);
+    }
+    if (detailLines.length > 0) {
+      details = detailLines.join("\n");
+    }
+
+    duration = 10000;
+  }
   // Handle 429 Too Many Requests / Rate Limit
-  if (/429|Too Many Requests|лимит запросов/i.test(text)) {
+  else if (/429|Too Many Requests|лимит запросов/i.test(text)) {
     type = "error";
     title = isEn ? "Rate Limit Exceeded (429)" : "Превышен лимит запросов (429)";
     const urlMatch = text.match(/for url '([^']+)'/i) || text.match(/https?:\/\/[^\s'"]+/i);
@@ -4277,14 +4363,26 @@ function showToast(message, type = "info") {
   else if (parsed.type === "warning") iconName = "alert-triangle";
 
   const card = document.createElement("div");
-  card.className = `toast-card ${parsed.type}`;
+  card.className = `toast-card ${parsed.type}${parsed.isServerError500 ? " is-500-error" : ""}`;
 
-  const copyBtnHtml = parsed.type === "error" && (parsed.details || parsed.message) ? `
+  const actionsHtml = (parsed.type === "error" && (parsed.details || parsed.message || parsed.isServerError500)) ? `
     <div class="toast-actions-row">
-      <button class="toast-action-btn copy-toast-btn" type="button">
+      <button class="toast-action-btn copy-toast-btn" type="button" title="${isEn ? "Copy diagnostic details" : "Скопировать диагностические данные"}">
         <i data-lucide="copy"></i>
-        <span>${isEn ? "Copy Error" : "Скопировать ошибку"}</span>
+        <span>${isEn ? "Copy Diagnostic" : "Скопировать диагностику"}</span>
       </button>
+      ${parsed.isServerError500 ? `
+      <button class="toast-action-btn secondary open-logs-btn" type="button" title="${isEn ? "View in system logs tab" : "Открыть системный журнал логов"}">
+        <i data-lucide="file-text"></i>
+        <span>${isEn ? "View in Logs" : "В журнал логов"}</span>
+      </button>
+      ` : ""}
+    </div>
+  ` : "";
+
+  const endpointHtml = (parsed.endpoint || parsed.method) ? `
+    <div class="toast-endpoint-row">
+      <span class="toast-endpoint-badge"><strong class="method-${(parsed.method || 'req').toLowerCase()}">${escapeHtml(parsed.method || 'API')}</strong> ${escapeHtml(parsed.endpoint || '')}</span>
     </div>
   ` : "";
 
@@ -4303,9 +4401,10 @@ function showToast(message, type = "info") {
             <i data-lucide="x"></i>
           </button>
         </div>
+        ${endpointHtml}
         ${descHtml}
         ${detailsHtml}
-        ${copyBtnHtml}
+        ${actionsHtml}
       </div>
     </div>
     <div class="toast-progress-track">
@@ -4380,11 +4479,29 @@ function showToast(message, type = "info") {
   if (copyBtn) {
     copyBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const textToCopy = [
-        parsed.title,
-        parsed.message,
-        parsed.details
-      ].filter(Boolean).join("\n");
+      const dateStr = new Date().toLocaleString(isEn ? "en-US" : "ru-RU");
+      let textToCopy = "";
+      if (parsed.isServerError500) {
+        const lines = [
+          `[Aliasarr 500 Error Diagnostic - ${dateStr}]`,
+          `Status: 500 Internal Server Error`,
+        ];
+        if (parsed.method || parsed.endpoint) {
+          lines.push(`Request: ${parsed.method || "METHOD"} ${parsed.endpoint || ""}`);
+        }
+        if (parsed.title) lines.push(`Title: ${parsed.title}`);
+        if (parsed.message) lines.push(`Message: ${parsed.message}`);
+        if (parsed.details) lines.push(`Details:\n${parsed.details}`);
+        lines.push(`App URL: ${window.location.href}`);
+        lines.push(`User-Agent: ${navigator.userAgent}`);
+        textToCopy = lines.join("\n");
+      } else {
+        textToCopy = [
+          parsed.title,
+          parsed.message,
+          parsed.details
+        ].filter(Boolean).join("\n");
+      }
 
       if (navigator.clipboard) {
         navigator.clipboard.writeText(textToCopy).then(() => {
@@ -4392,11 +4509,23 @@ function showToast(message, type = "info") {
           if (window.lucide) lucide.createIcons();
           setTimeout(() => {
             if (copyBtn && card.parentNode) {
-              copyBtn.innerHTML = `<i data-lucide="copy"></i> <span>${isEn ? "Copy Error" : "Скопировать ошибку"}</span>`;
+              const defaultLabel = parsed.isServerError500 ? (isEn ? "Copy Diagnostic" : "Скопировать диагностику") : (isEn ? "Copy Error" : "Скопировать ошибку");
+              copyBtn.innerHTML = `<i data-lucide="copy"></i> <span>${defaultLabel}</span>`;
               if (window.lucide) lucide.createIcons();
             }
           }, 1800);
         }).catch(() => {});
+      }
+    });
+  }
+
+  const logsBtn = card.querySelector(".open-logs-btn");
+  if (logsBtn) {
+    logsBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      dismiss();
+      if (typeof switchTab === "function") {
+        switchTab("journal");
       }
     });
   }

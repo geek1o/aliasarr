@@ -15,7 +15,7 @@ except ImportError:
         def shutdown(self): pass
         def add_job(self, *args, **kwargs): pass
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
@@ -78,6 +78,66 @@ def custom_openapi():
 
 
 app.openapi = custom_openapi
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Перехват HTTPException с обогащением диагностическими данными для 500+ ошибок."""
+    if exc.status_code >= 500:
+        logger.error(
+            "HTTP %s ошибка при %s %s: %s",
+            exc.status_code,
+            request.method,
+            request.url.path,
+            exc.detail,
+            exc_info=True,
+        )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "detail": str(exc.detail),
+                "error": str(exc.detail),
+                "error_type": "HTTPException",
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": exc.status_code,
+                "timestamp": dt.datetime.utcnow().isoformat() + "Z",
+            },
+            headers=getattr(exc, "headers", None),
+        )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Глобальный перехват всех необработанных исключений сервера (500 Internal Server Error)."""
+    exc_name = exc.__class__.__name__
+    exc_msg = str(exc) or "Внутренняя ошибка сервера"
+    logger.error(
+        "Необработанная ошибка сервера (500) при %s %s [%s]: %s",
+        request.method,
+        request.url.path,
+        exc_name,
+        exc_msg,
+        exc_info=True,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": f"Внутренняя ошибка сервера ({exc_name}): {exc_msg}",
+            "error": exc_msg,
+            "error_type": exc_name,
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": 500,
+            "timestamp": dt.datetime.utcnow().isoformat() + "Z",
+        },
+    )
+
 
 app.add_middleware(
     CORSMiddleware,

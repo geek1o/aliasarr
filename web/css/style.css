@@ -3930,6 +3930,74 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   color: #ffffff;
 }
 
+.toast-action-btn.secondary {
+  background: rgba(56, 189, 248, 0.1);
+  border-color: rgba(56, 189, 248, 0.25);
+  color: #38bdf8;
+}
+
+.toast-action-btn.secondary:hover {
+  background: rgba(56, 189, 248, 0.22);
+  color: #7dd3fc;
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.toast-endpoint-row {
+  margin: 2px 0 4px 0;
+}
+
+.toast-endpoint-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: #cbd5e1;
+  word-break: break-all;
+}
+
+.toast-endpoint-badge strong {
+  font-weight: 700;
+  font-size: 9.5px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+
+.toast-endpoint-badge strong.method-post {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+}
+
+.toast-endpoint-badge strong.method-get {
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+}
+
+.toast-endpoint-badge strong.method-put {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+
+.toast-endpoint-badge strong.method-delete {
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+}
+
+.toast-endpoint-badge strong.method-patch {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+}
+
+.toast-card.is-500-error {
+  border-color: rgba(248, 113, 113, 0.35);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75), 0 0 16px rgba(248, 113, 113, 0.15);
+}
+
 .toast-dismiss-btn {
   background: transparent;
   border: none;
@@ -4059,6 +4127,24 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   background: #f1f5f9;
   border-color: #cbd5e1;
   color: #1e293b;
+}
+[data-theme="light"] .toast-card .toast-action-btn.secondary {
+  background: rgba(14, 165, 233, 0.1);
+  border-color: rgba(14, 165, 233, 0.25);
+  color: #0284c7;
+}
+[data-theme="light"] .toast-card .toast-action-btn.secondary:hover {
+  background: rgba(14, 165, 233, 0.2);
+  color: #0369a1;
+}
+[data-theme="light"] .toast-endpoint-badge {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #1e293b;
+}
+[data-theme="light"] .toast-card.is-500-error {
+  border-color: rgba(239, 68, 68, 0.4);
+  box-shadow: 0 16px 40px rgba(239, 68, 68, 0.12), 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 [data-theme="dracula"] .toast-card {
