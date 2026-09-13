@@ -5105,6 +5105,7 @@ function selectWizardTitle(btn) {
   const chosen = btn?.dataset?.title;
   if (!chosen) return;
   WIZARD_STATE.selectedTitle = chosen;
+  WIZARD_STATE.manuallySelectedTitle = true;
   const titleEl = document.getElementById("wizard-selected-title");
   if (titleEl && WIZARD_STATE.selectedResult) {
     titleEl.textContent = formatShowTitleWithYear(chosen, WIZARD_STATE.selectedResult.year);
@@ -5125,15 +5126,24 @@ async function loadWizardDetails(r) {
     r._detailsLoaded = true;
     if (details) {
       if (details.titles_by_lang) {
-        r.titles_by_lang = Object.assign({}, details.titles_by_lang, r.titles_by_lang || {});
+        r.titles_by_lang = Object.assign({}, r.titles_by_lang || {}, details.titles_by_lang);
       }
       if (details.original_title && !r.original_title) {
         r.original_title = details.original_title;
       }
-      if (details.overview && (!r.overview || r.overview.length < details.overview.length)) {
+      if (details.overview && (!r.overview || r.overview.length < details.overview.length || (!/[а-яёА-ЯЁ]/.test(r.overview) && /[а-яёА-ЯЁ]/.test(details.overview)))) {
         r.overview = details.overview;
         const overviewEl = document.getElementById("wizard-selected-overview");
         if (overviewEl) overviewEl.textContent = details.overview;
+      }
+      if (!WIZARD_STATE.manuallySelectedTitle && details.titles_by_lang && details.titles_by_lang.ru) {
+        if (!/[а-яёА-ЯЁ]/.test(WIZARD_STATE.selectedTitle || "")) {
+          WIZARD_STATE.selectedTitle = details.titles_by_lang.ru;
+          const titleEl = document.getElementById("wizard-selected-title");
+          if (titleEl && WIZARD_STATE.selectedResult) {
+            titleEl.textContent = formatShowTitleWithYear(WIZARD_STATE.selectedTitle, WIZARD_STATE.selectedResult.year);
+          }
+        }
       }
       const variants = getTitleVariantsFromResult(r);
       if (variants.length > 1) {
@@ -12321,7 +12331,7 @@ function openAddShowWizard() {
   } else if (WIZARD_STATE && WIZARD_STATE.sourceId !== null) {
     effectiveSourceId = WIZARD_STATE.sourceId;
   }
-  WIZARD_STATE = { sourceId: effectiveSourceId, selectedResult: null, contentType: "series", lastQuery: WIZARD_STATE.lastQuery || "" };
+  WIZARD_STATE = { sourceId: effectiveSourceId, selectedResult: null, contentType: "series", lastQuery: WIZARD_STATE.lastQuery || "", manuallySelectedTitle: false };
   renderWizardStep(1);
   openModal("wizard-modal");
   setTimeout(() => {
@@ -12534,6 +12544,7 @@ function chooseWizardMetadataResultByIndex(index) {
   WIZARD_STATE.selectedResult = result;
   WIZARD_STATE.contentType = guessContentTypeFromMetadata(result);
   WIZARD_STATE.selectedTitle = result.title;
+  WIZARD_STATE.manuallySelectedTitle = false;
   renderWizardStep(2);
 }
 

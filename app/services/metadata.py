@@ -857,6 +857,11 @@ class TMDBClient(BaseMetadataClient):
             elif iso in allowed_langs and t_t and t_t.strip():
                 extra_lang_titles.append(t_t.strip())
 
+        orig_title_val = data.get("original_title") or ""
+        orig_lang = data.get("original_language") or ""
+        if not ru_title and (orig_lang == "ru" or any('\u0400' <= c <= '\u04ff' for c in orig_title_val)):
+            ru_title = orig_title_val
+
         # Альтернативные названия
         alt_titles = []
         at_raw = data.get("alternative_titles") or data.get("alternativeTitles") or data.get("alternateTitles")
@@ -889,7 +894,9 @@ class TMDBClient(BaseMetadataClient):
             titles_by_lang["en"] = eng_candidates[0]
         elif is_latin_text(raw_title):
             titles_by_lang["en"] = raw_title
-        if raw_title:
+        if orig_title_val:
+            titles_by_lang["original"] = orig_title_val
+        elif raw_title:
             titles_by_lang["original"] = raw_title
 
         if is_latin_text(raw_title):
@@ -1189,6 +1196,11 @@ class TMDBClient(BaseMetadataClient):
             elif iso in allowed_langs and t_t and t_t.strip():
                 extra_lang_titles.append(t_t.strip())
 
+        orig_name = show_data.get("original_name") or ""
+        orig_lang = show_data.get("original_language") or ""
+        if not ru_title and (orig_lang == "ru" or any('\u0400' <= c <= '\u04ff' for c in orig_name)):
+            ru_title = orig_name
+
         # Альтернативные названия
         alt_titles = []
         for at in (show_data.get("alternative_titles") or {}).get("results", []):
@@ -1208,6 +1220,18 @@ class TMDBClient(BaseMetadataClient):
             elif not norm_l and is_latin_text(t_name) and t_name.strip() not in eng_candidates:
                 eng_candidates.append(t_name.strip())
 
+        titles_by_lang: dict[str, str] = {}
+        if ru_title:
+            titles_by_lang["ru"] = ru_title
+        if eng_candidates:
+            titles_by_lang["en"] = eng_candidates[0]
+        elif is_latin_text(raw_title):
+            titles_by_lang["en"] = raw_title
+        if orig_name:
+            titles_by_lang["original"] = orig_name
+        elif raw_title:
+            titles_by_lang["original"] = raw_title
+
         if is_latin_text(raw_title):
             title = raw_title
         elif eng_candidates:
@@ -1216,9 +1240,11 @@ class TMDBClient(BaseMetadataClient):
             title = raw_title
 
         # Добавляем все альтернативные и нелатинские названия в алиасы
-        orig_lang = show_data.get("original_language") or ""
         if raw_title and raw_title != title and raw_title not in aliases:
             aliases.append(raw_title)
+        if orig_name and orig_name != title and orig_name not in aliases:
+            if is_alias_allowed(orig_name, orig_lang, allowed_langs, original_lang=orig_lang):
+                aliases.append(orig_name)
         if ru_title and ru_title != title and ru_title not in aliases and ("ru" in allowed_langs or "rus" in allowed_langs):
             aliases.append(ru_title)
         for ext_t in extra_lang_titles:
@@ -1274,6 +1300,8 @@ class TMDBClient(BaseMetadataClient):
             tvdb_id=tvdb_id_int,
             tvmaze_id=tvmaze_id_int,
             trailer_url=trailer_url_val,
+            original_title=orig_name or None,
+            titles_by_lang=titles_by_lang,
         )
 
 
@@ -1560,13 +1588,19 @@ class SkyHookClient(BaseMetadataClient):
         ru_overview = None
         if tmdb_match:
             t_n = tmdb_match.get("name")
+            t_orig = tmdb_match.get("original_name")
             if t_n and (any('\u0400' <= c <= '\u04ff' for c in t_n) or not raw_title):
                 ru_title = t_n
+            elif t_orig and any('\u0400' <= c <= '\u04ff' for c in t_orig):
+                ru_title = t_orig
             t_ov = tmdb_match.get("overview")
             if t_ov and str(t_ov).strip():
                 ru_overview = str(t_ov).strip()
             if not orig_title and tmdb_match.get("original_name"):
                 orig_title = tmdb_match.get("original_name")
+
+        if not ru_title and orig_title and any('\u0400' <= c <= '\u04ff' for c in orig_title):
+            ru_title = orig_title
 
         titles_by_lang: dict[str, str] = {}
         if raw_title:
@@ -1656,6 +1690,37 @@ class SkyHookClient(BaseMetadataClient):
             if resp and hasattr(resp, "status_code") and resp.status_code == 200:
                 items = resp.json()
                 if isinstance(items, list):
+                    unmatched_tmdb_ids = [
+                        int(item["tmdbId"]) for item in items
+                        if item.get("tmdbId") and str(item["tmdbId"]).isdigit() and int(item["tmdbId"]) not in tmdb_map
+                    ]
+                    if unmatched_tmdb_ids and needs_tmdb:
+                        async def fetch_tmdb_tv_info(tmdb_id: int):
+                            try:
+                                tr = await client.get(
+                                    f"{self.TMDB_URL}/tv/{tmdb_id}",
+                                    params={"language": "ru-RU"},
+                                    headers={"Authorization": f"Bearer {self.TMDB_TOKEN}", "accept": "application/json"},
+                                )
+                                if tr.status_code == 200:
+                                    return tmdb_id, tr.json()
+                            except Exception:
+                                pass
+                            return tmdb_id, None
+
+                        id_fetches = [fetch_tmdb_tv_info(tid) for tid in unmatched_tmdb_ids[:8]]
+                        id_results = await asyncio.gather(*id_fetches, return_exceptions=True)
+                        for id_res in id_results:
+                            if isinstance(id_res, tuple) and id_res[1]:
+                                tid, t_data = id_res
+                                tmdb_map[tid] = t_data
+                                t_name = (t_data.get("name") or t_data.get("title") or "").strip().lower()
+                                t_orig = (t_data.get("original_name") or t_data.get("originalTitle") or "").strip().lower()
+                                if t_name:
+                                    tmdb_name_map[t_name] = t_data
+                                if t_orig:
+                                    tmdb_name_map[t_orig] = t_data
+
                     for item in items:
                         r = self._map_skyhook_item(item, seen_ids, tmdb_map, tmdb_name_map)
                         if r:
@@ -1671,6 +1736,37 @@ class SkyHookClient(BaseMetadataClient):
                     if resp.status_code == 200:
                         items = resp.json()
                         if isinstance(items, list):
+                            unmatched_tmdb_ids = [
+                                int(item["tmdbId"]) for item in items
+                                if item.get("tmdbId") and str(item["tmdbId"]).isdigit() and int(item["tmdbId"]) not in tmdb_map
+                            ]
+                            if unmatched_tmdb_ids and needs_tmdb:
+                                async def fetch_backup_tmdb_tv_info(tmdb_id: int):
+                                    try:
+                                        tr = await client.get(
+                                            f"{self.TMDB_URL}/tv/{tmdb_id}",
+                                            params={"language": "ru-RU"},
+                                            headers={"Authorization": f"Bearer {self.TMDB_TOKEN}", "accept": "application/json"},
+                                        )
+                                        if tr.status_code == 200:
+                                            return tmdb_id, tr.json()
+                                    except Exception:
+                                        pass
+                                    return tmdb_id, None
+
+                                id_fetches = [fetch_backup_tmdb_tv_info(tid) for tid in unmatched_tmdb_ids[:8]]
+                                id_results = await asyncio.gather(*id_fetches, return_exceptions=True)
+                                for id_res in id_results:
+                                    if isinstance(id_res, tuple) and id_res[1]:
+                                        tid, t_data = id_res
+                                        tmdb_map[tid] = t_data
+                                        t_name = (t_data.get("name") or t_data.get("title") or "").strip().lower()
+                                        t_orig = (t_data.get("original_name") or t_data.get("originalTitle") or "").strip().lower()
+                                        if t_name:
+                                            tmdb_name_map[t_name] = t_data
+                                        if t_orig:
+                                            tmdb_name_map[t_orig] = t_data
+
                             for item in items:
                                 r = self._map_skyhook_item(item, seen_ids, tmdb_map, tmdb_name_map)
                                 if r:
@@ -1881,6 +1977,9 @@ class SkyHookClient(BaseMetadataClient):
         imdb_id_val = data.get("imdbId")
         tmdb_id_val = int(data.get("tmdbId")) if str(data.get("tmdbId") or "").isdigit() else None
 
+        orig_title = data.get("originalTitle") or ""
+        tmdb_details = None
+
         # Обогащение переводами и алиасами на всех настроенных языках (RU, JA, ZH, KO и др.) через TMDb
         if tmdb_id_val:
             try:
@@ -1895,6 +1994,13 @@ class SkyHookClient(BaseMetadataClient):
                         if a and a != raw_title and a not in aliases:
                             if is_alias_allowed(a, None, allowed_langs):
                                 aliases.append(a)
+                    if tmdb_details.original_title and not orig_title:
+                        orig_title = tmdb_details.original_title
+                    if tmdb_details.titles_by_lang:
+                        for k, v in tmdb_details.titles_by_lang.items():
+                            if v and v not in aliases and v != raw_title:
+                                if is_alias_allowed(v, k, allowed_langs):
+                                    aliases.append(v)
                     # Если TMDb предоставил локализованное описание на выбранном языке
                     norm_pref = normalize_metadata_lang_code(self.overview_language) or self.overview_language
                     if tmdb_details.overview:
@@ -1908,7 +2014,7 @@ class SkyHookClient(BaseMetadataClient):
             except Exception as e:
                 logger.debug("TMDb TV enrichment failed for tvdb %s (tmdb %s): %s", tvdb_id, tmdb_id_val, e)
 
-        orig_title = data.get("originalTitle") or ""
+        orig_title = orig_title or data.get("originalTitle") or ""
         titles_by_lang: dict[str, str] = {}
         if raw_title:
             titles_by_lang["en"] = raw_title
@@ -1920,8 +2026,14 @@ class SkyHookClient(BaseMetadataClient):
             if any('\u0400' <= c <= '\u04ff' for c in a):
                 ru_title = a
                 break
+        if not ru_title and tmdb_details and tmdb_details.titles_by_lang.get("ru"):
+            ru_title = tmdb_details.titles_by_lang["ru"]
+        if not ru_title and orig_title and any('\u0400' <= c <= '\u04ff' for c in orig_title):
+            ru_title = orig_title
         if ru_title:
             titles_by_lang["ru"] = ru_title
+            if ru_title not in aliases and ru_title != raw_title:
+                aliases.append(ru_title)
 
         chosen_title = raw_title
         norm_pref = normalize_metadata_lang_code(self.overview_language) or self.overview_language
