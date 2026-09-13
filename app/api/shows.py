@@ -82,6 +82,22 @@ from app.services.path_security import (
 
 router = APIRouter(prefix="/api/v1/shows", tags=["shows"])
 
+MAX_COVER_UPLOAD_BYTES = 10 * 1024 * 1024
+
+
+async def _read_upload_with_limit(file: UploadFile, max_bytes: int = MAX_COVER_UPLOAD_BYTES) -> bytes:
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(min(1024 * 1024, max_bytes + 1 - total))
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(status_code=413, detail="Файл обложки превышает лимит 10 МБ")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
 
 def _validate_destructive_media_paths(settings, paths: list[str | None]) -> None:
     try:
@@ -3253,7 +3269,7 @@ async def upload_show_cover(
     if not show:
         raise HTTPException(404, "Карточка не найдена")
 
-    contents = await file.read()
+    contents = await _read_upload_with_limit(file)
     if not contents:
         raise HTTPException(400, "Файл пуст")
 

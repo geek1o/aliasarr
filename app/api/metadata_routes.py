@@ -4,6 +4,7 @@ from typing import Optional, List, Dict, Any
 
 import asyncio
 import datetime as dt
+from urllib.parse import urljoin, urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
@@ -29,6 +30,64 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/metadata-sources", tags=["metadata"])
+
+IMAGE_PROXY_MAX_BYTES = 10 * 1024 * 1024
+IMAGE_PROXY_MAX_REDIRECTS = 3
+IMAGE_PROXY_ALLOWED_DOMAINS = (
+    "thetvdb.com",
+    "tmdb.org",
+    "tvmaze.com",
+    "sonarr.tv",
+    "servarr.com",
+    "fanart.tv",
+    "themoviedb.org",
+)
+
+
+def _validate_proxy_image_url(url: str) -> str:
+    try:
+        parsed = urlsplit((url or "").strip())
+        port = parsed.port
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid image URL") from exc
+
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise HTTPException(400, "Invalid image URL")
+    if parsed.username is not None or parsed.password is not None:
+        raise HTTPException(403, "URL credentials are not allowed")
+    if port not in (None, 80, 443):
+        raise HTTPException(403, "Image proxy port is not allowed")
+
+    hostname = parsed.hostname.rstrip(".").lower()
+    if not any(
+        hostname == domain or hostname.endswith(f".{domain}")
+        for domain in IMAGE_PROXY_ALLOWED_DOMAINS
+    ):
+        raise HTTPException(403, "Domain not allowed for proxy")
+    return parsed.geturl()
+
+
+async def _read_limited_image_response(response, max_bytes: int = IMAGE_PROXY_MAX_BYTES) -> bytes:
+    content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if not content_type.startswith("image/"):
+        raise HTTPException(415, "Remote response is not an image")
+
+    content_length = response.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > max_bytes:
+                raise HTTPException(413, "Remote image is too large")
+        except ValueError:
+            pass
+
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in response.aiter_bytes():
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(413, "Remote image is too large")
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def _normalize_source_type(val: str | MetadataSourceType) -> MetadataSourceType:
@@ -1028,24 +1087,35 @@ async def cleanup_unallowed_aliases(
 @router.get("/image-proxy")
 async def proxy_image(url: str):
     """Проксирует и кэширует изображения постеров (TheTVDB artworks, TMDB, TVMaze) для обхода ограничений CORS / Referrer."""
-    if not url or not url.startswith(("http://", "https://")):
-        raise HTTPException(400, "Invalid image URL")
-
-    allowed_domains = ("thetvdb.com", "tmdb.org", "tvmaze.com", "sonarr.tv", "servarr.com", "fanart.tv", "themoviedb.org")
-    if not any(d in url.lower() for d in allowed_domains):
-        raise HTTPException(403, "Domain not allowed for proxy")
+    current_url = _validate_proxy_image_url(url)
 
     try:
         import httpx
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-            resp = await client.get(url, headers={"User-Agent": "Aliasarr/1.0.0"})
-            if resp.status_code == 200:
-                media_type = resp.headers.get("content-type", "image/jpeg")
-                return Response(
-                    content=resp.content,
-                    media_type=media_type,
-                    headers={"Cache-Control": "public, max-age=86400, immutable"},
-                )
+        async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
+            for _ in range(IMAGE_PROXY_MAX_REDIRECTS + 1):
+                current_url = _validate_proxy_image_url(current_url)
+                async with client.stream(
+                    "GET",
+                    current_url,
+                    headers={"User-Agent": "Aliasarr/1.0.0"},
+                ) as resp:
+                    if resp.status_code in (301, 302, 303, 307, 308):
+                        location = resp.headers.get("location")
+                        if not location:
+                            break
+                        current_url = urljoin(current_url, location)
+                        continue
+                    if resp.status_code == 200:
+                        content = await _read_limited_image_response(resp)
+                        media_type = resp.headers.get("content-type", "image/jpeg")
+                        return Response(
+                            content=content,
+                            media_type=media_type,
+                            headers={"Cache-Control": "public, max-age=86400, immutable"},
+                        )
+                    break
+    except HTTPException:
+        raise
     except Exception as e:
         logger.warning(f"Failed to proxy image {url}: {e}")
 
