@@ -255,8 +255,7 @@ class TestNotificationLinks(unittest.TestCase):
             trailer_url=None,
         )
         msg_m = build_series_add_notification_message(mock_db, movie)
-        self.assertIn("🎬 В библиотеку добавлен тайтл: <a href=\"https://www.themoviedb.org/movie/157336\">Интерстеллар</a> (2014)", msg_m)
-        self.assertIn("🔗 TMDB: https://www.themoviedb.org/movie/157336", msg_m)
+        self.assertEqual(msg_m, "🎬 В библиотеку добавлен тайтл: <a href=\"https://www.themoviedb.org/movie/157336\">Интерстеллар</a> (2014)")
 
         # 2. Anime
         anime = SimpleNamespace(
@@ -275,8 +274,7 @@ class TestNotificationLinks(unittest.TestCase):
             trailer_url=None,
         )
         msg_a = build_series_add_notification_message(mock_db, anime)
-        self.assertIn("https://shikimori.one/animes/16498", msg_a)
-        self.assertIn("🔗 Shikimori: https://shikimori.one/animes/16498", msg_a)
+        self.assertEqual(msg_a, "🎬 В библиотеку добавлен тайтл: <a href=\"https://shikimori.one/animes/16498\">Атака титанов</a> (2013)")
 
         # 3. None configured
         mock_settings.notification_link_source_movie = "none"
@@ -284,28 +282,23 @@ class TestNotificationLinks(unittest.TestCase):
         self.assertEqual(msg_none, "🎬 В библиотеку добавлен тайтл: Интерстеллар (2014)")
 
     def test_messenger_conversions(self):
-        html_msg = (
-            '🎬 В библиотеку добавлен тайтл: <a href="https://www.themoviedb.org/movie/550">Бойцовский клуб</a> (1999)\n'
-            '🔗 TMDB: https://www.themoviedb.org/movie/550'
-        )
+        html_msg = '🎬 В библиотеку добавлен тайтл: <a href="https://www.themoviedb.org/movie/550">Бойцовский клуб</a> (1999)'
 
         # Discord Markdown
         md = _html_to_markdown(html_msg)
-        self.assertIn("[Бойцовский клуб](https://www.themoviedb.org/movie/550)", md)
-        self.assertIn("🔗 TMDB: https://www.themoviedb.org/movie/550", md)
+        self.assertEqual(md, "🎬 В библиотеку добавлен тайтл: [Бойцовский клуб](https://www.themoviedb.org/movie/550) (1999)")
 
         # Slack mrkdwn
         slack = _html_to_slack_mrkdwn(html_msg)
-        self.assertIn("<https://www.themoviedb.org/movie/550|Бойцовский клуб>", slack)
+        self.assertEqual(slack, "🎬 В библиотеку добавлен тайтл: <https://www.themoviedb.org/movie/550|Бойцовский клуб> (1999)")
 
         # Gotify / Ntfy plain text
         plain = _strip_html(html_msg)
-        self.assertIn("Бойцовский клуб (https://www.themoviedb.org/movie/550)", plain)
+        self.assertEqual(plain, "🎬 В библиотеку добавлен тайтл: Бойцовский клуб (https://www.themoviedb.org/movie/550) (1999)")
 
         # English translation
         en = format_notification_message(html_msg, lang="en")
-        self.assertIn("🎬 Title added to library:", en)
-        self.assertIn("https://www.themoviedb.org/movie/550", en)
+        self.assertEqual(en, '🎬 Title added to library: <a href="https://www.themoviedb.org/movie/550">Бойцовский клуб</a> (1999)')
 
     def test_settings_routes_update_and_validation(self):
         if not HAS_DB_DEPS:

@@ -214,7 +214,4 @@ def build_series_add_notification_message(db: Any, show: Any) -> str:
         return f"🎬 В библиотеку добавлен тайтл: {title}{year_str}"
 
     escaped_title = html.escape(title)
-    return (
-        f'🎬 В библиотеку добавлен тайтл: <a href="{url}">{escaped_title}</a>{year_str}\n'
-        f"🔗 {source_label}: {url}"
-    )
+    return f'🎬 В библиотеку добавлен тайтл: <a href="{url}">{escaped_title}</a>{year_str}'
