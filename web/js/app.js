@@ -12837,7 +12837,7 @@ function renderWizardStep2Content() {
       <div class="wizard-config-card">
         <div class="wizard-config-card-header">
           <div class="wizard-config-icon-badge">
-            <i data-lucide="zap"></i>
+            <i data-lucide="cpu"></i>
           </div>
           <div class="wizard-config-title-wrap">
             <h4>${t("wizard.automation_title") || "Автоматизация"}</h4>
