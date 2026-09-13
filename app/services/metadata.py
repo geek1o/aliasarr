@@ -3263,12 +3263,12 @@ async def refresh_show_metadata(db, show) -> dict:
                                 coll.poster_source_url = c_det.get("poster_url")
                                 from app.services.cover_service import download_and_store_collection_cover
                                 c_loc = await download_and_store_collection_cover(coll.id, c_det.get("poster_url"))
-                                coll.poster_url = c_loc or f"/api/v1/collections/{coll.id}/poster"
+                                coll.poster_url = c_loc or c_det.get("poster_url")
                             if c_det.get("backdrop_url"):
                                 coll.backdrop_source_url = c_det.get("backdrop_url")
                                 from app.services.cover_service import download_and_store_collection_backdrop
                                 b_loc = await download_and_store_collection_backdrop(coll.id, c_det.get("backdrop_url"))
-                                coll.backdrop_url = b_loc or f"/api/v1/collections/{coll.id}/backdrop"
+                                coll.backdrop_url = b_loc or c_det.get("backdrop_url")
                             db.add(coll)
                     except Exception as e:
                         logger.debug("Failed to prefetch collection parts for %s: %s", coll.title, e)
@@ -3740,12 +3740,12 @@ async def refresh_all_collections_metadata(db, force: bool = False) -> dict:
                     db_coll.poster_source_url = c_det.get("poster_url")
                     from app.services.cover_service import download_and_store_collection_cover
                     c_loc = await download_and_store_collection_cover(db_coll.id, c_det.get("poster_url"))
-                    db_coll.poster_url = c_loc or f"/api/v1/collections/{db_coll.id}/poster"
+                    db_coll.poster_url = c_loc or c_det.get("poster_url")
                 if c_det.get("backdrop_url"):
                     db_coll.backdrop_source_url = c_det.get("backdrop_url")
                     from app.services.cover_service import download_and_store_collection_backdrop
                     b_loc = await download_and_store_collection_backdrop(db_coll.id, c_det.get("backdrop_url"))
-                    db_coll.backdrop_url = b_loc or f"/api/v1/collections/{db_coll.id}/backdrop"
+                    db_coll.backdrop_url = b_loc or c_det.get("backdrop_url")
                 s_db.add(db_coll)
                 s_db.commit()
                 updated += 1

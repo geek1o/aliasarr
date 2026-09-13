@@ -635,12 +635,12 @@ async def import_show(
                                         coll.poster_source_url = c_det.get("poster_url")
                                         from app.services.cover_service import download_and_store_collection_cover
                                         c_loc = await download_and_store_collection_cover(coll.id, c_det.get("poster_url"))
-                                        coll.poster_url = c_loc or f"/api/v1/collections/{coll.id}/poster"
+                                        coll.poster_url = c_loc or c_det.get("poster_url")
                                     if c_det.get("backdrop_url") and not coll.backdrop_url:
                                         coll.backdrop_source_url = c_det.get("backdrop_url")
                                         from app.services.cover_service import download_and_store_collection_backdrop
                                         b_loc = await download_and_store_collection_backdrop(coll.id, c_det.get("backdrop_url"))
-                                        coll.backdrop_url = b_loc or f"/api/v1/collections/{coll.id}/backdrop"
+                                        coll.backdrop_url = b_loc or c_det.get("backdrop_url")
                                     db.add(coll)
                             except Exception as e:
                                 logger.debug("Failed fetching collection details for %s: %s", coll.title, e)

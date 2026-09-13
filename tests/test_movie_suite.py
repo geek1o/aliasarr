@@ -443,6 +443,7 @@ class TestMovieSuite(unittest.TestCase):
             res = asyncio.run(refresh_collection(collection_id=10, db=db_mock, current_user=MagicMock()))
             self.assertEqual(coll.overview, "Fresh overview from TMDb")
             self.assertEqual(coll.poster_url, "/fresh_poster.jpg")
+            self.assertEqual(coll.backdrop_url, "/fresh_backdrop.jpg")
             self.assertEqual(coll.parts_count, 2)
             self.assertIsNotNone(coll.parts_cache)
             self.assertIsNotNone(coll.last_metadata_refresh_at)

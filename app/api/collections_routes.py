@@ -198,12 +198,12 @@ async def get_collection_detail(
                     coll.poster_source_url = c_det.get("poster_url")
                     from app.services.cover_service import download_and_store_collection_cover
                     c_loc = await download_and_store_collection_cover(coll.id, c_det.get("poster_url"))
-                    coll.poster_url = c_loc or f"/api/v1/collections/{coll.id}/poster"
+                    coll.poster_url = c_loc or c_det.get("poster_url")
                 if c_det.get("backdrop_url") and not coll.backdrop_url:
                     coll.backdrop_source_url = c_det.get("backdrop_url")
                     from app.services.cover_service import download_and_store_collection_backdrop
                     b_loc = await download_and_store_collection_backdrop(coll.id, c_det.get("backdrop_url"))
-                    coll.backdrop_url = b_loc or f"/api/v1/collections/{coll.id}/backdrop"
+                    coll.backdrop_url = b_loc or c_det.get("backdrop_url")
                 coll.last_metadata_refresh_at = dt.datetime.utcnow()
                 db.add(coll)
                 db.commit()
@@ -390,12 +390,12 @@ async def refresh_collection(
         coll.poster_source_url = data.get("poster_url")
         from app.services.cover_service import download_and_store_collection_cover
         c_loc = await download_and_store_collection_cover(coll.id, data.get("poster_url"))
-        coll.poster_url = c_loc or f"/api/v1/collections/{coll.id}/poster"
+        coll.poster_url = c_loc or data.get("poster_url")
     if data.get("backdrop_url"):
         coll.backdrop_source_url = data.get("backdrop_url")
         from app.services.cover_service import download_and_store_collection_backdrop
         b_loc = await download_and_store_collection_backdrop(coll.id, data.get("backdrop_url"))
-        coll.backdrop_url = b_loc or f"/api/v1/collections/{coll.id}/backdrop"
+        coll.backdrop_url = b_loc or data.get("backdrop_url")
     coll.last_metadata_refresh_at = dt.datetime.utcnow()
     db.add(coll)
     db.commit()
