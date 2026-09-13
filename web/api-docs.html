@@ -585,11 +585,80 @@
 
     /* RESPONSIVE */
     @media (max-width: 900px) {
+      .api-header {
+        height: auto;
+        padding: 12px 16px;
+      }
+      .api-header-inner {
+        flex-wrap: wrap;
+        gap: 10px;
+      }
       .api-header-center {
-        display: none;
+        order: 3;
+        flex: 1 1 100%;
+        max-width: 100%;
+        margin: 4px 0 0 0;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .api-header {
+        height: auto !important;
+        padding: 10px 14px !important;
+        position: relative !important;
+      }
+      .api-header-inner {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+      }
+      .api-header-left {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+        width: 100% !important;
       }
       .brand-name {
-        display: none;
+        display: inline !important;
+        font-size: 18px !important;
+      }
+      .api-badge-sub {
+        font-size: 10.5px !important;
+        padding: 2px 6px !important;
+      }
+      .api-badge-version {
+        font-size: 10.5px !important;
+        padding: 2px 6px !important;
+      }
+      .api-header-center {
+        order: 2 !important;
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+      }
+      .api-search-box input {
+        width: 100% !important;
+        height: 38px !important;
+        box-sizing: border-box !important;
+      }
+      .api-header-right {
+        order: 3 !important;
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+        width: 100% !important;
+      }
+      .api-action-btn {
+        width: 100% !important;
+        justify-content: center !important;
+        text-align: center !important;
+        height: 36px !important;
+        padding: 0 10px !important;
+        font-size: 12px !important;
+        box-sizing: border-box !important;
       }
     }
   </style>

@@ -454,6 +454,50 @@
     .wiki-grid-2, .wiki-grid-3 { grid-template-columns: 1fr; }
     .wiki-sidebar { display: none; }
     .wiki-layout { padding: 14px; }
+    .wiki-header { padding: 12px 16px; }
+    .wiki-header-inner { flex-wrap: wrap; gap: 10px; }
+    .wiki-header-actions { flex-wrap: wrap; }
+  }
+  @media (max-width: 768px) {
+    .wiki-header {
+      padding: 10px 14px !important;
+      position: relative !important;
+    }
+    .wiki-header-inner {
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 10px !important;
+    }
+    .wiki-header-left {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: flex-start !important;
+      gap: 8px !important;
+      width: 100% !important;
+    }
+    .wiki-header-actions {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      gap: 8px !important;
+      width: 100% !important;
+    }
+    .wiki-search-box {
+      width: 100% !important;
+      max-width: 100% !important;
+      flex: 1 0 100% !important;
+    }
+    .wiki-search-box input {
+      width: 100% !important;
+      box-sizing: border-box !important;
+    }
+    .wiki-header-actions > .wiki-action-btn {
+      flex: 1 1 calc(50% - 4px) !important;
+      justify-content: center !important;
+      text-align: center !important;
+      box-sizing: border-box !important;
+      font-size: 12px !important;
+      padding: 0 8px !important;
+    }
   }
   .wiki-card {
     background: var(--panel-alt, rgba(255,255,255,0.03));
