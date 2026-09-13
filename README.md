@@ -380,6 +380,7 @@ docker run -d \
 | `DATABASE_URL` | `sqlite:////config/aliasarr.db` | URL БД (поддерживается `sqlite://` и `postgresql+psycopg2://`) |
 | `ALIASARR_PORT` | `8989` | Порт HTTP сервера |
 | `ALIASARR_BACKUP_DIR` | `/config/backups` | Директория для хранения автоматических резервных копий |
+| `ALIASARR_TRUSTED_PROXIES` | пусто | IP/CIDR доверенных reverse proxy через запятую; только от них принимаются `X-Forwarded-For`, `X-Real-IP` и `CF-Connecting-IP` |
 
 ---
 

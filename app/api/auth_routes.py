@@ -150,6 +150,22 @@ def auth_status(request: Request, db: Session = Depends(get_db)):
             "username": settings.username,
         }
 
+    if settings.login_enabled and auth_disabled_local and is_private:
+        master = ensure_master_admin(db)
+        return {
+            "login_required": False,
+            "auth_required": False,
+            "authenticated": True,
+            "is_authenticated": True,
+            "is_local": True,
+            "client_ip": client_ip,
+            "auth_disabled_for_local_addresses": True,
+            "totp_2fa_enabled": totp_2fa_enabled,
+            "totp_2fa_policy": totp_2fa_policy,
+            "user": _format_user_out(master),
+            "username": settings.username,
+        }
+
     # Если обязательная авторизация отключена в настройках:
     if not settings.login_enabled:
         master = ensure_master_admin(db)
@@ -167,7 +183,7 @@ def auth_status(request: Request, db: Session = Depends(get_db)):
             "username": settings.username,
         }
 
-    # Если сессии нет и включен вход по паролю — ВСЕГДА требуется ввод логина и пароля
+    # Если сессии нет, включен вход и не действует локальное исключение — требуется пароль.
     return {
         "login_required": True,
         "auth_required": True,
@@ -222,12 +238,8 @@ def login(payload: LoginRequest, response: Response, request: Request, db: Sessi
     user.last_login_at = dt.datetime.utcnow()
     db.commit()
 
-    is_local_permanent = is_private and bool(getattr(settings, "auth_disabled_for_local_addresses", True))
-    token = create_user_session(db, user, request=request, is_local_permanent=is_local_permanent)
-    if is_local_permanent:
-        max_age = 52560000 * 60  # 100 years
-    else:
-        max_age = (user.session_timeout_minutes or 43200) * 60
+    token = create_user_session(db, user, request=request, is_local_permanent=False)
+    max_age = (user.session_timeout_minutes or 43200) * 60
 
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
@@ -297,13 +309,8 @@ def login_2fa(payload: Login2FARequest, response: Response, request: Request, db
     db.commit()
 
     client_ip = get_client_ip(request)
-    is_private = is_private_ip(client_ip)
-    is_local_permanent = is_private and bool(getattr(settings, "auth_disabled_for_local_addresses", True))
-    token = create_user_session(db, user, request=request, is_local_permanent=is_local_permanent)
-    if is_local_permanent:
-        max_age = 52560000 * 60  # 100 years
-    else:
-        max_age = (user.session_timeout_minutes or 43200) * 60
+    token = create_user_session(db, user, request=request, is_local_permanent=False)
+    max_age = (user.session_timeout_minutes or 43200) * 60
 
     response.set_cookie(
         key=SESSION_COOKIE_NAME,

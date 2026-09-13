@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import ipaddress
+import os
 
 try:
     from starlette.middleware.base import BaseHTTPMiddleware
@@ -43,22 +44,47 @@ _PUBLIC_PATHS_PREFIXES = (
 )
 
 
+def _trusted_proxy_networks() -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+    raw_value = os.getenv("ALIASARR_TRUSTED_PROXIES", "")
+    networks = []
+    for raw_item in raw_value.split(","):
+        item = raw_item.strip()
+        if not item:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(item, strict=False))
+        except ValueError:
+            continue
+    return tuple(networks)
+
+
+def _is_trusted_proxy(peer_ip: str) -> bool:
+    try:
+        address = ipaddress.ip_address(peer_ip)
+    except ValueError:
+        return False
+    return any(address in network for network in _trusted_proxy_networks())
+
+
 def get_client_ip(request: Request) -> str:
-    """Извлекает IP клиента из заголовков прокси (CF-Connecting-IP, X-Forwarded-For, X-Real-IP) или request.client.host."""
+    """Return the socket peer IP, trusting forwarding headers only from configured proxies."""
     if not request:
         return "127.0.0.1"
-    cf_ip = request.headers.get("CF-Connecting-IP")
-    if cf_ip:
-        return cf_ip.strip()
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    real_ip = request.headers.get("X-Real-IP")
-    if real_ip:
-        return real_ip.strip()
+    peer_ip = ""
     if getattr(request, "client", None) and getattr(request.client, "host", None):
-        return request.client.host
-    return "127.0.0.1"
+        peer_ip = request.client.host.strip()
+
+    if peer_ip and _is_trusted_proxy(peer_ip):
+        cf_ip = request.headers.get("CF-Connecting-IP")
+        if cf_ip:
+            return cf_ip.strip()
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        real_ip = request.headers.get("X-Real-IP")
+        if real_ip:
+            return real_ip.strip()
+    return peer_ip or "127.0.0.1"
 
 
 _CGNAT_NET = ipaddress.ip_network("100.64.0.0/10")
@@ -185,6 +211,11 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         db = SessionLocal()
         try:
             settings = get_or_create_settings(db)
+            local_auth_bypass = bool(
+                settings.login_enabled
+                and getattr(settings, "auth_disabled_for_local_addresses", False)
+                and is_private_ip(get_client_ip(request))
+            )
 
             is_valid_session, user = _get_valid_session_user(db, token)
             if is_valid_session:
@@ -226,6 +257,17 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                                 {"error": "Неверный или отсутствующий API-ключ (заголовок X-Api-Key)", "code": "invalid_api_key"},
                                 status_code=401,
                             )
+                elif local_auth_bypass:
+                    from app.models.db import User
+                    owner = db.query(User).filter(User.is_owner == True).first()  # noqa: E712
+                    if owner:
+                        _ = (owner.id, owner.username, owner.display_name, owner.is_owner, owner.is_admin, owner.permissions, owner.api_key)
+                        try:
+                            db.expunge(owner)
+                        except Exception:
+                            pass
+                    user = owner
+                    is_authenticated = owner is not None
                 elif settings.login_enabled:
                     if is_page_request and path != "/openapi.json":
                         unauthorized_response = RedirectResponse(url="/", status_code=303)
