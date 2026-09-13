@@ -104,6 +104,9 @@ def format_notification_message(message: str, lang: str = "ru") -> str:
 
     # Series & File notifications
     text = text.replace("🎬 В библиотеку добавлен тайтл:", "🎬 Title added to library:")
+    text = text.replace("🔗 Кинопоиск:", "🔗 Kinopoisk:")
+    text = text.replace("🔗 Трейлер:", "🔗 Trailer:")
+    text = text.replace("🔗 Источник:", "🔗 Source:")
     text = text.replace("🗑 Удалён тайтл «", "🗑 Deleted title '").replace("🗑 Удален тайтл «", "🗑 Deleted title '")
     text = text.replace("🗑 Удалена карточка тайтла «", "🗑 Deleted title card '").replace("🗑 Удалена карточка «", "🗑 Deleted card '")
     text = text.replace("» (вместе с файлами на диске)", "' (along with files on disk)").replace(" (вместе с файлами на диске)", " (along with files on disk)")

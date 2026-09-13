@@ -73,6 +73,9 @@ class SettingsOut(BaseModel):
     calendar_metadata_source: str  # auto | tmdb | tvmaze | skyhook | radarr
     calendar_metadata_source_series: str = "skyhook"
     calendar_metadata_source_movie: str = "radarr"
+    notification_link_source_movie: str = "tmdb"
+    notification_link_source_series: str = "tvdb"
+    notification_link_source_anime: str = "shikimori"
     metadata_auto_refresh_enabled: bool = True
     metadata_refresh_interval_hours: int = 12
     metadata_refresh_aliases: bool = True
@@ -138,6 +141,9 @@ class SettingsUpdate(BaseModel):
     calendar_metadata_source: Optional[str] = None
     calendar_metadata_source_series: Optional[str] = None
     calendar_metadata_source_movie: Optional[str] = None
+    notification_link_source_movie: Optional[str] = None
+    notification_link_source_series: Optional[str] = None
+    notification_link_source_anime: Optional[str] = None
     metadata_auto_refresh_enabled: Optional[bool] = None
     metadata_refresh_interval_hours: Optional[int] = None
     metadata_refresh_aliases: Optional[bool] = None
@@ -198,6 +204,9 @@ def _to_settings_out(settings, is_owner: bool = False) -> SettingsOut:
         calendar_metadata_source=getattr(settings, "calendar_metadata_source", "auto"),
         calendar_metadata_source_series=getattr(settings, "calendar_metadata_source_series", "skyhook") or "skyhook",
         calendar_metadata_source_movie=getattr(settings, "calendar_metadata_source_movie", "radarr") or "radarr",
+        notification_link_source_movie=getattr(settings, "notification_link_source_movie", "tmdb") or "tmdb",
+        notification_link_source_series=getattr(settings, "notification_link_source_series", "tvdb") or "tvdb",
+        notification_link_source_anime=getattr(settings, "notification_link_source_anime", "shikimori") or "shikimori",
         metadata_auto_refresh_enabled=getattr(settings, "metadata_auto_refresh_enabled", True),
         metadata_refresh_interval_hours=getattr(settings, "metadata_refresh_interval_hours", 12) or 12,
         metadata_refresh_aliases=getattr(settings, "metadata_refresh_aliases", True),
@@ -394,6 +403,27 @@ def update_settings(
         if payload.calendar_metadata_source_movie not in allowed_movie:
             raise HTTPException(400, f"calendar_metadata_source_movie должен быть одним из: {', '.join(allowed_movie)}")
         settings.calendar_metadata_source_movie = payload.calendar_metadata_source_movie
+
+    if payload.notification_link_source_movie is not None:
+        src_m = str(payload.notification_link_source_movie).strip().lower()
+        allowed_m = ("tmdb", "imdb", "kinopoisk", "trakt", "letterboxd", "mdblist", "moviechat", "bluray", "trailer", "none")
+        if src_m not in allowed_m:
+            raise HTTPException(400, f"notification_link_source_movie должен быть одним из: {', '.join(allowed_m)}")
+        settings.notification_link_source_movie = src_m
+
+    if payload.notification_link_source_series is not None:
+        src_s = str(payload.notification_link_source_series).strip().lower()
+        allowed_s = ("tvdb", "tmdb", "imdb", "kinopoisk", "trakt", "tvmaze", "mdblist", "trailer", "none")
+        if src_s not in allowed_s:
+            raise HTTPException(400, f"notification_link_source_series должен быть одним из: {', '.join(allowed_s)}")
+        settings.notification_link_source_series = src_s
+
+    if payload.notification_link_source_anime is not None:
+        src_a = str(payload.notification_link_source_anime).strip().lower()
+        allowed_a = ("shikimori", "anidb", "mal", "anilist", "kitsu", "tvdb", "tmdb", "imdb", "kinopoisk", "trailer", "none")
+        if src_a not in allowed_a:
+            raise HTTPException(400, f"notification_link_source_anime должен быть одним из: {', '.join(allowed_a)}")
+        settings.notification_link_source_anime = src_a
 
     if payload.metadata_auto_refresh_enabled is not None:
         settings.metadata_auto_refresh_enabled = payload.metadata_auto_refresh_enabled

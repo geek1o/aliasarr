@@ -3420,6 +3420,80 @@
             <tbody></tbody>
           </table>
         </div>
+
+        <!-- Карточка: Ссылки на тайтлы в уведомлениях -->
+        <div class="settings-section-card" style="margin-top: 24px;">
+          <div class="settings-card-header">
+            <div class="settings-card-header-left">
+              <div class="settings-card-icon-badge">
+                <i data-lucide="link-2"></i>
+              </div>
+              <div class="settings-card-title-wrap">
+                <h3 data-i18n="nt.links_card_title">Ссылки на тайтлы в уведомлениях</h3>
+                <p class="subtitle" data-i18n="nt.links_card_subtitle">Выбор внешней базы данных или сервиса для ссылки на тайтл в сообщениях о добавлении нового контента</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-grid-modern">
+            <div class="settings-field-group">
+              <label class="settings-field-label" for="setting-notif-link-source-movie">
+                <span data-i18n="nt.link_source_movie_label">Кино</span>
+                <span class="settings-field-hint" data-i18n="nt.link_source_movie_hint">(фильмы)</span>
+              </label>
+              <select id="setting-notif-link-source-movie" class="input" onchange="updateNotificationLinkSource('movie', this.value)">
+                <option value="tmdb">TMDB (The Movie Database)</option>
+                <option value="imdb">IMDb</option>
+                <option value="kinopoisk">Кинопоиск</option>
+                <option value="trakt">Trakt</option>
+                <option value="letterboxd">Letterboxd</option>
+                <option value="mdblist">MDBList</option>
+                <option value="moviechat">MovieChat</option>
+                <option value="bluray">Blu-ray</option>
+                <option value="trailer">Трейлер (YouTube)</option>
+                <option value="none" data-i18n="nt.link_source_none">Отключено (без ссылки)</option>
+              </select>
+            </div>
+
+            <div class="settings-field-group">
+              <label class="settings-field-label" for="setting-notif-link-source-series">
+                <span data-i18n="nt.link_source_series_label">Сериалы</span>
+                <span class="settings-field-hint" data-i18n="nt.link_source_series_hint">(ТВ-шоу)</span>
+              </label>
+              <select id="setting-notif-link-source-series" class="input" onchange="updateNotificationLinkSource('series', this.value)">
+                <option value="tvdb">The TVDB</option>
+                <option value="tmdb">TMDB (The Movie Database)</option>
+                <option value="imdb">IMDb</option>
+                <option value="kinopoisk">Кинопоиск</option>
+                <option value="trakt">Trakt</option>
+                <option value="tvmaze">TV Maze</option>
+                <option value="mdblist">MDBList</option>
+                <option value="trailer">Трейлер (YouTube)</option>
+                <option value="none" data-i18n="nt.link_source_none">Отключено (без ссылки)</option>
+              </select>
+            </div>
+
+            <div class="settings-field-group">
+              <label class="settings-field-label" for="setting-notif-link-source-anime">
+                <span data-i18n="nt.link_source_anime_label">Аниме</span>
+                <span class="settings-field-hint" data-i18n="nt.link_source_anime_hint">(сериалы и фильмы аниме)</span>
+              </label>
+              <select id="setting-notif-link-source-anime" class="input" onchange="updateNotificationLinkSource('anime', this.value)">
+                <option value="shikimori">Shikimori</option>
+                <option value="anidb">AniDB</option>
+                <option value="mal">MyAnimeList</option>
+                <option value="anilist">AniList</option>
+                <option value="kitsu">Kitsu</option>
+                <option value="tvdb">The TVDB</option>
+                <option value="tmdb">TMDB</option>
+                <option value="imdb">IMDb</option>
+                <option value="kinopoisk">Кинопоиск</option>
+                <option value="trailer">Трейлер (YouTube)</option>
+                <option value="none" data-i18n="nt.link_source_none">Отключено (без ссылки)</option>
+              </select>
+            </div>
+          </div>
+        </div>
       </div>
 
     </section>

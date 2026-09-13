@@ -558,6 +558,11 @@ class AppSettings(Base):
     calendar_metadata_source_series: Mapped[str] = mapped_column(String(20), default="skyhook")
     calendar_metadata_source_movie: Mapped[str] = mapped_column(String(20), default="radarr")
 
+    # Источники ссылок на тайтлы в уведомлениях
+    notification_link_source_movie: Mapped[str] = mapped_column(String(50), default="tmdb")
+    notification_link_source_series: Mapped[str] = mapped_column(String(50), default="tvdb")
+    notification_link_source_anime: Mapped[str] = mapped_column(String(50), default="shikimori")
+
     # Автоматическое регулярное обновление метаданных библиотеки
     metadata_auto_refresh_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     metadata_refresh_interval_hours: Mapped[int] = mapped_column(Integer, default=12)  # 6, 12, 24, 72, 168

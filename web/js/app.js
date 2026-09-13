@@ -1079,6 +1079,15 @@ const TRANSLATIONS = {
     "nt.status_enabled": "Включено",
     "nt.status_disabled": "Отключено",
     "nt.empty": "Уведомления не настроены",
+    "nt.links_card_title": "Ссылки на тайтлы в уведомлениях",
+    "nt.links_card_subtitle": "Выбор внешней базы данных или сервиса для ссылки на тайтл в сообщениях о добавлении нового контента",
+    "nt.link_source_movie_label": "Кино",
+    "nt.link_source_movie_hint": "(фильмы)",
+    "nt.link_source_series_label": "Сериалы",
+    "nt.link_source_series_hint": "(ТВ-шоу)",
+    "nt.link_source_anime_label": "Аниме",
+    "nt.link_source_anime_hint": "(сериалы и фильмы аниме)",
+    "nt.link_source_none": "Отключено (без ссылки)",
     "show.delete_modal_title": "Удаление карточки",
     "show.delete_files_label": "Удалить карточку вместе с файлами",
     "show.delete_files_hint": "Файлы и директория медиафайлов будут безвозвратно удалены с диска.",
@@ -2508,6 +2517,15 @@ const TRANSLATIONS = {
     "nt.status_enabled": "Enabled",
     "nt.status_disabled": "Disabled",
     "nt.empty": "No notifications configured",
+    "nt.links_card_title": "Title Links in Notifications",
+    "nt.links_card_subtitle": "Select an external database or service for the title link in notifications when new content is added",
+    "nt.link_source_movie_label": "Movies",
+    "nt.link_source_movie_hint": "(movies)",
+    "nt.link_source_series_label": "Series",
+    "nt.link_source_series_hint": "(TV shows)",
+    "nt.link_source_anime_label": "Anime",
+    "nt.link_source_anime_hint": "(anime series and movies)",
+    "nt.link_source_none": "Disabled (no link)",
     "show.delete_modal_title": "Delete Title Card",
     "show.delete_files_label": "Delete card together with files",
     "show.delete_files_hint": "Media files and directory will be permanently removed from disk.",
@@ -18260,6 +18278,17 @@ function collectNotificationSettingsFromForm() {
 async function loadNotifications() {
   const tbody = document.querySelector("#nt-table tbody");
   try {
+    const s = CACHED_APP_SETTINGS || await api("/api/v1/settings");
+    if (s) {
+      const movieEl = document.getElementById("setting-notif-link-source-movie");
+      if (movieEl && s.notification_link_source_movie) movieEl.value = s.notification_link_source_movie;
+      const seriesEl = document.getElementById("setting-notif-link-source-series");
+      if (seriesEl && s.notification_link_source_series) seriesEl.value = s.notification_link_source_series;
+      const animeEl = document.getElementById("setting-notif-link-source-anime");
+      if (animeEl && s.notification_link_source_anime) animeEl.value = s.notification_link_source_anime;
+    }
+  } catch (_) {}
+  try {
     const items = await api("/api/v1/notifications");
     tbody.innerHTML = items.map(n => `
       <tr>
@@ -18283,6 +18312,28 @@ async function loadNotifications() {
       </tr>`).join("") || `<tr><td colspan="4" style="color:var(--text-muted)">—</td></tr>`;
     if (window.lucide) lucide.createIcons();
   } catch (e) {}
+}
+
+async function updateNotificationLinkSource(category, value) {
+  try {
+    const body = {};
+    if (category === "movie") body.notification_link_source_movie = value;
+    else if (category === "series") body.notification_link_source_series = value;
+    else if (category === "anime") body.notification_link_source_anime = value;
+
+    const res = await api("/api/v1/settings", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    if (CACHED_APP_SETTINGS && res) {
+      if (res.notification_link_source_movie) CACHED_APP_SETTINGS.notification_link_source_movie = res.notification_link_source_movie;
+      if (res.notification_link_source_series) CACHED_APP_SETTINGS.notification_link_source_series = res.notification_link_source_series;
+      if (res.notification_link_source_anime) CACHED_APP_SETTINGS.notification_link_source_anime = res.notification_link_source_anime;
+    }
+    toast(t("settings.toast_saved"));
+  } catch (e) {
+    toast((t("common.error") || "Ошибка") + ": " + (e.message || e), true);
+  }
 }
 
 async function toggleNotificationStatus(button, id, currentlyEnabled) {

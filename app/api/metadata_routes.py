@@ -960,11 +960,13 @@ async def import_show(
         db.refresh(show)
 
         from app.services.notifications import notify_all
+        from app.services.show_links import build_series_add_notification_message
         try:
+            msg = build_series_add_notification_message(db, show)
             await notify_all(
                 db,
                 "series_add",
-                f"🎬 В библиотеку добавлен тайтл: {show.title}{f' ({show.year})' if show.year else ''}",
+                msg,
             )
         except Exception:
             pass
