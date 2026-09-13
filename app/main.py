@@ -276,19 +276,22 @@ async def on_startup():
         try:
             from app.models.db import Episode, EpisodeStatus, Show
             now_dt = dt.datetime.utcnow()
-            unaired_updated = (
-                db.query(Episode)
-                .join(Show, Show.id == Episode.show_id)
-                .filter(
-                    Show.monitored == True,
-                    Episode.monitored == False,
-                    Episode.file_path.is_(None),
-                    Episode.status != EpisodeStatus.DOWNLOADED,
-                    Episode.status != EpisodeStatus.IGNORED,
-                    (Episode.status == EpisodeStatus.UNAIRED) | (Episode.air_date > now_dt),
+            monitored_shows = db.query(Show).filter(Show.monitored == True).all()
+            monitored_show_ids = [s.id for s in monitored_shows if getattr(s, "id", None) is not None]
+            unaired_updated = 0
+            if monitored_show_ids:
+                unaired_updated = (
+                    db.query(Episode)
+                    .filter(
+                        Episode.show_id.in_(monitored_show_ids),
+                        Episode.monitored == False,
+                        Episode.file_path.is_(None),
+                        Episode.status != EpisodeStatus.DOWNLOADED,
+                        Episode.status != EpisodeStatus.IGNORED,
+                        (Episode.status == EpisodeStatus.UNAIRED) | (Episode.air_date > now_dt),
+                    )
+                    .update({Episode.monitored: True, Episode.status: EpisodeStatus.UNAIRED}, synchronize_session=False)
                 )
-                .update({Episode.monitored: True, Episode.status: EpisodeStatus.UNAIRED}, synchronize_session=False)
-            )
             if unaired_updated > 0:
                 db.commit()
                 logger.info("Синхронизация: включен мониторинг для %d невышедших серий", unaired_updated)
@@ -582,12 +585,8 @@ async def on_startup():
 
             try:
                 from app.services.metadata import refresh_all_shows_metadata, refresh_all_collections_metadata
-                db_refresh = SessionLocal()
-                try:
-                    await refresh_all_shows_metadata(db_refresh, username="scheduler")
-                    await refresh_all_collections_metadata(db_refresh)
-                finally:
-                    db_refresh.close()
+                await refresh_all_shows_metadata(None, username="scheduler")
+                await refresh_all_collections_metadata(None)
             except Exception as exc:
                 logger.warning("Ошибка автоматического обновления метаданных библиотеки: %s", exc)
 

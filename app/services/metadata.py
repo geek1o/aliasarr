@@ -4067,7 +4067,7 @@ def should_refresh_show(show, db, force: bool = False) -> bool:
         return False
 
 
-async def refresh_all_shows_metadata(db, force: bool = False, username: str = "system") -> dict:
+async def refresh_all_shows_metadata(db=None, force: bool = False, username: str = "system") -> dict:
     """
     Фоновое регулярное обновление метаданных для библиотеки по алгоритму Sonarr/Radarr.
     Автоматически обновляет тайтлы, требующие синхронизации (невышедшие серии, TBA/Episode N, активные онгоинги).
@@ -4076,12 +4076,25 @@ async def refresh_all_shows_metadata(db, force: bool = False, username: str = "s
     from app.models.db import Show
     from app.services.audit_service import log_audit
     from app.services.task_manager import task_manager
+    from app.database import SessionLocal
 
-    all_shows = db.query(Show).all()
-    if not all_shows:
-        return {"total": 0, "updated": 0, "message": "Библиотека пуста"}
+    needs_close = False
+    init_db = db
+    if init_db is None:
+        init_db = SessionLocal()
+        needs_close = True
 
-    candidate_shows = [s for s in all_shows if should_refresh_show(s, db, force=force)]
+    try:
+        all_shows = init_db.query(Show).all()
+        if not all_shows:
+            return {"total": 0, "updated": 0, "message": "Библиотека пуста"}
+
+        candidate_shows = [s for s in all_shows if should_refresh_show(s, init_db, force=force)]
+    finally:
+        if needs_close:
+            init_db.close()
+            init_db = None
+
     if not candidate_shows:
         logger.debug("Все %d тайтлов имеют актуальные метаданные (Sonarr/Radarr rate-limit). Пропуск.", len(all_shows))
         return {"total": len(all_shows), "updated": 0, "message": "Все метаданные актуальны"}
@@ -4129,12 +4142,17 @@ async def refresh_all_shows_metadata(db, force: bool = False, username: str = "s
             summary_msg += f" (ошибок: {errors_count})"
 
         task_manager.finish_task(task.id, message=summary_msg)
-        log_audit(
-            db,
-            "metadata.refresh_all",
-            f"Автоматическое обновление метаданных библиотеки (Sonarr/Radarr): обновлено {updated_count} из {len(candidate_shows)} тайтлов",
-            username=username,
-        )
+        audit_db = db or SessionLocal()
+        try:
+            log_audit(
+                audit_db,
+                "metadata.refresh_all",
+                f"Автоматическое обновление метаданных библиотеки (Sonarr/Radarr): обновлено {updated_count} из {len(candidate_shows)} тайтлов",
+                username=username,
+            )
+        finally:
+            if audit_db is not db:
+                audit_db.close()
 
         return {"total": len(candidate_shows), "updated": updated_count, "errors": errors_count, "message": summary_msg}
     except Exception as exc:
@@ -4142,37 +4160,48 @@ async def refresh_all_shows_metadata(db, force: bool = False, username: str = "s
         raise
 
 
-async def refresh_all_collections_metadata(db, force: bool = False) -> dict:
+async def refresh_all_collections_metadata(db=None, force: bool = False) -> dict:
     """
     Фоновое регулярное обновление метаданных киноколлекций/саг из TMDb.
     Синхронизирует список частей франшизы, постеры и описания в БД.
     """
     from app.models.db import MovieCollection
     import json
+    from app.database import SessionLocal
 
-    colls = db.query(MovieCollection).filter(MovieCollection.tmdb_collection_id.isnot(None)).all()
-    if not colls:
-        return {"total": 0, "updated": 0}
+    needs_close = False
+    init_db = db
+    if init_db is None:
+        init_db = SessionLocal()
+        needs_close = True
 
-    now = dt.datetime.utcnow()
-    candidates = []
-    for c in colls:
-        if force or not getattr(c, "parts_cache", None) or not getattr(c, "last_metadata_refresh_at", None):
-            candidates.append(c)
-        elif (now - c.last_metadata_refresh_at).days >= 7:
-            candidates.append(c)
+    try:
+        colls = init_db.query(MovieCollection).filter(MovieCollection.tmdb_collection_id.isnot(None)).all()
+        if not colls:
+            return {"total": 0, "updated": 0}
 
-    if not candidates:
-        return {"total": len(colls), "updated": 0}
+        now = dt.datetime.utcnow()
+        candidates = []
+        for c in colls:
+            if force or not getattr(c, "parts_cache", None) or not getattr(c, "last_metadata_refresh_at", None):
+                candidates.append(c)
+            elif (now - c.last_metadata_refresh_at).days >= 7:
+                candidates.append(c)
 
-    from app.models.db import AppSettings
-    app_settings = db.query(AppSettings).filter(getattr(AppSettings, "id", None) == 1).first()
-    overview_lang = getattr(app_settings, "metadata_overview_language", "ru") if app_settings else "ru"
-    overview_lang = overview_lang or "ru"
+        if not candidates:
+            return {"total": len(colls), "updated": 0}
+
+        from app.models.db import AppSettings
+        app_settings = init_db.query(AppSettings).filter(getattr(AppSettings, "id", None) == 1).first()
+        overview_lang = getattr(app_settings, "metadata_overview_language", "ru") if app_settings else "ru"
+        overview_lang = overview_lang or "ru"
+    finally:
+        if needs_close:
+            init_db.close()
+            init_db = None
 
     client = RadarrClient(overview_language=overview_lang)
     updated = 0
-    from app.database import SessionLocal
     for coll in candidates:
         s_db = SessionLocal()
         try:

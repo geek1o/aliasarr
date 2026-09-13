@@ -1709,11 +1709,10 @@ async def trigger_refresh_all_metadata(
         return {"success": False, "message": "Обновление метаданных уже выполняется"}
 
     async def _runner():
-        async_db = SessionLocal()
         try:
-            await refresh_all_shows_metadata(async_db, force=True, username=current_user.username)
-        finally:
-            async_db.close()
+            await refresh_all_shows_metadata(None, force=True, username=current_user.username)
+        except Exception as exc:
+            logger.warning("Ошибка ручного фонового обновления метаданных: %s", exc)
 
     background_tasks.add_task(_runner)
     return {"success": True, "message": "Запущено фоновое обновление метаданных библиотеки"}

@@ -54,14 +54,6 @@ if is_sqlite:
             cursor.close()
         except Exception:
             pass
-
-    @event.listens_for(engine, "begin")
-    def do_begin(conn):
-        # Использование BEGIN IMMEDIATE предотвращает deadlocks при конкурентных транзакциях в SQLite
-        try:
-            conn.exec_driver_sql("BEGIN IMMEDIATE")
-        except Exception:
-            pass
 else:
     engine = create_engine(
         DATABASE_URL,
