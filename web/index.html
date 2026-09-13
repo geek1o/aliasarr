@@ -2081,6 +2081,36 @@
           </div>
         </div>
 
+        <!-- Экспериментальные настройки и альфа-флаги -->
+        <div class="settings-section-card" id="card-experimental-settings">
+          <div class="settings-card-header">
+            <div class="settings-card-header-left">
+              <div class="settings-card-icon-badge">
+                <i data-lucide="flask-conical"></i>
+              </div>
+              <div class="settings-card-title-wrap">
+                <h3 data-i18n="settings.experimental_title">Экспериментальные настройки и альфа-флаги</h3>
+                <p class="subtitle" data-i18n="settings.experimental_subtitle">Дополнительные и тестируемые возможности системы, скрытые по умолчанию во избежание случайных изменений</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-grid-modern">
+            <div class="settings-field-group" style="grid-column: 1 / -1;">
+              <label class="switch-toggle">
+                <input id="setting-enable-remap-button" type="checkbox" onchange="toggleExperimentalRemap(this.checked, this)">
+                <span class="switch-slider"></span>
+                <span class="switch-title" data-i18n="settings.enable_remap_button_title">Отображать кнопку «Сменить привязку»</span>
+                <span class="switch-desc" data-i18n="settings.enable_remap_button_desc">Показывать кнопку ручной смены привязки метаданных в карточке тайтла (по умолчанию скрыта для безопасности)</span>
+              </label>
+            </div>
+
+            <div style="grid-column: 1 / -1; margin-top: 4px;">
+              <button class="btn btn-primary" onclick="saveExperimentalSettings(this)" data-i18n="common.save">Сохранить</button>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- ПАНЕЛЬ 2: БЕЗОПАСНОСТЬ -->

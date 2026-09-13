@@ -697,6 +697,10 @@ const TRANSLATIONS = {
     "settings.tracker_check_interval_hint": "(минуты)",
     "settings.unaired_check_interval": "Интервал активации премьер (Unaired → Wanted)",
     "settings.unaired_check_interval_hint": "(минуты)",
+    "settings.experimental_title": "Экспериментальные настройки и альфа-флаги",
+    "settings.experimental_subtitle": "Дополнительные и тестируемые возможности системы, скрытые по умолчанию во избежание случайных изменений",
+    "settings.enable_remap_button_title": "Отображать кнопку «Сменить привязку»",
+    "settings.enable_remap_button_desc": "Показывать кнопку ручной смены привязки метаданных в карточке тайтла (по умолчанию скрыта для безопасности)",
     "settings.security_title": "Безопасность и авторизация",
     "settings.security_hint": "Вход по логину и паролю защищает веб-интерфейс. Внешние API-запросы продолжают работать по X-Api-Key заголовку.",
     "settings.require_login": "Требовать вход по логину и паролю",
@@ -2066,6 +2070,10 @@ const TRANSLATIONS = {
     "settings.tracker_check_interval_hint": "(minutes)",
     "settings.unaired_check_interval": "Unaired → Wanted activation interval",
     "settings.unaired_check_interval_hint": "(minutes)",
+    "settings.experimental_title": "Experimental Settings & Alpha Flags",
+    "settings.experimental_subtitle": "Additional and preview system capabilities, hidden by default to prevent accidental misconfigurations",
+    "settings.enable_remap_button_title": "Show 'Remap Metadata' button",
+    "settings.enable_remap_button_desc": "Display manual metadata remapping action in title details card (hidden by default for safety)",
     "settings.security_title": "Security & Authentication",
     "settings.security_hint": "Username and password authentication secures the web interface. External API calls continue via X-Api-Key.",
     "settings.require_login": "Require username and password login",
@@ -7892,9 +7900,10 @@ async function refreshShowModal() {
           <i data-lucide="shield-check" class="ico-sm"></i> <span>${CURRENT_LANG === 'en' ? 'Permissions' : 'Права доступа'}</span>
         </button>
         ` : ""}
+        ${(Boolean(CACHED_APP_SETTINGS?.enable_remap_button ?? (localStorage.getItem("aliasarr_enable_remap_button") === "true"))) ? `
         <button type="button" class="btn btn-secondary btn-small" onclick="openShowRemapModal(${show.id})" title="${t("show.remap_tooltip")}">
           <i data-lucide="link-2" class="ico-sm"></i> <span>${t("show.btn_remap")}</span>
-        </button>
+        </button>` : ""}
         ${show.content_type !== "movie" ? `
         <button type="button" class="btn btn-secondary btn-small" onclick="openSeasonSplitModal(${show.id})" title="${CURRENT_LANG === 'en' ? 'Season Splitter for split-cour / multi-part anime seasons' : 'Разделитель сезона для сплит-куров и составных сезонов'}">
           <i data-lucide="split" class="ico-sm"></i> <span>${CURRENT_LANG === 'en' ? 'Season Splitter' : 'Разделитель сезона'}</span>
@@ -14230,6 +14239,11 @@ async function loadGeneralSettings() {
     const unairedEl = document.getElementById("setting-unaired-interval");
     if (unairedEl) unairedEl.value = s.unaired_check_interval_minutes ?? 10;
 
+    const remapEl = document.getElementById("setting-enable-remap-button");
+    const remapEnabled = Boolean(s.enable_remap_button);
+    if (remapEl) remapEl.checked = remapEnabled;
+    localStorage.setItem("aliasarr_enable_remap_button", remapEnabled ? "true" : "false");
+
     applyTheme(s.theme || "dark");
     applyLanguage(s.language || "ru");
     applyScrollbarMode(s.scrollbar_mode || localStorage.getItem("aliasarr_scrollbar") || "autohide");
@@ -14364,10 +14378,46 @@ async function saveAutoSearchSettings(btn) {
   });
 }
 
+async function toggleExperimentalRemap(checked, inputEl) {
+  try {
+    const val = Boolean(checked);
+    await api("/api/v1/settings", {
+      method: "PUT",
+      body: JSON.stringify({ enable_remap_button: val }),
+    });
+    if (CACHED_APP_SETTINGS) {
+      CACHED_APP_SETTINGS.enable_remap_button = val;
+    }
+    localStorage.setItem("aliasarr_enable_remap_button", val ? "true" : "false");
+    toast(t("settings.toast_saved"));
+  } catch (e) {
+    if (inputEl) inputEl.checked = !checked;
+    toast((CURRENT_LANG === "en" ? "Error: " : "Ошибка: ") + e.message, true);
+  }
+}
+
+async function saveExperimentalSettings(btn) {
+  await withLoading(btn, async () => {
+    try {
+      const val = Boolean(document.getElementById("setting-enable-remap-button")?.checked);
+      await api("/api/v1/settings", {
+        method: "PUT",
+        body: JSON.stringify({ enable_remap_button: val }),
+      });
+      if (CACHED_APP_SETTINGS) {
+        CACHED_APP_SETTINGS.enable_remap_button = val;
+      }
+      localStorage.setItem("aliasarr_enable_remap_button", val ? "true" : "false");
+      toast(t("settings.toast_saved"));
+    } catch (e) { toast("Ошибка: " + e.message, true); }
+  });
+}
+
 async function saveGeneralSettings() {
   await saveInterfaceSettings();
   await saveFolderSettings();
   await saveAutoSearchSettings();
+  await saveExperimentalSettings();
 }
 
 async function regenerateApiKey(button) {

@@ -81,6 +81,7 @@ class SettingsOut(BaseModel):
     backup_interval_days: int = 7
     backup_retention_count: int = 10
     backup_default_type: str = "full"
+    enable_remap_button: bool = False
 
 
 class SettingsUpdate(BaseModel):
@@ -144,6 +145,7 @@ class SettingsUpdate(BaseModel):
     backup_interval_days: Optional[int] = None
     backup_retention_count: Optional[int] = None
     backup_default_type: Optional[str] = None
+    enable_remap_button: Optional[bool] = None
 
 
 def _to_settings_out(settings, is_owner: bool = False) -> SettingsOut:
@@ -200,6 +202,7 @@ def _to_settings_out(settings, is_owner: bool = False) -> SettingsOut:
         backup_interval_days=getattr(settings, "backup_interval_days", 7) or 7,
         backup_retention_count=getattr(settings, "backup_retention_count", 10) or 10,
         backup_default_type=getattr(settings, "backup_default_type", "full") or "full",
+        enable_remap_button=bool(getattr(settings, "enable_remap_button", False)),
     )
 
 
@@ -402,6 +405,9 @@ def update_settings(
         if payload.session_timeout_minutes < 5:
             raise HTTPException(400, "Таймаут сессии не может быть меньше 5 минут")
         settings.session_timeout_minutes = payload.session_timeout_minutes
+
+    if payload.enable_remap_button is not None:
+        settings.enable_remap_button = payload.enable_remap_button
 
     db.add(settings)
     db.commit()

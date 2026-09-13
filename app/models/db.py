@@ -568,6 +568,9 @@ class AppSettings(Base):
     # Разовая миграция: автоматическое снятие отслеживания с уже скачанных серий
     unmonitor_downloaded_migrated: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Экспериментальные настройки и альфа-флаги
+    enable_remap_button: Mapped[bool] = mapped_column(Boolean, default=False)
+
 
 class User(Base):
     """Модель пользователя с поддержкой ролей и прав доступа (RBAC)."""
