@@ -190,9 +190,9 @@ async def create_show(
     settings = get_or_create_settings(db)
     qp_id = payload.quality_profile_id
     if qp_id is None:
-        if payload.content_type == ContentType.MOVIE:
+        if payload.content_type == "movie":
             qp_id = getattr(settings, "default_quality_profile_movie_id", None)
-        elif payload.content_type == ContentType.ANIME:
+        elif payload.content_type == "anime":
             qp_id = getattr(settings, "default_quality_profile_anime_id", None)
         else:
             qp_id = getattr(settings, "default_quality_profile_series_id", None)
@@ -916,6 +916,10 @@ def add_alias(
         language=payload.language,
         source=payload.source,
         priority=priority,
+        season_number=payload.season_number,
+        episode_start=payload.episode_start,
+        episode_end=payload.episode_end,
+        episode_offset=payload.episode_offset,
     )
     db.add(alias)
     db.commit()
@@ -947,6 +951,9 @@ def update_alias(
         alias.language = dumped["language"]
     if "priority" in dumped:
         alias.priority = dumped["priority"]
+    for field in ("season_number", "episode_start", "episode_end", "episode_offset"):
+        if field in dumped:
+            setattr(alias, field, dumped[field])
     db.add(alias)
     db.commit()
     db.refresh(alias)
