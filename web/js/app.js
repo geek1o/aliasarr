@@ -899,7 +899,19 @@ const TRANSLATIONS = {
     "qp.col_name": "Название",
     "qp.col_allowed": "Разрешено",
     "qp.col_cutoff": "Порог (Cutoff)",
+    "qp.col_voiceover": "Озвучка / Regex",
     "qp.empty": "Профили не созданы",
+    "qp.voiceover_preset_label": "Готовая озвучка / студия (Voiceover Preset)",
+    "qp.voiceover_preset_none": "-- Не выбрано (ручной ввод или без фильтра) --",
+    "qp.group_series_movies": "Сериалы и Кино",
+    "qp.group_anime": "Аниме",
+    "qp.regex_pattern": "Regex шаблон названия (Release Title Regex)",
+    "qp.regex_hint": "Регулярное выражение для обязательной фильтрации релизов (заполняется автоматически при выборе озвучки из меню выше или вручную). Захватываются только релизы, удовлетворяющие шаблону.",
+    "qp.regex_test_label": "Инспектор проверки названия релиза (Test Regex):",
+    "qp.regex_test_match": "Совпадает",
+    "qp.regex_test_nomatch": "Не совпадает",
+    "qp.regex_test_empty": "—",
+    "qp.custom_regex_badge": "Свой Regex",
     "cf.title": "Форматы качества",
     "cf.subtitle": "Правила распознавания и приоритезации релизов (HDR, TrueHD, Proper, Preferred Groups)",
     "cf.add_btn": "Добавить формат",
@@ -2291,7 +2303,19 @@ const TRANSLATIONS = {
     "qp.col_name": "Name",
     "qp.col_allowed": "Allowed",
     "qp.col_cutoff": "Cutoff",
+    "qp.col_voiceover": "Voiceover / Regex",
     "qp.empty": "No quality profiles created",
+    "qp.voiceover_preset_label": "Voiceover / Studio Preset",
+    "qp.voiceover_preset_none": "-- None selected (manual input or no filter) --",
+    "qp.group_series_movies": "TV Series & Movies",
+    "qp.group_anime": "Anime",
+    "qp.regex_pattern": "Release Title Regex",
+    "qp.regex_hint": "Regular expression for mandatory release filtering (automatically populated when selecting a voiceover preset above, or entered manually). Only releases matching this pattern will be captured.",
+    "qp.regex_test_label": "Release title match inspector (Test Regex):",
+    "qp.regex_test_match": "Matches",
+    "qp.regex_test_nomatch": "No match",
+    "qp.regex_test_empty": "—",
+    "qp.custom_regex_badge": "Custom Regex",
     "cf.title": "Quality Formats",
     "cf.subtitle": "Rules for recognizing and prioritizing releases (HDR, TrueHD, Proper, Preferred Groups)",
     "cf.add_btn": "Add Format",
@@ -16552,6 +16576,139 @@ async function saveDefaultQualityProfiles() {
   }
 }
 
+const QP_VOICEOVER_PRESETS = [
+  { id: "lostfilm", name: "LostFilm", regex: "\\b(lostfilm|lost[-_. ]?film|лостфильм)\\b" },
+  { id: "kubik_v_kube", name: "Кубик в кубе", regex: "\\b(kubik[-_. ]?v[-_. ]?kube|kubik|кубик[-_. ]*в[-_. ]*кубе|квк)\\b" },
+  { id: "newstudio", name: "NewStudio", regex: "\\b(newstudio|new[-_. ]?studio|ньюстудио|ньюстудия)\\b" },
+  { id: "alexfilm", name: "AlexFilm", regex: "\\b(alexfilm|alex[-_. ]?film|алексфильм)\\b" },
+  { id: "baibako", name: "BaibaKo", regex: "\\b(baibako(?:tv)?|байбако)\\b" },
+  { id: "kuraj_bambey", name: "Кураж-Бамбей", regex: "\\b(kuraj[-_. ]?bambey|кураж[-_. ]?бамбей|kuraj)\\b" },
+  { id: "amedia", name: "Amedia / Амедиа", regex: "\\b(amedia(?:teka)?|амедиа(?:тека)?)\\b" },
+  { id: "jaskier", name: "Jaskier", regex: "\\b(jaskier|яскьер)\\b" },
+  { id: "hdrezka_studio", name: "HDrezka Studio", regex: "\\b(hdrezka|hd[-_. ]?rezka|rezka|хдрезка|резка)\\b" },
+  { id: "tvshows", name: "TVShows", regex: "\\b(tvshows|tv[-_. ]?shows|твшоуз)\\b" },
+  { id: "viruseproject", name: "ViruseProject", regex: "\\b(viruse[-_. ]?project|вирус[-_. ]?проджект)\\b" },
+  { id: "goblin", name: "Гоблин", regex: "\\b(goblin|гоблин|пучков|дмитрий[-_. ]?пучков)\\b" },
+  { id: "coldfilm", name: "ColdFilm", regex: "\\b(coldfilm|cold[-_. ]?film|колдфильм)\\b" },
+  { id: "newcomers", name: "NewComers", regex: "\\b(newcomers|new[-_. ]?comers|ньюкамерс)\\b" },
+  { id: "anilibria", name: "AniLibria", regex: "\\b(anilibria|анилибрия)\\b" },
+  { id: "anidub", name: "AniDUB", regex: "\\b(anidub|анидаб)\\b" },
+  { id: "shiza_project", name: "SHIZA Project", regex: "\\b(shiza[-_. ]?project|shiza|шиза[-_. ]?проджект|шиза)\\b" },
+  { id: "studio_band", name: "Студийная банда", regex: "\\b(studio[-_. ]?band|студийная[-_. ]?банда)\\b" },
+  { id: "cuba77", name: "Cuba77", regex: "\\b(cuba77|куба77)\\b" },
+  { id: "animevost", name: "AnimeVost", regex: "\\b(animevost|anime[-_. ]?vost|анимевост)\\b" },
+  { id: "anistar", name: "AniStar", regex: "\\b(anistar|ani[-_. ]?star|анистар)\\b" },
+  { id: "animedia", name: "AniMedia", regex: "\\b(animedia|ani[-_. ]?media|анимедиа)\\b" },
+  { id: "anilibria_subtitles", name: "AniLibria.Subtitles", regex: "\\b(anilibria[-_. ]?(?:subtitles|subs|субтитры)|анилибрия[-_. ]?(?:субтитры|сабы))\\b" },
+  { id: "anisound", name: "AniSound", regex: "\\b(anisound|ani[-_. ]?sound|анисаунд)\\b" },
+  { id: "aniplay", name: "AniPlay", regex: "\\b(aniplay|ani[-_. ]?play|аниплей)\\b" },
+  { id: "animaunt", name: "AniMaunt", regex: "\\b(animaunt|ani[-_. ]?maunt|анимаунт)\\b" },
+  { id: "ancord", name: "Ancord", regex: "\\b(ancord|анкорд)\\b" },
+  { id: "persona99", name: "Persona99", regex: "\\b(persona[-_. ]?99|персона[-_. ]?99)\\b" },
+  { id: "eladiel", name: "Eladiel", regex: "\\b(eladiel|эладиэль)\\b" },
+  { id: "jam", name: "JAM", regex: "\\b(jam(?:[-_. ]?club)?|джем)\\b" },
+  { id: "animur", name: "AniMur", regex: "\\b(animur|ani[-_. ]?mur|анимур)\\b" },
+  { id: "anisky", name: "AniSky", regex: "\\b(anisky|ani[-_. ]?sky|анискай)\\b" },
+  { id: "dream_cast", name: "Dream Cast", regex: "\\b(dream[-_. ]?cast|дрим[-_. ]?каст)\\b" },
+  { id: "anything_group", name: "Anything Group", regex: "\\b(anything[-_. ]?group|энисинг[-_. ]?групп)\\b" },
+  { id: "aos_team", name: "AOS Team", regex: "\\b(aos[-_. ]?team|aos)\\b" },
+  { id: "anifilm", name: "AniFilm", regex: "\\b(anifilm|ani[-_. ]?film|анифильм)\\b" },
+  { id: "sovetromantica", name: "SovetRomantica", regex: "\\b(sovet[-_. ]?romantica|совет[-_. ]?романтика)\\b" },
+  { id: "onibaku", name: "Onibaku", regex: "\\b(onibaku(?:[-_. ]?group)?|онибаку)\\b" },
+  { id: "anime_heaven", name: "Anime Heaven", regex: "\\b(anime[-_. ]?heaven|аниме[-_. ]?х[еэ]вен)\\b" },
+  { id: "animato", name: "AniMato", regex: "\\b(animato|ani[-_. ]?mato|анимато)\\b" },
+  { id: "aniversal", name: "AniVersal", regex: "\\b(aniversal|ani[-_. ]?versal|аниверсал)\\b" },
+  { id: "reanimedia", name: "Reanimedia", regex: "\\b(reanimedia|реанимедиа)\\b" },
+  { id: "mc_entertainment", name: "MC Entertainment", regex: "\\b(mc[-_. ]?entertainment|mcent|эмси[-_. ]?энтертейнмент)\\b" },
+  { id: "crunchyroll", name: "Crunchyroll", regex: "\\b(crunchyroll|кранчиролл)\\b" },
+];
+
+function findVoiceoverPresetByRegex(regexStr) {
+  if (!regexStr) return null;
+  const clean = regexStr.trim();
+  return QP_VOICEOVER_PRESETS.find(p => p.regex === clean || p.regex.replace(/\s+/g, "") === clean.replace(/\s+/g, "")) || null;
+}
+
+function onQualityProfileVoiceoverPresetChange(selectedName) {
+  const preset = QP_VOICEOVER_PRESETS.find(p => p.name === selectedName);
+  const regexInput = document.getElementById("qp-regex");
+  if (!regexInput) return;
+  if (preset) {
+    regexInput.value = preset.regex;
+  } else if (!selectedName) {
+    regexInput.value = "";
+  }
+  testQualityProfileRegex();
+}
+
+function onQualityProfileRegexInput() {
+  const regexInput = document.getElementById("qp-regex");
+  const presetSelect = document.getElementById("qp-voiceover-preset");
+  if (!regexInput || !presetSelect) return;
+  const val = regexInput.value.trim();
+  const matched = findVoiceoverPresetByRegex(val);
+  presetSelect.value = matched ? matched.name : "";
+  testQualityProfileRegex();
+}
+
+function clearQualityProfileRegex() {
+  const regexInput = document.getElementById("qp-regex");
+  const presetSelect = document.getElementById("qp-voiceover-preset");
+  if (regexInput) regexInput.value = "";
+  if (presetSelect) presetSelect.value = "";
+  testQualityProfileRegex();
+}
+
+function testQualityProfileRegex() {
+  const regexInput = document.getElementById("qp-regex");
+  const testInput = document.getElementById("qp-regex-test-input");
+  const badge = document.getElementById("qp-regex-test-badge");
+  if (!regexInput || !badge) return;
+
+  const pat = (regexInput.value || "").trim();
+  const text = (testInput?.value || "").trim();
+
+  if (!pat) {
+    badge.className = "badge badge-secondary";
+    badge.style.background = "";
+    badge.style.color = "";
+    badge.style.borderColor = "";
+    badge.textContent = "—";
+    return;
+  }
+  if (!text) {
+    badge.className = "badge badge-secondary";
+    badge.style.background = "";
+    badge.style.color = "";
+    badge.style.borderColor = "";
+    badge.textContent = t("qp.regex_test_empty");
+    return;
+  }
+
+  try {
+    const rx = new RegExp(pat, "i");
+    if (rx.test(text)) {
+      badge.className = "badge badge-success";
+      badge.style.background = "rgba(16,185,129,0.2)";
+      badge.style.color = "var(--success)";
+      badge.style.borderColor = "rgba(16,185,129,0.3)";
+      badge.textContent = t("qp.regex_test_match");
+    } else {
+      badge.className = "badge badge-danger";
+      badge.style.background = "rgba(239,68,68,0.2)";
+      badge.style.color = "var(--danger)";
+      badge.style.borderColor = "rgba(239,68,68,0.3)";
+      badge.textContent = t("qp.regex_test_nomatch");
+    }
+  } catch (err) {
+    badge.className = "badge badge-danger";
+    badge.style.background = "rgba(239,68,68,0.2)";
+    badge.style.color = "var(--danger)";
+    badge.style.borderColor = "rgba(239,68,68,0.3)";
+    badge.textContent = "Regex Error";
+  }
+}
+
 async function loadQualityProfiles() {
   renderQualityChips();
   const tbody = document.querySelector("#qp-table tbody");
@@ -16564,7 +16721,16 @@ async function loadQualityProfiles() {
     CACHED_APP_SETTINGS = settings;
     populateDefaultQualityProfileSelects(settings, items);
 
-    tbody.innerHTML = (items || []).map(q => `
+    tbody.innerHTML = (items || []).map(q => {
+      const matchedVo = findVoiceoverPresetByRegex(q.release_title_regex);
+      let voBadge = `<span class="hint">—</span>`;
+      if (matchedVo) {
+        voBadge = `<span class="badge" style="background:rgba(99,102,241,0.15); color:var(--accent); font-weight:600; border:1px solid rgba(99,102,241,0.25);"><i data-lucide="mic" class="ico-xs" style="vertical-align:middle; margin-right:4px;"></i>${escapeHtml(matchedVo.name)}</span>`;
+      } else if (q.release_title_regex) {
+        voBadge = `<span class="badge badge-secondary mono" title="${escapeHtml(q.release_title_regex)}" style="max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; vertical-align:middle;">${escapeHtml(q.release_title_regex)}</span>`;
+      }
+
+      return `
       <tr>
         <td><strong>${escapeHtml(q.name)}</strong></td>
         <td class="mono">${(q.allowed_qualities || []).join(", ") || t("common.any_quality")}</td>
@@ -16572,13 +16738,15 @@ async function loadQualityProfiles() {
           ${q.cutoff_quality ? `<span class="badge badge-quality">${escapeHtml(q.cutoff_quality)}</span>` : `<span class="hint">—</span>`}
           ${q.cutoff_score > 0 ? `<span class="badge badge-cf-score" style="margin-left:4px;">Score: ${q.cutoff_score}</span>` : ""}
         </td>
+        <td>${voBadge}</td>
         <td>
           <div class="row-actions">
             <button class="btn-icon-only" title="${t("common.edit")}" onclick='editQualityProfile(${JSON.stringify(q).replace(/'/g, "&apos;")})'><i data-lucide="edit-2" class="ico-sm"></i></button>
             <button class="btn-icon-only danger" title="${t("common.delete")}" onclick="removeQualityProfile(${q.id})"><i data-lucide="trash-2" class="ico-sm"></i></button>
           </div>
         </td>
-      </tr>`).join("") || `<tr><td colspan="4" style="color:var(--text-muted)">—</td></tr>`;
+      </tr>`;
+    }).join("") || `<tr><td colspan="5" style="color:var(--text-muted)">—</td></tr>`;
     if (window.lucide) lucide.createIcons();
   } catch (e) {}
 
@@ -16599,6 +16767,15 @@ function editQualityProfile(q) {
   const upgradeChk = document.getElementById("qp-upgrade-allowed");
   if (upgradeChk) upgradeChk.checked = q.upgrade_allowed !== false;
 
+  const regexInput = document.getElementById("qp-regex");
+  if (regexInput) regexInput.value = q.release_title_regex || "";
+  const presetSelect = document.getElementById("qp-voiceover-preset");
+  if (presetSelect) {
+    const matched = findVoiceoverPresetByRegex(q.release_title_regex);
+    presetSelect.value = matched ? matched.name : "";
+  }
+  testQualityProfileRegex();
+
   document.getElementById("qp-submit-btn").textContent = t("common.save");
   document.getElementById("qp-cancel-btn").style.display = "inline-block";
 }
@@ -16617,6 +16794,14 @@ function resetQualityProfileForm() {
   const upgradeChk = document.getElementById("qp-upgrade-allowed");
   if (upgradeChk) upgradeChk.checked = true;
 
+  const regexInput = document.getElementById("qp-regex");
+  if (regexInput) regexInput.value = "";
+  const presetSelect = document.getElementById("qp-voiceover-preset");
+  if (presetSelect) presetSelect.value = "";
+  const testInput = document.getElementById("qp-regex-test-input");
+  if (testInput) testInput.value = "";
+  testQualityProfileRegex();
+
   document.getElementById("qp-submit-btn").textContent = t("common.add");
   document.getElementById("qp-cancel-btn").style.display = "none";
 }
@@ -16628,6 +16813,16 @@ async function submitQualityProfile() {
   const cutoffQuality = document.getElementById("qp-cutoff-quality")?.value || null;
   const cutoffScore = parseInt(document.getElementById("qp-cutoff-score")?.value || "0", 10) || 0;
   const upgradeAllowed = document.getElementById("qp-upgrade-allowed")?.checked ?? true;
+  const releaseTitleRegex = document.getElementById("qp-regex")?.value?.trim() || null;
+
+  if (releaseTitleRegex) {
+    try {
+      new RegExp(releaseTitleRegex, "i");
+    } catch (e) {
+      toast((CURRENT_LANG === "en" ? "Invalid regular expression: " : "Некорректное регулярное выражение: ") + e.message, true);
+      return;
+    }
+  }
 
   const sortedQualities = Array.from(SELECTED_QUALITIES).sort((a, b) => {
     const idxA = QUALITY_OPTIONS.indexOf(a);
@@ -16641,6 +16836,7 @@ async function submitQualityProfile() {
     cutoff_quality: cutoffQuality,
     cutoff_score: cutoffScore,
     upgrade_allowed: upgradeAllowed,
+    release_title_regex: releaseTitleRegex,
   };
 
   try {

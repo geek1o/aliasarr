@@ -12,8 +12,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, List, Optional
+import logging
 import re
+from typing import Any, List, Optional
+
+logger = logging.getLogger("aliasarr.decision_engine")
 
 try:
     from sqlalchemy.orm import Session
@@ -311,6 +314,17 @@ class DecisionEngine:
         if quality_profile:
             if not is_allowed(quality, quality_profile.allowed_qualities):
                 rejections.append(f"Качество «{quality.name}» не разрешено в профиле «{quality_profile.name}»")
+
+            # 5.1. Проверка Regex шаблона названия (ReleaseTitleRegexSpecification)
+            regex_val = getattr(quality_profile, "release_title_regex", None)
+            if isinstance(regex_val, str) and regex_val.strip():
+                pat = regex_val.strip()
+                try:
+                    if not re.search(pat, title, re.IGNORECASE):
+                        rejections.append(f"Название не соответствует фильтру Regex профиля «{quality_profile.name}» (шаблон: {pat})")
+                except Exception as ex:
+                    logger.warning("Ошибка проверки Regex '%s' профиля '%s': %s", pat, quality_profile.name, ex)
+                    rejections.append(f"Ошибка проверки Regex профиля качества: {ex}")
 
             # 6. Проверка размера файла (AcceptableSizeSpecification)
             size_mb = size_bytes / (1024 * 1024) if size_bytes > 0 else 0

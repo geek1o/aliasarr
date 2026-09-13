@@ -330,6 +330,7 @@ class QualityProfile(Base):
     cutoff_quality: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     cutoff_score: Mapped[int] = mapped_column(Integer, default=0)
     format_items: Mapped[list] = mapped_column(JSON, default=list)  # [{"format_id": 1, "name": "HDR10+", "score": 100}]
+    release_title_regex: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True, default=None)
 
 
 class Indexer(Base):

@@ -307,13 +307,23 @@ def list_quality_profiles(db: Session = Depends(get_db), current_user: User = De
     return db.query(QualityProfile).all()
 
 
+@router.get("/quality-profiles/voiceovers")
+def list_quality_profile_voiceovers(current_user: User = Depends(get_current_user)):
+    """Возвращает структурированный каталог всех 44 заготовленных пресетов озвучек и студий."""
+    from app.constants.voiceover_presets import VOICEOVER_PRESETS
+    return VOICEOVER_PRESETS
+
+
 @router.post("/quality-profiles", response_model=QualityProfileOut, status_code=201)
 def create_quality_profile(
     payload: QualityProfileCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("manage_settings")),
 ):
-    profile = QualityProfile(**payload.model_dump())
+    data = payload.model_dump()
+    if data.get("release_title_regex"):
+        data["release_title_regex"] = data["release_title_regex"].strip() or None
+    profile = QualityProfile(**data)
     db.add(profile)
     db.commit()
     db.refresh(profile)
@@ -353,7 +363,13 @@ def update_quality_profile(
     profile = db.get(QualityProfile, profile_id)
     if not profile:
         raise HTTPException(404, "Profile not found")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    dump = payload.model_dump(exclude_unset=True)
+    if "release_title_regex" in dump:
+        if dump["release_title_regex"]:
+            dump["release_title_regex"] = dump["release_title_regex"].strip() or None
+        else:
+            dump["release_title_regex"] = None
+    for field, value in dump.items():
         setattr(profile, field, value)
     db.add(profile)
     db.commit()

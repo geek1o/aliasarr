@@ -2762,6 +2762,80 @@
               </label>
             </div>
 
+            <div class="settings-field-group" style="grid-column: 1 / -1;">
+              <label class="settings-field-label" data-i18n="qp.voiceover_preset_label">Готовая озвучка / студия (Voiceover Preset)</label>
+              <select id="qp-voiceover-preset" class="input" onchange="onQualityProfileVoiceoverPresetChange(this.value)">
+                <option value="" data-i18n="qp.voiceover_preset_none">-- Не выбрано (ручной ввод или без фильтра) --</option>
+                <optgroup label="Сериалы и Кино" data-i18n-label="qp.group_series_movies">
+                  <option value="LostFilm">LostFilm</option>
+                  <option value="Кубик в кубе">Кубик в кубе</option>
+                  <option value="NewStudio">NewStudio</option>
+                  <option value="AlexFilm">AlexFilm</option>
+                  <option value="BaibaKo">BaibaKo</option>
+                  <option value="Кураж-Бамбей">Кураж-Бамбей</option>
+                  <option value="Amedia / Амедиа">Amedia / Амедиа</option>
+                  <option value="Jaskier">Jaskier</option>
+                  <option value="HDrezka Studio">HDrezka Studio</option>
+                  <option value="TVShows">TVShows</option>
+                  <option value="ViruseProject">ViruseProject</option>
+                  <option value="Гоблин">Гоблин</option>
+                  <option value="ColdFilm">ColdFilm</option>
+                  <option value="NewComers">NewComers</option>
+                </optgroup>
+                <optgroup label="Аниме" data-i18n-label="qp.group_anime">
+                  <option value="AniLibria">AniLibria</option>
+                  <option value="AniDUB">AniDUB</option>
+                  <option value="SHIZA Project">SHIZA Project</option>
+                  <option value="Студийная банда">Студийная банда</option>
+                  <option value="Cuba77">Cuba77</option>
+                  <option value="AnimeVost">AnimeVost</option>
+                  <option value="AniStar">AniStar</option>
+                  <option value="AniMedia">AniMedia</option>
+                  <option value="AniLibria.Subtitles">AniLibria.Subtitles</option>
+                  <option value="AniSound">AniSound</option>
+                  <option value="AniPlay">AniPlay</option>
+                  <option value="AniMaunt">AniMaunt</option>
+                  <option value="Ancord">Ancord</option>
+                  <option value="Persona99">Persona99</option>
+                  <option value="Eladiel">Eladiel</option>
+                  <option value="JAM">JAM</option>
+                  <option value="AniMur">AniMur</option>
+                  <option value="AniSky">AniSky</option>
+                  <option value="Dream Cast">Dream Cast</option>
+                  <option value="Anything Group">Anything Group</option>
+                  <option value="AOS Team">AOS Team</option>
+                  <option value="AniFilm">AniFilm</option>
+                  <option value="SovetRomantica">SovetRomantica</option>
+                  <option value="Onibaku">Onibaku</option>
+                  <option value="Anime Heaven">Anime Heaven</option>
+                  <option value="AniMato">AniMato</option>
+                  <option value="AniVersal">AniVersal</option>
+                  <option value="Reanimedia">Reanimedia</option>
+                  <option value="MC Entertainment">MC Entertainment</option>
+                  <option value="Crunchyroll">Crunchyroll</option>
+                </optgroup>
+              </select>
+            </div>
+
+            <div class="settings-field-group" style="grid-column: 1 / -1;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <label class="settings-field-label" style="margin-bottom:0;" data-i18n="qp.regex_pattern">Regex шаблон названия (Release Title Regex)</label>
+                <button type="button" class="btn-link" style="font-size:12px; color:var(--accent); text-decoration:underline; cursor:pointer; background:none; border:none; padding:0;" onclick="clearQualityProfileRegex()" data-i18n="common.clear">Очистить</button>
+              </div>
+              <input id="qp-regex" class="input mono" placeholder="\b(hdrezka|rezka|хдрезка|резка)\b" oninput="onQualityProfileRegexInput()">
+              <span class="hint" style="margin-top:4px; display:block; font-size:12px; color:var(--text-muted);" data-i18n="qp.regex_hint">
+                Регулярное выражение для обязательной фильтрации релизов (заполняется автоматически при выборе озвучки из меню выше или вручную). Захватываются только релизы, удовлетворяющие шаблону.
+              </span>
+            </div>
+
+            <div class="settings-field-group" style="grid-column: 1 / -1; margin-top:-4px;">
+              <label class="settings-field-label" style="font-size:12px;" data-i18n="qp.regex_test_label">Инспектор проверки названия релиза (Test Regex):</label>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input id="qp-regex-test-input" class="input" style="flex:1;" placeholder="Вставьте название релиза для проверки, например: «Breaking Bad S01 1080p HDrezka»" oninput="testQualityProfileRegex()">
+                <div id="qp-regex-test-badge" class="badge badge-secondary" style="font-size:12px; height:34px; line-height:34px; padding:0 12px; min-width:110px; text-align:center;">—</div>
+              </div>
+            </div>
+
             <div class="form-row" style="grid-column: 1 / -1; margin-top: 6px;">
               <button class="btn btn-primary" id="qp-submit-btn" onclick="submitQualityProfile()" data-i18n="common.add">Добавить</button>
               <button class="btn btn-secondary" id="qp-cancel-btn" style="display:none" onclick="resetQualityProfileForm()" data-i18n="common.cancel">Отмена</button>
@@ -2771,7 +2845,7 @@
 
         <div class="table-responsive glass-table-wrap" style="margin-bottom: 24px;">
           <table class="data-table" id="qp-table">
-            <thead><tr><th data-i18n="qp.col_name">Название</th><th data-i18n="qp.col_allowed">Разрешено</th><th data-i18n="qp.col_cutoff">Порог (Cutoff)</th><th></th></tr></thead>
+            <thead><tr><th data-i18n="qp.col_name">Название</th><th data-i18n="qp.col_allowed">Разрешено</th><th data-i18n="qp.col_cutoff">Порог (Cutoff)</th><th data-i18n="qp.col_voiceover">Озвучка / Regex</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>

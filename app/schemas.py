@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class AliasCreate(BaseModel):
@@ -293,6 +294,21 @@ class QualityProfileCreate(BaseModel):
     cutoff_quality: Optional[str] = None
     cutoff_score: int = 0
     format_items: list[dict] = []
+    release_title_regex: Optional[str] = None
+
+    @field_validator("release_title_regex")
+    @classmethod
+    def validate_release_title_regex(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        stripped = v.strip()
+        if not stripped:
+            return None
+        try:
+            re.compile(stripped)
+        except re.error as e:
+            raise ValueError(f"Некорректное регулярное выражение: {e}")
+        return stripped
 
 
 class QualityProfileUpdate(BaseModel):
@@ -304,6 +320,21 @@ class QualityProfileUpdate(BaseModel):
     cutoff_quality: Optional[str] = None
     cutoff_score: Optional[int] = None
     format_items: Optional[list[dict]] = None
+    release_title_regex: Optional[str] = None
+
+    @field_validator("release_title_regex")
+    @classmethod
+    def validate_release_title_regex(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        stripped = v.strip()
+        if not stripped:
+            return None
+        try:
+            re.compile(stripped)
+        except re.error as e:
+            raise ValueError(f"Некорректное регулярное выражение: {e}")
+        return stripped
 
 
 class QualityProfileOut(QualityProfileCreate):

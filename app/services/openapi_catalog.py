@@ -726,6 +726,12 @@ ENDPOINT_CATALOG: dict[tuple[str, str], tuple[str, str, str, str]] = {
         'Возвращает все настроенные профили качества с целевыми разрешениями, кодеками и лимитами размеров.',
         'Returns all configured quality profiles with resolution targets, allowed codecs, and size boundaries.',
     ),
+    ('/api/v1/quality-profiles/voiceovers', 'GET'): (
+        'Каталог пресетов озвучек',
+        'List voiceover presets',
+        'Возвращает структурированный каталог из 44 заготовленных пресетов озвучек и регулярных выражений для профилей качества.',
+        'Returns structured catalog of 44 predefined voiceover studio presets and regex patterns for quality profiles.',
+    ),
     ('/api/v1/quality-profiles', 'POST'): (
         'Создать новый профиль качества',
         'Create quality profile',

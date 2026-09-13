@@ -1414,6 +1414,21 @@ async def _collect_candidates(
                 })
                 continue
 
+            regex_val = getattr(quality_profile, "release_title_regex", None) if quality_profile else None
+            if isinstance(regex_val, str) and regex_val.strip():
+                pat = regex_val.strip()
+                try:
+                    if not re.search(pat, rel.title, re.IGNORECASE):
+                        rejected_candidates.append({
+                            "title": rel.title,
+                            "indexer": idx_name,
+                            "quality": quality.name,
+                            "reason": f"Название не соответствует фильтру Regex профиля «{getattr(quality_profile, 'name', 'Profile')}» (шаблон: {pat})",
+                        })
+                        continue
+                except Exception as ex:
+                    logger.warning("Ошибка проверки regex '%s' в auto_search: %s", pat, ex)
+
             candidates.append({
                 "rel": rel, "match": match, "quality": quality, "indexer": indexer,
             })
