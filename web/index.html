@@ -3367,11 +3367,16 @@
               </label>
             </div>
 
-            <div class="settings-field-group" style="grid-column: 1 / -1;">
+            <div class="settings-field-group" style="grid-column: 1 / -1; display:flex; flex-wrap:wrap; gap:16px;">
               <label class="switch-toggle">
                 <input id="nt-include-app-name" type="checkbox">
                 <span class="switch-slider"></span>
                 <span class="switch-title" data-i18n="nt.include_app_name">Включить Aliasarr в заголовок</span>
+              </label>
+              <label class="switch-toggle">
+                <input id="nt-send-backup-file" type="checkbox" checked>
+                <span class="switch-slider"></span>
+                <span class="switch-title" data-i18n="nt.send_backup_file">Прикреплять архив бэкапа (.zip) к сообщению</span>
               </label>
             </div>
 

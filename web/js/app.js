@@ -1037,6 +1037,7 @@ const TRANSLATIONS = {
     "nt.webhook_url_label": "URL вебхука",
     "nt.webhook_method_label": "HTTP метод",
     "nt.include_app_name": "Включить Aliasarr в заголовок",
+    "nt.send_backup_file": "Прикреплять архив бэкапа (.zip) к сообщению",
     "nt.triggers_title": "События уведомлений:",
     "nt.on_grab": "При захвате релиза",
     "nt.on_import": "При скачивании / импорте",
@@ -2452,6 +2453,7 @@ const TRANSLATIONS = {
     "nt.webhook_url_label": "Webhook URL",
     "nt.webhook_method_label": "HTTP Method",
     "nt.include_app_name": "Include Aliasarr in title",
+    "nt.send_backup_file": "Attach backup archive (.zip) to message",
     "nt.triggers_title": "Notification Triggers:",
     "nt.on_grab": "On Grab",
     "nt.on_import": "On Download / Import",
@@ -18098,6 +18100,11 @@ function collectNotificationSettingsFromForm() {
     settings.arguments = document.getElementById("nt-script-args").value.trim();
   }
 
+  const elSendBackup = document.getElementById("nt-send-backup-file");
+  if (elSendBackup) {
+    settings.send_backup_file = elSendBackup.checked;
+  }
+
   return settings;
 }
 
@@ -18264,6 +18271,8 @@ function editNotification(n) {
   if (elEpDel) elEpDel.checked = !!n.on_episode_file_delete;
   const elBackup = document.getElementById("nt-on-backup");
   if (elBackup) elBackup.checked = !!n.on_backup;
+  const elSendBackup = document.getElementById("nt-send-backup-file");
+  if (elSendBackup) elSendBackup.checked = s.send_backup_file !== false;
 
   document.getElementById("nt-submit-btn").textContent = t("common.save");
 }
@@ -18360,6 +18369,8 @@ function resetNotificationForm() {
   if (elEpDel) elEpDel.checked = false;
   const elBackup = document.getElementById("nt-on-backup");
   if (elBackup) elBackup.checked = false;
+  const elSendBackup = document.getElementById("nt-send-backup-file");
+  if (elSendBackup) elSendBackup.checked = true;
 
   clearInlineStatus("nt-test-result");
   document.getElementById("nt-submit-btn").textContent = t("common.save");

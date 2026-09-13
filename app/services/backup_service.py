@@ -234,7 +234,8 @@ def create_backup(
         notify_all_sync(
             db=None,
             event_type="backup",
-            message=f"📦 Создана резервная копия Aliasarr: {filename} ({backup_type}). Размер: {file_size / (1024*1024):.2f} МБ",
+            message=f"Создана резервная копия Aliasarr: {filename} ({backup_type}). Размер: {file_size / (1024*1024):.2f} МБ",
+            file_path=archive_path,
         )
     except Exception:
         pass

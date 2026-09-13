@@ -5,7 +5,9 @@ Telegram, Discord, Gotify, Ntfy, Pushover, Slack, Webhook.
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
+import os
 import re
 from typing import Optional, Any
 
@@ -95,6 +97,7 @@ def format_notification_message(message: str, lang: str = "ru") -> str:
     text = text.replace(" файлов", " more files")
 
     # Backup notifications
+    text = text.replace("Создана резервная копия Aliasarr:", "Aliasarr backup created:")
     text = text.replace("📦 Создана резервная копия Aliasarr:", "📦 Aliasarr backup created:")
     text = text.replace("Создан бэкап", "Backup created")
     text = text.replace("Размер:", "Size:")
@@ -113,7 +116,7 @@ def format_notification_message(message: str, lang: str = "ru") -> str:
 
 
 def _apply_title(settings: dict, message: str) -> str:
-    """Галочка "Включить Aliasarr в заголовок" — добавляет префикс приложения к тексту."""
+    """Галочка 'Включить Aliasarr в заголовок' — добавляет префикс приложения к тексту."""
     if settings.get("include_app_name"):
         return f"Aliasarr: {message}"
     return message
@@ -123,11 +126,54 @@ def _apply_title(settings: dict, message: str) -> str:
 # Провайдеры отправки уведомлений
 # -----------------------------------------------------------------------------
 
-async def _send_telegram(settings: dict, message: str, event_type: str = "general") -> None:
+async def _send_telegram(settings: dict, message: str, event_type: str = "general", file_path: Optional[str] = None) -> None:
     bot_token = settings.get("bot_token")
     chat_id = settings.get("chat_id")
     if not bot_token or not chat_id:
         return
+
+    if httpx is None:
+        return
+
+    send_file = bool(settings.get("send_backup_file", True))
+    if file_path and os.path.isfile(file_path) and send_file:
+        try:
+            f_size = os.path.getsize(file_path)
+            # Лимит Telegram Bot API на отправку документов составляет 50 МБ
+            if f_size <= 50 * 1024 * 1024:
+                url = f"https://api.telegram.org/bot{bot_token}/sendDocument"
+                data: dict[str, Any] = {
+                    "chat_id": chat_id,
+                    "parse_mode": "HTML",
+                }
+                caption = _apply_title(settings, message)
+                if len(caption) > 1024:
+                    caption = caption[:1020] + "..."
+                data["caption"] = caption
+
+                message_thread_id = settings.get("message_thread_id") or settings.get("topic_id")
+                if message_thread_id:
+                    try:
+                        data["message_thread_id"] = int(message_thread_id)
+                    except (ValueError, TypeError):
+                        pass
+
+                if settings.get("silent"):
+                    data["disable_notification"] = True
+
+                filename = os.path.basename(file_path)
+                with open(file_path, "rb") as f:
+                    file_bytes = f.read()
+                files = {"document": (filename, file_bytes, "application/zip")}
+
+                async with httpx.AsyncClient(timeout=60) as client:
+                    resp = await client.post(url, data=data, files=files)
+                    resp.raise_for_status()
+                return
+            else:
+                message += "\n<i>(Размер архива превышает лимит Telegram 50 МБ)</i>"
+        except Exception as doc_err:
+            logger.warning("Не удалось отправить документ бэкапа в Telegram: %s, отправляем текстовое сообщение", doc_err)
 
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload: dict[str, Any] = {
@@ -147,16 +193,17 @@ async def _send_telegram(settings: dict, message: str, event_type: str = "genera
     if settings.get("silent"):
         payload["disable_notification"] = True
 
-    if httpx is None:
-        return
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(url, json=payload)
         resp.raise_for_status()
 
 
-async def _send_discord(settings: dict, message: str, event_type: str = "general") -> None:
+async def _send_discord(settings: dict, message: str, event_type: str = "general", file_path: Optional[str] = None) -> None:
     webhook_url = settings.get("webhook_url")
     if not webhook_url:
+        return
+
+    if httpx is None:
         return
 
     # Цветовая кодировка embed
@@ -164,6 +211,7 @@ async def _send_discord(settings: dict, message: str, event_type: str = "general
         "import": 0x2ECC71,  # Зелёный
         "grab": 0x3498DB,    # Синий
         "health": 0xE74C3C,  # Красный
+        "backup": 0x1ABC9C,  # Бирюзовый
         "test": 0x9B59B6,    # Фиолетовый
     }
     color = color_map.get(event_type, 0x1ABC9C)
@@ -172,6 +220,7 @@ async def _send_discord(settings: dict, message: str, event_type: str = "general
         "import": "Файл скачан и импортирован",
         "grab": "Захвачен новый релиз",
         "health": "Внимание: Проблема системы",
+        "backup": "Создана резервная копия",
         "test": "Тестовое уведомление",
     }
     title = event_titles.get(event_type, "Уведомление")
@@ -193,14 +242,32 @@ async def _send_discord(settings: dict, message: str, event_type: str = "general
     if settings.get("avatar_url"):
         payload["avatar_url"] = settings["avatar_url"]
 
-    if httpx is None:
-        return
+    send_file = bool(settings.get("send_backup_file", True))
+    if file_path and os.path.isfile(file_path) and send_file:
+        try:
+            f_size = os.path.getsize(file_path)
+            # Лимит Discord Webhook для вложений составляет 25 МБ
+            if f_size <= 25 * 1024 * 1024:
+                filename = os.path.basename(file_path)
+                with open(file_path, "rb") as f:
+                    file_bytes = f.read()
+                files = {"files[0]": (filename, file_bytes, "application/zip")}
+                data = {"payload_json": json.dumps(payload)}
+                async with httpx.AsyncClient(timeout=60) as client:
+                    resp = await client.post(webhook_url, data=data, files=files)
+                    resp.raise_for_status()
+                return
+            else:
+                embed["description"] += "\n*(Размер архива превышает лимит Discord 25 МБ)*"
+        except Exception as disc_err:
+            logger.warning("Не удалось отправить файл бэкапа в Discord: %s, отправляем текстовое сообщение", disc_err)
+
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(webhook_url, json=payload)
         resp.raise_for_status()
 
 
-async def _send_gotify(settings: dict, message: str, event_type: str = "general") -> None:
+async def _send_gotify(settings: dict, message: str, event_type: str = "general", file_path: Optional[str] = None) -> None:
     server_url = (settings.get("server_url") or "").rstrip("/")
     app_token = settings.get("app_token")
     if not server_url or not app_token:
@@ -236,7 +303,7 @@ async def _send_gotify(settings: dict, message: str, event_type: str = "general"
         resp.raise_for_status()
 
 
-async def _send_ntfy(settings: dict, message: str, event_type: str = "general") -> None:
+async def _send_ntfy(settings: dict, message: str, event_type: str = "general", file_path: Optional[str] = None) -> None:
     server_url = (settings.get("server_url") or "https://ntfy.sh").rstrip("/")
     topic = (settings.get("topic") or "").strip().lstrip("/")
     if not topic:
@@ -253,20 +320,37 @@ async def _send_ntfy(settings: dict, message: str, event_type: str = "general") 
 
     tags = settings.get("tags")
     if not tags:
-        tag_map = {"import": "arrow_down,film_projector", "grab": "magnet", "health": "warning", "test": "bell"}
+        tag_map = {"import": "arrow_down,film_projector", "grab": "magnet", "health": "warning", "backup": "floppy_disk", "test": "bell"}
         tags = tag_map.get(event_type, "bell")
     headers["Tags"] = tags
 
-    body = _strip_html(message)
-
     if httpx is None:
         return
+
+    send_file = bool(settings.get("send_backup_file", True))
+    if file_path and os.path.isfile(file_path) and send_file:
+        try:
+            f_size = os.path.getsize(file_path)
+            # Публичный ntfy.sh имеет лимит до 15 МБ на вложение
+            if f_size <= 15 * 1024 * 1024:
+                headers["Filename"] = os.path.basename(file_path)
+                headers["Message"] = _strip_html(message)
+                with open(file_path, "rb") as f:
+                    file_content = f.read()
+                async with httpx.AsyncClient(timeout=60) as client:
+                    resp = await client.post(url, headers=headers, content=file_content)
+                    resp.raise_for_status()
+                return
+        except Exception as ntfy_err:
+            logger.warning("Не удалось отправить файл бэкапа в Ntfy: %s, отправляем текстовое сообщение", ntfy_err)
+
+    body = _strip_html(message)
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(url, headers=headers, content=body.encode("utf-8"))
         resp.raise_for_status()
 
 
-async def _send_pushover(settings: dict, message: str, event_type: str = "general") -> None:
+async def _send_pushover(settings: dict, message: str, event_type: str = "general", file_path: Optional[str] = None) -> None:
     user_key = settings.get("user_key")
     api_token = settings.get("api_token")
     if not user_key or not api_token:
@@ -296,7 +380,7 @@ async def _send_pushover(settings: dict, message: str, event_type: str = "genera
         resp.raise_for_status()
 
 
-async def _send_slack(settings: dict, message: str, event_type: str = "general") -> None:
+async def _send_slack(settings: dict, message: str, event_type: str = "general", file_path: Optional[str] = None) -> None:
     webhook_url = settings.get("webhook_url")
     if not webhook_url:
         return
@@ -318,7 +402,7 @@ async def _send_slack(settings: dict, message: str, event_type: str = "general")
         resp.raise_for_status()
 
 
-async def _send_generic_webhook(settings: dict, message: str, event_type: str = "general") -> None:
+async def _send_generic_webhook(settings: dict, message: str, event_type: str = "general", file_path: Optional[str] = None) -> None:
     webhook_url = settings.get("webhook_url")
     if not webhook_url:
         return
@@ -343,7 +427,7 @@ async def _send_generic_webhook(settings: dict, message: str, event_type: str = 
         resp.raise_for_status()
 
 
-async def _send_email(settings: dict, message: str, event_type: str = "general") -> None:
+async def _send_email(settings: dict, message: str, event_type: str = "general", file_path: Optional[str] = None) -> None:
     import asyncio
     import smtplib
     from email.mime.multipart import MIMEMultipart
@@ -380,14 +464,32 @@ async def _send_email(settings: dict, message: str, event_type: str = "general")
     }
     subject = f"{subject_prefix} {event_titles.get(event_type, event_type.capitalize())}"
 
-    msg = MIMEMultipart("alternative")
+    msg = MIMEMultipart("mixed")
     msg["Subject"] = subject
     msg["From"] = from_addr
     msg["To"] = to_addr
 
+    body_part = MIMEMultipart("alternative")
     plain_text = _strip_html(message)
-    msg.attach(MIMEText(plain_text, "plain", "utf-8"))
-    msg.attach(MIMEText(message, "html", "utf-8"))
+    body_part.attach(MIMEText(plain_text, "plain", "utf-8"))
+    body_part.attach(MIMEText(message, "html", "utf-8"))
+    msg.attach(body_part)
+
+    send_file = bool(settings.get("send_backup_file", True))
+    if file_path and os.path.isfile(file_path) and send_file:
+        try:
+            f_size = os.path.getsize(file_path)
+            if f_size <= 25 * 1024 * 1024:
+                from email.mime.base import MIMEBase
+                from email import encoders
+                with open(file_path, "rb") as f:
+                    part = MIMEBase("application", "zip")
+                    part.set_payload(f.read())
+                encoders.encode_base64(part)
+                part.add_header("Content-Disposition", f'attachment; filename="{os.path.basename(file_path)}"')
+                msg.attach(part)
+        except Exception as mail_att_err:
+            logger.warning("Не удалось прикрепить файл бэкапа к письму: %s", mail_att_err)
 
     use_ssl = bool(settings.get("use_ssl"))
     use_tls = bool(settings.get("use_tls", True))
@@ -396,9 +498,9 @@ async def _send_email(settings: dict, message: str, event_type: str = "general")
 
     def _sync_send():
         if use_ssl:
-            smtp = smtplib.SMTP_SSL(server, port, timeout=15)
+            smtp = smtplib.SMTP_SSL(server, port, timeout=30)
         else:
-            smtp = smtplib.SMTP(server, port, timeout=15)
+            smtp = smtplib.SMTP(server, port, timeout=30)
         try:
             if not use_ssl and use_tls:
                 smtp.starttls()
@@ -415,7 +517,7 @@ async def _send_email(settings: dict, message: str, event_type: str = "general")
     await loop.run_in_executor(None, _sync_send)
 
 
-async def _send_pushbullet(settings: dict, message: str, event_type: str = "general") -> None:
+async def _send_pushbullet(settings: dict, message: str, event_type: str = "general", file_path: Optional[str] = None) -> None:
     api_key = settings.get("api_key")
     if not api_key:
         return
@@ -435,7 +537,7 @@ async def _send_pushbullet(settings: dict, message: str, event_type: str = "gene
         resp.raise_for_status()
 
 
-async def _send_apprise(settings: dict, message: str, event_type: str = "general") -> None:
+async def _send_apprise(settings: dict, message: str, event_type: str = "general", file_path: Optional[str] = None) -> None:
     server_url = (settings.get("server_url") or "").rstrip("/")
     if not server_url:
         return
@@ -455,7 +557,7 @@ async def _send_apprise(settings: dict, message: str, event_type: str = "general
         resp.raise_for_status()
 
 
-async def _send_custom_script(settings: dict, message: str, event_type: str = "general") -> None:
+async def _send_custom_script(settings: dict, message: str, event_type: str = "general", file_path: Optional[str] = None) -> None:
     import asyncio
     import os
     script_path = settings.get("path")
@@ -468,6 +570,7 @@ async def _send_custom_script(settings: dict, message: str, event_type: str = "g
         "ALIASARR_EVENT_TYPE": event_type,
         "ALIASARR_MESSAGE": message,
         "ALIASARR_PLAIN_MESSAGE": _strip_html(message),
+        "ALIASARR_FILE_PATH": file_path or "",
     }
     proc = await asyncio.create_subprocess_exec(*cmd, env=env)
     await proc.communicate()
@@ -503,7 +606,7 @@ REQUIRED_NOTIFICATION_FIELDS = {
 }
 
 
-async def send_notification(config_row, message: str, event_type: str, db=None) -> None:
+async def send_notification(config_row, message: str, event_type: str, db=None, file_path: Optional[str] = None) -> None:
     """config_row: модель NotificationConfig из БД (или совместимый объект для ad-hoc теста)."""
     try:
         lang = "ru"
@@ -521,7 +624,7 @@ async def send_notification(config_row, message: str, event_type: str, db=None) 
         dispatcher = _NOTIFICATION_DISPATCHERS.get(cfg_type)
 
         if dispatcher:
-            await dispatcher(config_row.settings or {}, localized_msg, event_type)
+            await dispatcher(config_row.settings or {}, localized_msg, event_type, file_path=file_path)
         else:
             logger.warning("Неизвестный тип уведомлений: %s", getattr(config_row, "type", "unknown"))
     except Exception as exc:  # уведомления не должны ронять основной процесс
@@ -529,7 +632,7 @@ async def send_notification(config_row, message: str, event_type: str, db=None) 
         raise exc
 
 
-async def notify_all(db=None, event_type: str = "import", message: str = "") -> None:
+async def notify_all(db=None, event_type: str = "import", message: str = "", file_path: Optional[str] = None) -> None:
     close_db = False
     if db is None:
         try:
@@ -591,12 +694,12 @@ async def notify_all(db=None, event_type: str = "import", message: str = "") -> 
         if field_name and not getattr(config_row, field_name, True):
             continue
         try:
-            await send_notification(config_row, localized_message, event_type)
+            await send_notification(config_row, localized_message, event_type, db=None, file_path=file_path)
         except Exception:
             pass
 
 
-def notify_all_sync(db=None, event_type: str = "import", message: str = "") -> None:
+def notify_all_sync(db=None, event_type: str = "import", message: str = "", file_path: Optional[str] = None) -> None:
     """Синхронный запуск notify_all в фоновом потоке или текущем event loop."""
     import asyncio
     import threading
@@ -604,14 +707,14 @@ def notify_all_sync(db=None, event_type: str = "import", message: str = "") -> N
     try:
         loop = asyncio.get_running_loop()
         if loop.is_running():
-            loop.create_task(notify_all(db=None, event_type=event_type, message=message))
+            loop.create_task(notify_all(db=None, event_type=event_type, message=message, file_path=file_path))
             return
     except RuntimeError:
         pass
 
     def _run():
         try:
-            asyncio.run(notify_all(db=None, event_type=event_type, message=message))
+            asyncio.run(notify_all(db=None, event_type=event_type, message=message, file_path=file_path))
         except Exception as err:
             logger.warning("Ошибка в фоновом notify_all_sync: %s", err)
 
