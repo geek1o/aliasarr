@@ -488,6 +488,42 @@ class TestTitleLanguageAndBulkSwitch(unittest.TestCase):
         alias_texts = {a.text for a in s.aliases}
         self.assertIn("Breaking Bad", alias_texts)
 
+    @patch("app.api.metadata_routes.get_metadata_client")
+    def test_get_source_details_normalizes_language(self, mock_get_client):
+        from app.api.metadata_routes import get_source_details
+
+        mock_client = AsyncMock()
+        mock_details = MagicMock()
+        mock_details.external_id = "tvdb:12345"
+        mock_details.title = "Default Title"
+        mock_details.original_title = "Original Title"
+        mock_details.titles_by_lang = {"ru": "Русское название", "en": "English Title"}
+        mock_details.year = 2024
+        mock_details.overview = "Описание"
+        mock_details.poster_url = "http://example.com/poster.jpg"
+        mock_details.tmdb_id = 123
+        mock_details.tvdb_id = 456
+        mock_details.genres = []
+        mock_details.network = "HBO"
+        mock_details.status = "continuing"
+        mock_details.runtime = 45
+        mock_details.total_seasons = 1
+        mock_details.seasons = []
+        mock_client.get_details.return_value = mock_details
+        mock_get_client.return_value = mock_client
+
+        res = asyncio.run(
+            get_source_details(
+                external_id="tvdb:12345",
+                source_id=None,
+                content_type="series",
+                db=self.db,
+                current_user=self.user,
+            )
+        )
+        self.assertEqual(res.title, "Русское название")
+
 
 if __name__ == "__main__":
     unittest.main()
+
