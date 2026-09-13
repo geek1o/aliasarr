@@ -5746,6 +5746,37 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   flex-shrink: 0;
 }
 
+/* ---------- COLLECTIONS TOOLBAR ---------- */
+.collections-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.collections-toolbar .toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 240px;
+}
+
+.collections-toolbar .library-search-wrap {
+  flex: 1 1 240px;
+  min-width: 160px;
+  max-width: 380px;
+}
+
+.collections-toolbar .toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 /* ---------- LIBRARY: OVERVIEW VIEW (Modernized Neo-Glass & Cinematic Luxe) ---------- */
 .shows-overview {
   display: flex;
@@ -9027,14 +9058,16 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
     box-sizing: border-box !important;
   }
 
-  /* Library Header Actions on Mobile (Stacked in 1 column, stretched) */
-  #tab-library .header-actions {
+  /* Library & Collections Header Actions on Mobile (Stacked in 1 column, stretched) */
+  #tab-library .header-actions,
+  #tab-collections .header-actions {
     display: flex !important;
     flex-direction: column !important;
     width: 100% !important;
     gap: 8px !important;
   }
-  #tab-library .header-actions .btn {
+  #tab-library .header-actions .btn,
+  #tab-collections .header-actions .btn {
     width: 100% !important;
     justify-content: center !important;
     min-height: 42px !important;
@@ -9086,6 +9119,51 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   }
   .library-toolbar .toolbar-right #card-style-btn,
   .library-toolbar .toolbar-right #poster-options-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Collections Toolbar & Controls on Mobile */
+  .collections-toolbar {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    gap: 8px !important;
+    box-sizing: border-box !important;
+  }
+  .collections-toolbar .toolbar-left {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    gap: 8px !important;
+    min-width: 0 !important;
+    flex-wrap: wrap !important;
+    box-sizing: border-box !important;
+  }
+  .collections-toolbar .library-search-wrap {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+  .collections-toolbar .library-search-wrap .library-search-input {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 42px !important;
+    box-sizing: border-box !important;
+  }
+  .collections-toolbar .toolbar-right {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .collections-toolbar .toolbar-right #collections-card-style-btn,
+  .collections-toolbar .toolbar-right #collections-poster-options-btn {
     width: 100% !important;
     min-width: 0 !important;
     margin: 0 !important;
@@ -11379,13 +11457,15 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
     gap: 10px !important;
     width: 100% !important;
   }
-  [data-design="vanguard"] #tab-library .header-actions {
+  [data-design="vanguard"] #tab-library .header-actions,
+  [data-design="vanguard"] #tab-collections .header-actions {
     display: flex !important;
     flex-direction: column !important;
     width: 100% !important;
     gap: 8px !important;
   }
-  [data-design="vanguard"] #tab-library .header-actions .btn {
+  [data-design="vanguard"] #tab-library .header-actions .btn,
+  [data-design="vanguard"] #tab-collections .header-actions .btn {
     width: 100% !important;
     display: flex !important;
     align-items: center !important;
@@ -11430,7 +11510,9 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
     width: 100% !important;
   }
   [data-design="vanguard"] .toolbar-right #card-style-btn,
-  [data-design="vanguard"] .toolbar-right #poster-options-btn {
+  [data-design="vanguard"] .toolbar-right #poster-options-btn,
+  [data-design="vanguard"] .toolbar-right #collections-card-style-btn,
+  [data-design="vanguard"] .toolbar-right #collections-poster-options-btn {
     width: 100% !important;
     min-width: 0 !important;
     margin: 0 !important;
