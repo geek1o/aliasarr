@@ -2,7 +2,14 @@ import asyncio
 import unittest
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from app.services.metadata import SkyHookClient, MetadataResult, MetadataShowDetails, MetadataEpisode
+from app.services.metadata import (
+    SkyHookClient,
+    MetadataResult,
+    MetadataShowDetails,
+    MetadataEpisode,
+    TMDBClient,
+    RadarrClient,
+)
 
 
 class TestSkyhookResilience(unittest.TestCase):
@@ -182,7 +189,6 @@ class TestSkyhookResilience(unittest.TestCase):
 
         async def run():
             from app.api.metadata_routes import search_all_metadata_sources
-            from app.services.metadata import RadarrClient
 
             movie_results = [
                 MetadataResult(
@@ -205,7 +211,7 @@ class TestSkyhookResilience(unittest.TestCase):
 
             with patch.object(RadarrClient, "search", new_callable=AsyncMock, return_value=movie_results), \
                  patch.object(SkyHookClient, "search", new_callable=AsyncMock, return_value=[]), \
-                 patch("app.services.metadata.TMDBClient.search", new_callable=AsyncMock) as mock_tmdb_search, \
+                 patch.object(TMDBClient, "search", new_callable=AsyncMock) as mock_tmdb_search, \
                  patch("app.api.metadata_routes._find_existing_show", return_value=None):
 
                 mock_tmdb_search.return_value = [

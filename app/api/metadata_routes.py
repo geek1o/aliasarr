@@ -16,6 +16,7 @@ from app.services.metadata import (
     MetadataResult,
     RadarrClient,
     SkyHookClient,
+    TMDBClient,
     get_metadata_client,
     get_allowed_metadata_languages,
     is_alias_allowed,
@@ -460,7 +461,6 @@ async def search_all_metadata_sources(
     has_series = any(item.content_type in ("series", "anime") for item in combined_results)
     if not has_series:
         try:
-            from app.services.metadata import TMDBClient, RadarrClient
             tmdb_fallback = TMDBClient(api_key=RadarrClient.RADARR_TMDB_TOKEN)
             tv_results = await tmdb_fallback.search(clean_query)
             for r in tv_results:
@@ -552,7 +552,6 @@ async def import_show(
         elif ext_str.startswith("tv:") or (ext_str.startswith("tmdb:") and payload.content_type in ("series", "anime")):
             source = db.query(MetadataSource).filter(MetadataSource.type == MetadataSourceType.TMDB, MetadataSource.enabled == True).first()
             if not source:
-                from app.services.metadata import RadarrClient
                 source = MetadataSource(name="TMDB", type="tmdb", base_url="https://api.themoviedb.org/3", api_key=RadarrClient.RADARR_TMDB_TOKEN, enabled=True)
         elif ext_str.startswith("tvmaze:"):
             source = db.query(MetadataSource).filter(MetadataSource.type == MetadataSourceType.TVMAZE, MetadataSource.enabled == True).first()
@@ -588,7 +587,6 @@ async def import_show(
         # Гарантия наличия названия и метаданных для фильмов
         if (not details or not details.title or not details.title.strip()) and (ext_str.startswith("movie:") or payload.content_type == "movie"):
             clean_id = ext_str.replace("movie:", "").replace("tmdb:", "").strip()
-            from app.services.metadata import TMDBClient, RadarrClient
             try:
                 tmdb = TMDBClient(api_key=RadarrClient.RADARR_TMDB_TOKEN, overview_language=overview_lang)
                 details = await tmdb._get_movie_details(clean_id)
@@ -599,7 +597,6 @@ async def import_show(
         if (not details or not details.title or not details.title.strip()) and (ext_str.startswith("tv:") or payload.content_type in ("series", "anime")):
             clean_id = ext_str.replace("tv:", "").replace("tmdb:", "").strip()
             if clean_id.isdigit():
-                from app.services.metadata import TMDBClient, RadarrClient
                 try:
                     tmdb = TMDBClient(api_key=RadarrClient.RADARR_TMDB_TOKEN, overview_language=overview_lang)
                     details = await tmdb._get_tv_details(clean_id)
