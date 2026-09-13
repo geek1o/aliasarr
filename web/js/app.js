@@ -1224,6 +1224,10 @@ const TRANSLATIONS = {
     "show.upload_cover": "Загрузить",
     "show.refresh_cover": "Обновить",
     "show.new_alias_placeholder": "Новый алиас…",
+    "show.alt_titles_more": "еще",
+    "show.alt_titles_collapse": "Свернуть",
+    "show.search_aliases_title": "Алиасы поиска",
+    "show.toggle_aliases": "Скрыть / раскрыть алиасы поиска",
     "alias.edit_title": "Редактирование алиаса",
     "alias.field_text": "Текст алиаса",
     "alias.field_lang": "Язык",
@@ -2662,6 +2666,10 @@ const TRANSLATIONS = {
     "show.upload_cover": "Upload",
     "show.refresh_cover": "Refresh",
     "show.new_alias_placeholder": "New alias…",
+    "show.alt_titles_more": "more",
+    "show.alt_titles_collapse": "Collapse",
+    "show.search_aliases_title": "Search Aliases",
+    "show.toggle_aliases": "Toggle search aliases",
     "alias.edit_title": "Edit Alias",
     "alias.field_text": "Alias text",
     "alias.field_lang": "Language",
@@ -5134,28 +5142,100 @@ function renderShowTitleLangSwitcher(show, canManageLib = true) {
   if (variants.length <= 1) return "";
 
   const currentTitleLower = (show.title || "").trim().toLowerCase();
+  window._SHOW_TITLE_LANG_EXPANDED = window._SHOW_TITLE_LANG_EXPANDED || {};
+  const isExpanded = Boolean(window._SHOW_TITLE_LANG_EXPANDED[show.id]);
+
+  const activeVariant = variants.find(v => v.title.toLowerCase() === currentTitleLower) || variants[0];
+  const otherVariants = variants.filter(v => v !== activeVariant);
+
+  if (otherVariants.length === 0) {
+    return `
+      <div class="show-title-lang-bar">
+        <span class="show-title-lang-icon" title="${CURRENT_LANG === 'en' ? 'Main title language' : 'Язык основного названия'}">
+          <i data-lucide="languages" class="ico-xs"></i>
+        </span>
+        <div class="show-title-lang-chips">
+          <button type="button" class="title-lang-chip active" 
+            data-title="${escapeHtml(activeVariant.title)}" 
+            title="${escapeHtml(activeVariant.title)}">
+            <span class="title-lang-tag">${activeVariant.langTag}</span>
+            <span class="title-lang-val">${escapeHtml(activeVariant.title)}</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  const moreText = t("show.alt_titles_more") || (CURRENT_LANG === "en" ? "more" : "еще");
+  const collapseText = t("show.alt_titles_collapse") || (CURRENT_LANG === "en" ? "Collapse" : "Свернуть");
 
   return `
-    <div class="show-title-lang-bar">
+    <div class="show-title-lang-bar ${isExpanded ? 'is-expanded' : 'is-collapsed'}" id="show-title-lang-bar-${show.id}">
       <span class="show-title-lang-icon" title="${CURRENT_LANG === 'en' ? 'Switch main title' : 'Переключить основное название'}">
         <i data-lucide="languages" class="ico-xs"></i>
       </span>
       <div class="show-title-lang-chips">
-        ${variants.map(v => {
-          const isActive = v.title.toLowerCase() === currentTitleLower;
-          return `
-            <button type="button" class="title-lang-chip ${isActive ? 'active' : ''}" 
+        <button type="button" class="title-lang-chip active" 
+          data-title="${escapeHtml(activeVariant.title)}" 
+          title="${escapeHtml(activeVariant.title)}">
+          <span class="title-lang-tag">${activeVariant.langTag}</span>
+          <span class="title-lang-val">${escapeHtml(activeVariant.title)}</span>
+        </button>
+        <button type="button" class="title-lang-more-btn" onclick="toggleShowTitleLangVariants(${show.id})" 
+          title="${isExpanded ? collapseText : (CURRENT_LANG === 'en' ? 'Show alternative titles' : 'Показать альтернативные названия')}">
+          <span class="title-lang-more-text">${isExpanded ? collapseText : `+${otherVariants.length} ${moreText}`}</span>
+          <i data-lucide="${isExpanded ? 'chevron-up' : 'chevron-down'}" class="ico-xxs title-lang-more-icon"></i>
+        </button>
+        <div class="show-title-lang-extra" id="show-title-lang-extra-${show.id}" style="${isExpanded ? '' : 'display: none;'}">
+          ${otherVariants.map(v => `
+            <button type="button" class="title-lang-chip" 
               data-title="${escapeHtml(v.title)}" 
               ${canManageLib ? `onclick="onTitleLangChipClick(this, ${show.id})"` : 'disabled'}
               title="${escapeHtml(v.title)}">
               <span class="title-lang-tag">${v.langTag}</span>
               <span class="title-lang-val">${escapeHtml(v.title)}</span>
             </button>
-          `;
-        }).join("")}
+          `).join("")}
+        </div>
       </div>
     </div>
   `;
+}
+
+function toggleShowTitleLangVariants(showId) {
+  window._SHOW_TITLE_LANG_EXPANDED = window._SHOW_TITLE_LANG_EXPANDED || {};
+  const current = Boolean(window._SHOW_TITLE_LANG_EXPANDED[showId]);
+  window._SHOW_TITLE_LANG_EXPANDED[showId] = !current;
+  const isExpanded = !current;
+
+  const bar = document.getElementById(`show-title-lang-bar-${showId}`);
+  const extra = document.getElementById(`show-title-lang-extra-${showId}`);
+  const moreBtn = bar?.querySelector(".title-lang-more-btn");
+  if (!bar || !extra || !moreBtn) return;
+
+  if (isExpanded) {
+    bar.classList.remove("is-collapsed");
+    bar.classList.add("is-expanded");
+    extra.style.display = "";
+  } else {
+    bar.classList.remove("is-expanded");
+    bar.classList.add("is-collapsed");
+    extra.style.display = "none";
+  }
+
+  const extraCount = extra.querySelectorAll(".title-lang-chip").length;
+  const moreText = t("show.alt_titles_more") || (CURRENT_LANG === "en" ? "more" : "еще");
+  const collapseText = t("show.alt_titles_collapse") || (CURRENT_LANG === "en" ? "Collapse" : "Свернуть");
+
+  moreBtn.title = isExpanded ? collapseText : (CURRENT_LANG === "en" ? "Show alternative titles" : "Показать альтернативные названия");
+  moreBtn.innerHTML = `
+    <span class="title-lang-more-text">${isExpanded ? collapseText : `+${extraCount} ${moreText}`}</span>
+    <i data-lucide="${isExpanded ? 'chevron-up' : 'chevron-down'}" class="ico-xxs title-lang-more-icon"></i>
+  `;
+
+  if (typeof lucide !== "undefined" && lucide.createIcons) {
+    lucide.createIcons();
+  }
 }
 
 async function onTitleLangChipClick(btn, showId) {
@@ -5185,6 +5265,9 @@ async function switchShowMainTitle(showId, newTitle) {
     }
     const msg = (t("show.title_updated") || (CURRENT_LANG === "en" ? "Main title updated: {title}" : "Основное название обновлено: {title}")).replace("{title}", cleanTitle);
     toast(msg);
+
+    window._SHOW_TITLE_LANG_EXPANDED = window._SHOW_TITLE_LANG_EXPANDED || {};
+    window._SHOW_TITLE_LANG_EXPANDED[showId] = false;
 
     if (CURRENT_SHOW_ID === showId && document.getElementById("show-modal")?.classList.contains("active")) {
       await refreshShowModal();
@@ -8530,23 +8613,43 @@ async function refreshShowModal() {
 
             <p class="show-hero-overview">${escapeHtml(show.overview || t("show.no_overview"))}</p>
 
-            <div class="show-hero-aliases-block">
-              <div class="alias-manager" id="alias-manager-${show.id}">
-                ${renderAliasChips(show, canManageLib)}
-              </div>
-              ${canManageLib ? `
-              <div class="alias-add-row" style="margin-top:6px;">
-                <input id="new-alias-text-${show.id}" class="input input-small" type="text" placeholder="${t("show.new_alias_placeholder")}"
-                  style="flex: 2; min-width: 140px;"
-                  onkeydown="if(event.key==='Enter') addAlias(${show.id})">
-                <select id="new-alias-lang-${show.id}" class="input input-small" style="width: 75px;">
-                  <option value="ru">ru</option><option value="en">en</option>
-                  <option value="jp">jp</option><option value="romaji">romaji</option><option value="other">other</option>
-                </select>
-                <button class="btn btn-secondary btn-small" onclick="addAlias(${show.id})"><i data-lucide="plus" class="ico-sm"></i> ${t("common.add")}</button>
-              </div>` : ""}
-              ${renderSeasonSplitBadges(show, canManageLib)}
-            </div>
+            ${(() => {
+              window._SHOW_ALIASES_EXPANDED = window._SHOW_ALIASES_EXPANDED || {};
+              const isAliasesExpanded = Boolean(window._SHOW_ALIASES_EXPANDED[show.id]);
+              const aliasesCount = (show.aliases || []).length;
+              return `
+                <div class="show-hero-aliases-block ${isAliasesExpanded ? 'is-expanded' : 'is-collapsed'}" id="show-aliases-block-${show.id}">
+                  <button type="button" class="show-aliases-accordion-header" onclick="toggleShowAliasesCollapse(${show.id})"
+                    title="${t('show.toggle_aliases') || (CURRENT_LANG === 'en' ? 'Toggle search aliases' : 'Скрыть / раскрыть алиасы поиска')}">
+                    <div class="show-aliases-header-left">
+                      <i data-lucide="tag" class="ico-xs"></i>
+                      <span class="show-aliases-title">${t('show.search_aliases_title') || (CURRENT_LANG === 'en' ? 'Search Aliases' : 'Алиасы поиска')}</span>
+                      <span class="show-aliases-count-badge">${aliasesCount}</span>
+                    </div>
+                    <div class="show-aliases-header-right">
+                      <i data-lucide="${isAliasesExpanded ? 'chevron-up' : 'chevron-down'}" class="ico-xs show-aliases-chevron"></i>
+                    </div>
+                  </button>
+                  <div class="show-aliases-accordion-body" id="show-aliases-body-${show.id}" style="${isAliasesExpanded ? '' : 'display:none;'}">
+                    <div class="alias-manager" id="alias-manager-${show.id}">
+                      ${renderAliasChips(show, canManageLib)}
+                    </div>
+                    ${canManageLib ? `
+                    <div class="alias-add-row" style="margin-top:6px;">
+                      <input id="new-alias-text-${show.id}" class="input input-small" type="text" placeholder="${t("show.new_alias_placeholder")}"
+                        style="flex: 2; min-width: 140px;"
+                        onkeydown="if(event.key==='Enter') addAlias(${show.id})">
+                      <select id="new-alias-lang-${show.id}" class="input input-small" style="width: 75px;">
+                        <option value="ru">ru</option><option value="en">en</option>
+                        <option value="jp">jp</option><option value="romaji">romaji</option><option value="other">other</option>
+                      </select>
+                      <button class="btn btn-secondary btn-small" onclick="addAlias(${show.id})"><i data-lucide="plus" class="ico-sm"></i> ${t("common.add")}</button>
+                    </div>` : ""}
+                    ${renderSeasonSplitBadges(show, canManageLib)}
+                  </div>
+                </div>
+              `;
+            })()}
           </div>
         </div>
       </div>
@@ -8917,12 +9020,43 @@ async function saveEditedAlias() {
       method: "PUT",
       body: JSON.stringify(payload),
     });
+    window._SHOW_ALIASES_EXPANDED = window._SHOW_ALIASES_EXPANDED || {};
+    if (showId) window._SHOW_ALIASES_EXPANDED[showId] = true;
     closeModal("alias-edit-modal");
     await refreshShowModal();
     await loadShows();
     toast(t("alias.toast_saved") || (CURRENT_LANG === "en" ? "Alias saved successfully" : "Алиас успешно сохранён"));
   } catch (e) {
     toast((CURRENT_LANG === "en" ? "Error: " : "Ошибка: ") + e.message, true);
+  }
+}
+
+function toggleShowAliasesCollapse(showId) {
+  window._SHOW_ALIASES_EXPANDED = window._SHOW_ALIASES_EXPANDED || {};
+  const current = Boolean(window._SHOW_ALIASES_EXPANDED[showId]);
+  window._SHOW_ALIASES_EXPANDED[showId] = !current;
+  const isExpanded = !current;
+
+  const block = document.getElementById(`show-aliases-block-${showId}`);
+  const body = document.getElementById(`show-aliases-body-${showId}`);
+  const icon = block?.querySelector(".show-aliases-chevron");
+  if (!block || !body) return;
+
+  if (isExpanded) {
+    block.classList.remove("is-collapsed");
+    block.classList.add("is-expanded");
+    body.style.display = "";
+  } else {
+    block.classList.remove("is-expanded");
+    block.classList.add("is-collapsed");
+    body.style.display = "none";
+  }
+
+  if (icon) {
+    icon.setAttribute("data-lucide", isExpanded ? "chevron-up" : "chevron-down");
+  }
+  if (typeof lucide !== "undefined" && lucide.createIcons) {
+    lucide.createIcons();
   }
 }
 
@@ -8947,6 +9081,8 @@ async function addAlias(showId) {
       method: "POST",
       body: JSON.stringify(payload),
     });
+    window._SHOW_ALIASES_EXPANDED = window._SHOW_ALIASES_EXPANDED || {};
+    window._SHOW_ALIASES_EXPANDED[showId] = true;
     if (textInput) textInput.value = "";
     await refreshShowModal();
     await loadShows();
@@ -9395,6 +9531,8 @@ async function deleteAliasFromShow(showId, aliasId) {
   if (!confirmed) return;
   try {
     await api(`/api/v1/shows/${showId}/aliases/${aliasId}`, { method: "DELETE" });
+    window._SHOW_ALIASES_EXPANDED = window._SHOW_ALIASES_EXPANDED || {};
+    window._SHOW_ALIASES_EXPANDED[showId] = true;
     await refreshShowModal();
     await loadShows();
   } catch (e) { toast("Ошибка: " + e.message, true); }
