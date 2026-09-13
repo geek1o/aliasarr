@@ -34,7 +34,7 @@ try:
     from sqlalchemy.orm import sessionmaker
     from fastapi import HTTPException
     from fastapi.responses import Response
-    from app.models.db import Base, Show, MovieCollection, User, UserRole
+    from app.models.db import Base, Show, MovieCollection, User
     HAS_DEPS = True
 except ImportError:
     HAS_DEPS = False
@@ -197,8 +197,9 @@ class TestCoverServiceEndpointsAndDb(unittest.TestCase):
         self.user = User(
             id=1,
             username="admin",
-            role=UserRole.ADMIN,
-            is_active=True,
+            is_admin=True,
+            is_owner=True,
+            enabled=True,
             password_hash="hash",
         )
         self.db.add(self.user)
@@ -385,5 +386,5 @@ class TestCoverServiceEndpointsAndDb(unittest.TestCase):
         self.assertTrue(os.path.isfile(get_collection_backdrop_path(coll.id)))
 
         res = delete_collection(coll.id, db=self.db, current_user=self.user)
-        self.assertTrue(res.get("success", False))
+        self.assertIsNone(res)
         self.assertFalse(os.path.exists(get_collection_poster_dir(coll.id)))

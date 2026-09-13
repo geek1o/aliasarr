@@ -1,10 +1,11 @@
+import asyncio
 import unittest
 from unittest.mock import MagicMock
 
 try:
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from app.models.db import Base, AppSettings, User, UserRole, QualityProfile, Show, ContentType
+    from app.models.db import Base, AppSettings, User, QualityProfile, Show
     from app.services.settings_service import get_or_create_settings
     from app.api.settings_routes import update_settings, SettingsUpdate, get_settings
     from app.api.shows import create_show
@@ -25,8 +26,8 @@ class TestDefaultQualityProfiles(unittest.TestCase):
         self.user = User(
             id=1,
             username="admin",
-            role=UserRole.ADMIN,
-            is_active=True,
+            is_admin=True,
+            enabled=True,
             password_hash="hash",
             is_owner=True,
         )
@@ -74,38 +75,38 @@ class TestDefaultQualityProfiles(unittest.TestCase):
         movie_payload = ShowCreate(
             title="Inception",
             year=2010,
-            content_type=ContentType.MOVIE,
+            content_type="movie",
             quality_profile_id=None,
         )
-        movie_show = create_show(payload=movie_payload, db=self.db, current_user=self.user)
+        movie_show = asyncio.run(create_show(payload=movie_payload, db=self.db, current_user=self.user))
         self.assertEqual(movie_show.quality_profile_id, 1)
 
         # 2. Create Series without explicit quality_profile_id -> should get qp 2
         series_payload = ShowCreate(
             title="Breaking Bad",
             year=2008,
-            content_type=ContentType.SERIES,
+            content_type="series",
             quality_profile_id=None,
         )
-        series_show = create_show(payload=series_payload, db=self.db, current_user=self.user)
+        series_show = asyncio.run(create_show(payload=series_payload, db=self.db, current_user=self.user))
         self.assertEqual(series_show.quality_profile_id, 2)
 
         # 3. Create Anime without explicit quality_profile_id -> should get qp 3
         anime_payload = ShowCreate(
             title="Attack on Titan",
             year=2013,
-            content_type=ContentType.ANIME,
+            content_type="anime",
             quality_profile_id=None,
         )
-        anime_show = create_show(payload=anime_payload, db=self.db, current_user=self.user)
+        anime_show = asyncio.run(create_show(payload=anime_payload, db=self.db, current_user=self.user))
         self.assertEqual(anime_show.quality_profile_id, 3)
 
         # 4. Create with explicit quality_profile_id -> should preserve explicit ID
         custom_payload = ShowCreate(
             title="Special Movie",
             year=2024,
-            content_type=ContentType.MOVIE,
+            content_type="movie",
             quality_profile_id=2,
         )
-        custom_show = create_show(payload=custom_payload, db=self.db, current_user=self.user)
+        custom_show = asyncio.run(create_show(payload=custom_payload, db=self.db, current_user=self.user))
         self.assertEqual(custom_show.quality_profile_id, 2)

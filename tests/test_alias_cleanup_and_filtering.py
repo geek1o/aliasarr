@@ -21,7 +21,6 @@ try:
         MetadataSource,
         MetadataSourceType,
         User,
-        UserRole,
         AliasLanguage,
     )
     from app.schemas import ShowOut
@@ -116,16 +115,17 @@ class TestAliasCleanupAndSettings(unittest.TestCase):
         self.user = User(
             id=1,
             username="admin",
-            role=UserRole.ADMIN,
-            is_active=True,
+            is_admin=True,
+            is_owner=True,
+            enabled=True,
             password_hash="hash",
         )
         self.db.add(self.user)
 
         self.settings = AppSettings(
             id=1,
+            api_key="test-key",
             metadata_refresh_aliases=True,
-            alias_languages=["ru", "en"],
         )
         self.db.add(self.settings)
 
@@ -207,7 +207,7 @@ class TestAliasCleanupAndSettings(unittest.TestCase):
         fake_details = MagicMock()
         fake_details.external_id = "tvdb:76156"
         fake_details.title = "Scrubs"
-        fake_details.aliases = ["Клиника", "Hoży doktorzy", "Scrubs – Die Anfänger"]
+        fake_details.aliases = ["Клиника", "Hoży doktorzy", "Großstadt"]
         fake_details.overview = "Description"
         fake_details.poster_url = None
         fake_details.rating = 8.5
@@ -251,15 +251,12 @@ class TestAliasCleanupAndSettings(unittest.TestCase):
         self.assertIn("Клиника", alias_texts)
         # Filtered out:
         self.assertNotIn("Hoży doktorzy", alias_texts)
-        self.assertNotIn("Scrubs – Die Anfänger", alias_texts)
+        self.assertNotIn("Großstadt", alias_texts)
 
     def test_show_with_multilingual_aliases_serialization(self):
         """Проверяет, что карточка с алиасами на различных языках (zh, ja, ko, de и т.д.)
         успешно считывается из БД и сериализуется в ShowOut без ошибки LookupError."""
-        show = Show(
-            title="Naruto Shippuden",
-            status="continuing",
-        )
+        show = Show(title="Naruto Shippuden")
         self.db.add(show)
         self.db.commit()
         self.db.refresh(show)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import shutil
 import tempfile
@@ -9,7 +10,7 @@ import datetime as dt
 try:
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from app.models.db import Base, Show, Episode, Alias, EpisodeStatus, AliasLanguage, User, UserRole
+    from app.models.db import AppSettings, Base, Show, Episode, Alias, EpisodeStatus, AliasLanguage, User
     from app.schemas import AliasCreate, ShowCreate, DeleteContentPayload
     from app.api.shows import add_alias, create_show, delete_content
     from app.services.metadata import should_refresh_show, trigger_show_metadata_refresh_if_needed
@@ -30,11 +31,20 @@ class TestDeletionAndAliases(unittest.TestCase):
         self.user = User(
             id=1,
             username="admin",
-            role=UserRole.ADMIN,
-            is_active=True,
+            is_admin=True,
+            is_owner=True,
+            enabled=True,
             password_hash="hash",
         )
         self.db.add(self.user)
+        self.db.add(AppSettings(
+            id=1,
+            api_key="test-key",
+            root_folder=self.temp_dir,
+            root_folder_movies=self.temp_dir,
+            root_folder_series=self.temp_dir,
+            root_folder_anime=self.temp_dir,
+        ))
         self.db.commit()
 
     def tearDown(self):
@@ -42,7 +52,7 @@ class TestDeletionAndAliases(unittest.TestCase):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_alias_priority_autoincrement(self):
-        # 1. Создаем шоу с 2 алиасами без явного приоритета -> должны получить 1 и 2
+        # Создание также добавляет исходный заголовок как auto-алиас.
         payload = ShowCreate(
             title="Test Show",
             aliases=[
@@ -50,11 +60,13 @@ class TestDeletionAndAliases(unittest.TestCase):
                 AliasCreate(text="Test Alias 2"),
             ],
         )
-        show = create_show(payload, db=self.db, current_user=self.user)
+        show = asyncio.run(create_show(payload, db=self.db, current_user=self.user))
         aliases = self.db.query(Alias).filter(Alias.show_id == show.id).order_by(Alias.priority).all()
-        self.assertEqual(len(aliases), 2)
-        self.assertEqual(aliases[0].priority, 1)
-        self.assertEqual(aliases[1].priority, 2)
+        self.assertEqual(len(aliases), 3)
+        aliases_by_text = {alias.text: alias for alias in aliases}
+        self.assertEqual(aliases_by_text["Test Alias 1"].priority, 1)
+        self.assertEqual(aliases_by_text["Test Alias 2"].priority, 2)
+        self.assertEqual(aliases_by_text["Test Show"].source, "auto")
 
         # 2. Добавляем новый алиас через add_alias без явного приоритета -> должен получить 3
         new_alias = add_alias(show.id, AliasCreate(text="Test Alias 3"), db=self.db, current_user=self.user)
@@ -88,9 +100,9 @@ class TestDeletionAndAliases(unittest.TestCase):
         self.db.add(show)
         self.db.flush()
 
-        ep1 = Episode(show_id=show.id, season_number=1, episode_number=1, title="Ep 1", file_path=ep1_file, file_size=6, status=EpisodeStatus.DOWNLOADED)
-        ep2 = Episode(show_id=show.id, season_number=1, episode_number=2, title="Ep 2", file_path=ep2_file, file_size=6, status=EpisodeStatus.DOWNLOADED)
-        ep3 = Episode(show_id=show.id, season_number=2, episode_number=1, title="Ep 3", file_path=ep3_file, file_size=6, status=EpisodeStatus.DOWNLOADED)
+        ep1 = Episode(show_id=show.id, season_number=1, episode_number=1, title="Ep 1", file_path=ep1_file, file_size_bytes=6, status=EpisodeStatus.DOWNLOADED)
+        ep2 = Episode(show_id=show.id, season_number=1, episode_number=2, title="Ep 2", file_path=ep2_file, file_size_bytes=6, status=EpisodeStatus.DOWNLOADED)
+        ep3 = Episode(show_id=show.id, season_number=2, episode_number=1, title="Ep 3", file_path=ep3_file, file_size_bytes=6, status=EpisodeStatus.DOWNLOADED)
         self.db.add_all([ep1, ep2, ep3])
         self.db.commit()
 
@@ -143,8 +155,8 @@ class TestDeletionAndAliases(unittest.TestCase):
         self.db.add(show)
         self.db.flush()
 
-        ep1 = Episode(show_id=show.id, season_number=1, episode_number=1, file_path=ep1_file, file_size=6, status=EpisodeStatus.DOWNLOADED)
-        ep2 = Episode(show_id=show.id, season_number=1, episode_number=2, file_path=ep2_file, file_size=6, status=EpisodeStatus.DOWNLOADED)
+        ep1 = Episode(show_id=show.id, season_number=1, episode_number=1, file_path=ep1_file, file_size_bytes=6, status=EpisodeStatus.DOWNLOADED)
+        ep2 = Episode(show_id=show.id, season_number=1, episode_number=2, file_path=ep2_file, file_size_bytes=6, status=EpisodeStatus.DOWNLOADED)
         self.db.add_all([ep1, ep2])
         self.db.commit()
 
@@ -184,8 +196,8 @@ class TestDeletionAndAliases(unittest.TestCase):
         # Несмотря на наличие placeholder title ("Episode 1"), прошло только 5 минут -> should_refresh_show = False
         self.assertFalse(should_refresh_show(show, self.db))
 
-        # Если прошло 20 минут -> should_refresh_show = True
-        show.last_metadata_refresh_at = now - dt.timedelta(minutes=20)
+        # Placeholder-эпизоды разрешают обновление после защитного окна в 30 минут.
+        show.last_metadata_refresh_at = now - dt.timedelta(minutes=31)
         self.db.commit()
         self.assertTrue(should_refresh_show(show, self.db))
 

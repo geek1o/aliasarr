@@ -27,7 +27,7 @@ try:
         AppSettings,
     )
     from app.api.operations import set_episode_status, toggle_episode_upgrade
-    from app.services.postprocess import process_download_directory, process_movie_download
+    from app.services.postprocess import process_download, process_movie_download
     HAS_DEPS = True
 except ImportError:
     HAS_DEPS = False
@@ -70,7 +70,7 @@ class TestEpisodeMonitor(unittest.TestCase):
             title="Test Series",
             content_type="series",
             quality_profile_id=self.profile.id,
-            root_folder=self.library_dir,
+            path=os.path.join(self.library_dir, "Test Series"),
             monitored=True,
         )
         self.db.add(show)
@@ -95,14 +95,12 @@ class TestEpisodeMonitor(unittest.TestCase):
         with open(video_path, "wb") as f:
             f.write(b"0" * 1024)
 
-        result = process_download_directory(
+        result = process_download(
             db=self.db,
             download_path=self.download_dir,
             show=show,
-            season_num=1,
-            actual_ep_num=1,
-            use_hardlinks=False,
-            keep_source=False,
+            rename_template="{title} - S{season:02d}E{episode:02d}",
+            root_folder=self.library_dir,
         )
 
         self.assertTrue(len(result) > 0)
@@ -118,7 +116,7 @@ class TestEpisodeMonitor(unittest.TestCase):
             content_type="movie",
             year=2024,
             quality_profile_id=self.profile.id,
-            root_folder=self.library_dir,
+            path=os.path.join(self.library_dir, "Test Movie"),
             monitored=True,
         )
         self.db.add(show)
@@ -146,8 +144,7 @@ class TestEpisodeMonitor(unittest.TestCase):
             db=self.db,
             download_path=self.download_dir,
             show=show,
-            use_hardlinks=False,
-            keep_source=False,
+            rename_template="{Movie Title} ({Release Year})",
             root_folder=self.library_dir,
         )
 
@@ -529,4 +526,3 @@ class TestUnairedEpisodeLogic(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
