@@ -3219,6 +3219,9 @@ function openModal(id) {
   const el = document.getElementById(id);
   if (el) el.classList.add("active");
   document.body.classList.add("modal-open");
+  if (window.lucide && typeof lucide.createIcons === "function") {
+    lucide.createIcons();
+  }
 }
 function closeModal(id) {
   const el = document.getElementById(id);
