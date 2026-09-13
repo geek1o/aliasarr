@@ -185,13 +185,18 @@
       align-items: center;
     }
 
-    .api-search-box i {
+    .api-search-box i,
+    .api-search-box svg,
+    .api-search-box .lucide {
       position: absolute;
       left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
       width: 16px;
       height: 16px;
       color: var(--text-muted);
       pointer-events: none;
+      z-index: 2;
     }
 
     .api-search-box input {
@@ -206,6 +211,7 @@
       font-size: 13px;
       outline: none;
       transition: all 0.2s ease;
+      box-sizing: border-box;
     }
 
     [data-theme="light"] .api-search-box input {
@@ -261,9 +267,12 @@
       color: var(--teal);
     }
 
-    .api-action-btn i {
+    .api-action-btn i,
+    .api-action-btn svg,
+    .api-action-btn .lucide {
       width: 16px;
       height: 16px;
+      flex-shrink: 0;
     }
 
     /* MAIN CONTAINER */
