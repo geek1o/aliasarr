@@ -324,9 +324,10 @@ class TestManualImportLogic(unittest.TestCase):
         self.assertEqual(res_off["affected"], 2)
 
     def test_set_unaired_monitored(self):
-        """Проверяет перевод невышедших серий в статус WANTED и обратно."""
+        """Проверяет перевод невышедших серий в статус UNAIRED/IGNORED при переключении мониторинга."""
         try:
             from app.api.shows import set_unaired_monitored
+            from app.models.db import EpisodeStatus
         except ImportError:
             self.skipTest("FastAPI not installed in test runner")
             return
@@ -339,8 +340,8 @@ class TestManualImportLogic(unittest.TestCase):
         past_date = dt.datetime.utcnow() - dt.timedelta(days=30)
 
         show = SimpleNamespace(id=1, title="Test Series", content_type="series", monitored=True)
-        ep_future = SimpleNamespace(id=101, show_id=1, season_number=1, episode_number=20, status="unaired", air_date=future_date)
-        ep_past = SimpleNamespace(id=102, show_id=1, season_number=1, episode_number=1, status="downloaded", air_date=past_date)
+        ep_future = SimpleNamespace(id=101, show_id=1, season_number=1, episode_number=20, status="unaired", air_date=future_date, monitored=False)
+        ep_past = SimpleNamespace(id=102, show_id=1, season_number=1, episode_number=1, status="downloaded", air_date=past_date, monitored=False)
 
         db_mock = MagicMock()
         db_mock.get.return_value = show
@@ -348,9 +349,15 @@ class TestManualImportLogic(unittest.TestCase):
         current_user = SimpleNamespace(id=1, username="admin")
 
         res = set_unaired_monitored(1, monitored=True, db=db_mock, current_user=current_user)
-        self.assertEqual(ep_future.status, "wanted")
+        self.assertIn(ep_future.status, (EpisodeStatus.UNAIRED, "unaired"))
+        self.assertTrue(ep_future.monitored)
         self.assertEqual(ep_past.status, "downloaded")
         self.assertEqual(res["affected"], 1)
+
+        res_off = set_unaired_monitored(1, monitored=False, db=db_mock, current_user=current_user)
+        self.assertIn(ep_future.status, (EpisodeStatus.IGNORED, "ignored"))
+        self.assertFalse(ep_future.monitored)
+        self.assertEqual(res_off["affected"], 1)
 
     def test_get_specials_import_status_and_scan_fallback(self):
         """Проверяет эндпоинты specials-import-status и scan-for-manual-import."""
