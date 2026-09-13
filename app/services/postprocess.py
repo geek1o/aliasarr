@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import shutil
+from typing import Callable, Optional
 
 logger = logging.getLogger("aliasarr.postprocess")
 

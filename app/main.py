@@ -4,6 +4,7 @@ import asyncio
 import datetime as dt
 import logging
 import os
+from typing import Any, Optional
 
 try:
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
