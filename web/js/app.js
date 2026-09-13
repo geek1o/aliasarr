@@ -12104,7 +12104,10 @@ function getContentTypeLabels() {
 }
 
 function guessContentTypeFromMetadata(result) {
-  return result && result.content_type === "movie" ? "movie" : "series";
+  if (!result) return "series";
+  if (result.content_type === "movie") return "movie";
+  if (result.content_type === "anime") return "anime";
+  return "series";
 }
 
 async function loadSourcesIntoWizardSelect(selectedSourceId) {
@@ -12179,9 +12182,14 @@ async function runWizardMetadataSearch() {
 
 function renderMetadataResultCard(r, index) {
   const isMovie = r.content_type === "movie";
-  const typeLabel = isMovie ? (CURRENT_LANG === 'en' ? 'Movie' : 'Фильм') : (CURRENT_LANG === 'en' ? 'Series' : 'Сериал');
-  const typeIco = isMovie ? "film" : "tv";
-  const typeClass = isMovie ? "meta-type-movie" : "meta-type-series";
+  const isAnime = r.content_type === "anime";
+  const typeLabel = isMovie 
+    ? (CURRENT_LANG === 'en' ? 'Movie' : 'Фильм') 
+    : (isAnime 
+        ? (CURRENT_LANG === 'en' ? 'Anime' : 'Аниме') 
+        : (CURRENT_LANG === 'en' ? 'Series' : 'Сериал'));
+  const typeIco = isMovie ? "film" : (isAnime ? "sparkles" : "tv");
+  const typeClass = isMovie ? "meta-type-movie" : (isAnime ? "meta-type-anime" : "meta-type-series");
 
   const yearStr = r.year ? String(r.year) : "";
   const ratingStr = r.rating ? `<span class="meta-badge-glass meta-rating"><i data-lucide="star" style="width:11px; height:11px;"></i>${Number(r.rating).toFixed(1)}</span>` : "";
@@ -12248,11 +12256,14 @@ function renderWizardStep2Content() {
 
   const r = WIZARD_STATE.selectedResult;
   const isMovie = r.content_type === "movie";
-  const currentType = isMovie ? "movie" : (WIZARD_STATE.contentType || "series");
+  const isAnime = r.content_type === "anime";
+  const currentType = isMovie ? "movie" : (isAnime ? "anime" : (WIZARD_STATE.contentType || "series"));
   WIZARD_STATE.contentType = currentType;
-  const typeLabel = isMovie ? (CURRENT_LANG === 'en' ? 'Movie' : 'Фильм') : (CURRENT_LANG === 'en' ? 'Series' : 'Сериал');
-  const typeIco = isMovie ? "film" : "tv";
-  const typeClass = isMovie ? "meta-badge-type-movie" : "meta-badge-type-series";
+  const typeLabel = isMovie 
+    ? (CURRENT_LANG === 'en' ? 'Movie' : 'Фильм') 
+    : (isAnime ? (CURRENT_LANG === 'en' ? 'Anime' : 'Аниме') : (CURRENT_LANG === 'en' ? 'Series' : 'Сериал'));
+  const typeIco = isMovie ? "film" : (isAnime ? "sparkles" : "tv");
+  const typeClass = isMovie ? "meta-badge-type-movie" : (isAnime ? "meta-badge-type-anime" : "meta-badge-type-series");
   const initialLetter = (r.title || "?").trim()[0]?.toUpperCase() || "?";
   const posterStyle = r.poster_url ? `style="background-image: url('${r.poster_url}');"` : "";
 

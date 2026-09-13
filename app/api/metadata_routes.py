@@ -364,6 +364,9 @@ async def search_all_metadata_sources(
         primary_responses = []
 
     for (source_type_str, _), resp in zip(primary_tasks, primary_responses):
+        if isinstance(resp, Exception):
+            logger.warning("Primary metadata hook %s search error: %s", source_type_str, resp)
+            continue
         if isinstance(resp, list):
             for r in resp:
                 uid = f"{r.external_id}"
@@ -451,6 +454,47 @@ async def search_all_metadata_sources(
                             )
                         )
 
+    # 3. СТРАХОВОЧНЫЙ МЕХАНИЗМ: если найдены только фильмы, а сериалов/аниме 0
+    # (например, при крайне медленном соединении, сетевом сбое или таймауте внешних шлюзов SkyHook),
+    # опрашиваем TMDb TV fallback, чтобы на экране поиска карточки фильмов и сериалов всегда отображались вместе
+    has_series = any(item.content_type in ("series", "anime") for item in combined_results)
+    if not has_series:
+        try:
+            from app.services.metadata import TMDBClient, RadarrClient
+            tmdb_fallback = TMDBClient(api_key=RadarrClient.RADARR_TMDB_TOKEN)
+            tv_results = await tmdb_fallback.search(clean_query)
+            for r in tv_results:
+                if r.content_type not in ("series", "anime"):
+                    continue
+                uid = f"{r.external_id}"
+                c_type = r.content_type or "series"
+                title_norm = (r.title or "").strip().lower()
+                key = (c_type, title_norm, r.year)
+
+                if uid in seen_ids or (title_norm and key in seen_keys):
+                    continue
+                seen_ids.add(uid)
+                if title_norm:
+                    seen_keys.add(key)
+
+                existing = _find_existing_show(
+                    db,
+                    metadata_source="tmdb",
+                    metadata_id=r.external_id,
+                    title=r.title,
+                    year=r.year,
+                    content_type=c_type,
+                )
+                combined_results.append(
+                    MetadataSearchResultOut(
+                        **r.__dict__,
+                        already_added=existing is not None,
+                        existing_show_id=existing.id if existing else None,
+                    )
+                )
+        except Exception as e:
+            logger.debug("Emergency TMDb TV search fallback error in search_all: %s", e)
+
     return combined_results
 
 
@@ -505,8 +549,11 @@ async def import_show(
             source = db.query(MetadataSource).filter(MetadataSource.type.in_([MetadataSourceType.RADARR, MetadataSourceType.TMDB]), MetadataSource.enabled == True).first()
             if not source:
                 source = MetadataSource(name="Radarr SkyHook (Movie Cloud)", type="radarr", base_url="https://api.radarr.video/v1", enabled=True)
-        elif ext_str.startswith("tv:"):
+        elif ext_str.startswith("tv:") or (ext_str.startswith("tmdb:") and payload.content_type in ("series", "anime")):
             source = db.query(MetadataSource).filter(MetadataSource.type == MetadataSourceType.TMDB, MetadataSource.enabled == True).first()
+            if not source:
+                from app.services.metadata import RadarrClient
+                source = MetadataSource(name="TMDB", type="tmdb", base_url="https://api.themoviedb.org/3", api_key=RadarrClient.RADARR_TMDB_TOKEN, enabled=True)
         elif ext_str.startswith("tvmaze:"):
             source = db.query(MetadataSource).filter(MetadataSource.type == MetadataSourceType.TVMAZE, MetadataSource.enabled == True).first()
         elif ext_str.startswith("shiki:"):
@@ -547,6 +594,17 @@ async def import_show(
                 details = await tmdb._get_movie_details(clean_id)
             except Exception as e:
                 logger.warning("TMDb emergency details fetch failed: %s", e)
+
+        # Гарантия наличия названия и метаданных для сериалов и аниме
+        if (not details or not details.title or not details.title.strip()) and (ext_str.startswith("tv:") or payload.content_type in ("series", "anime")):
+            clean_id = ext_str.replace("tv:", "").replace("tmdb:", "").strip()
+            if clean_id.isdigit():
+                from app.services.metadata import TMDBClient, RadarrClient
+                try:
+                    tmdb = TMDBClient(api_key=RadarrClient.RADARR_TMDB_TOKEN, overview_language=overview_lang)
+                    details = await tmdb._get_tv_details(clean_id)
+                except Exception as e:
+                    logger.warning("TMDb emergency TV details fetch failed: %s", e)
 
         content_type = payload.content_type or details.content_type or "series"
         if content_type not in ("movie", "series", "anime"):

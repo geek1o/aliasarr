@@ -1480,7 +1480,10 @@ class SkyHookClient(BaseMetadataClient):
     """
 
     BASE_URL = "https://skyhook.sonarr.tv/v1/tvdb"
+    BACKUP_URL = "https://skyhook.servarr.com/v1/tvdb"
     RADARR_URL = "https://radarr.servarr.com/v1/api"
+    TMDB_URL = "https://api.themoviedb.org/3"
+    TMDB_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIxYTczNzMzMDE5NjFkMDNmOTdmODUzYTg3NmRkMTIxMiIsInN1YiI6IjU4NjRmNTkyYzNhMzY4MGFiNjAxNzUzNCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.gh1BwogCCKOda6xj9FRMgAAj_RYKMMPC3oNlcBtlmwk"
 
     def __init__(
         self,
@@ -1506,15 +1509,19 @@ class SkyHookClient(BaseMetadataClient):
         if not query or not query.strip():
             return []
 
+        clean_query = query.strip()
         results: list[MetadataResult] = []
         seen_ids: set[str] = set()
 
-        # 1. Поиск сериалов и аниме через Sonarr Skyhook
-        async with httpx.AsyncClient(timeout=20, headers={"User-Agent": "Aliasarr/1.0.0 (Sonarr SkyHook Proxy)"}) as client:
+        if httpx is None:
+            return results
+
+        # 1. Поиск сериалов и аниме через официальный Sonarr Skyhook
+        async with httpx.AsyncClient(timeout=25, headers={"User-Agent": "Aliasarr/1.0.0 (Sonarr SkyHook Proxy)"}) as client:
             try:
                 resp = await client.get(
                     f"{self.base_url}/search/en/",
-                    params={"term": query.strip()},
+                    params={"term": clean_query},
                 )
                 if resp.status_code == 200:
                     items = resp.json()
@@ -1548,13 +1555,100 @@ class SkyHookClient(BaseMetadataClient):
                                 genre=", ".join(genres) if genres else None,
                                 content_type=c_type,
                             ))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Skyhook search error on %s for '%s': %s", self.base_url, clean_query, e)
+
+            # 2. Резервный шлюз Skyhook Servarr
+            if not results and self.BACKUP_URL != self.base_url:
+                try:
+                    resp = await client.get(
+                        f"{self.BACKUP_URL}/search/en/",
+                        params={"term": clean_query},
+                    )
+                    if resp.status_code == 200:
+                        items = resp.json()
+                        if isinstance(items, list):
+                            for item in items:
+                                tvdb_id = item.get("tvdbId")
+                                if not tvdb_id:
+                                    continue
+                                ext_id = f"tvdb:{tvdb_id}"
+                                if ext_id in seen_ids:
+                                    continue
+                                seen_ids.add(ext_id)
+
+                                poster_url = extract_skyhook_poster(item.get("images", []))
+                                genres = item.get("genres", [])
+                                country = item.get("originalCountry")
+                                is_anime = ("Anime" in genres or "Animation" in genres) and (country in ("Japan", "JP", "JPN"))
+                                c_type = "anime" if is_anime else "series"
+                                rating_val = (item.get("rating") or {}).get("value")
+
+                                results.append(MetadataResult(
+                                    external_id=ext_id,
+                                    title=item.get("title") or "",
+                                    year=item.get("year"),
+                                    overview=item.get("overview"),
+                                    poster_url=poster_url,
+                                    rating=float(rating_val) if rating_val is not None else None,
+                                    country=country,
+                                    genre=", ".join(genres) if genres else None,
+                                    content_type=c_type,
+                                ))
+                except Exception as e:
+                    logger.warning("Skyhook backup search error on %s for '%s': %s", self.BACKUP_URL, clean_query, e)
+
+            # 3. Мгновенный CDN Fallback на TMDb TV (для сериалов и аниме)
+            if not results:
+                try:
+                    resp = await client.get(
+                        f"{self.TMDB_URL}/search/tv",
+                        params={"query": clean_query, "language": "ru-RU", "include_adult": "false"},
+                        headers={"Authorization": f"Bearer {self.TMDB_TOKEN}", "accept": "application/json"},
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        for item in data.get("results", []):
+                            tmdb_id = item.get("id")
+                            if not tmdb_id:
+                                continue
+                            ext_id = f"tv:{tmdb_id}"
+                            if ext_id in seen_ids:
+                                continue
+                            seen_ids.add(ext_id)
+
+                            year = None
+                            d_str = item.get("first_air_date") or ""
+                            if d_str and len(d_str) >= 4:
+                                try:
+                                    year = int(d_str[:4])
+                                except ValueError:
+                                    pass
+
+                            origin_countries = item.get("origin_country") or []
+                            is_anime = ("JP" in origin_countries or "JPN" in origin_countries)
+                            c_type = "anime" if is_anime else "series"
+
+                            poster = f"https://image.tmdb.org/t/p/w500{item['poster_path']}" if item.get("poster_path") else None
+
+                            results.append(MetadataResult(
+                                external_id=ext_id,
+                                title=item.get("name") or item.get("original_name") or "",
+                                year=year,
+                                overview=item.get("overview"),
+                                poster_url=poster,
+                                rating=item.get("vote_average"),
+                                country=", ".join(origin_countries) if origin_countries else None,
+                                genre=None,
+                                content_type=c_type,
+                            ))
+                except Exception as e:
+                    logger.warning("TMDb TV search fallback error for '%s': %s", clean_query, e)
 
         return results
 
     async def get_details(self, external_id: str) -> MetadataShowDetails:
-        """Получение полных деталей и списка всех эпизодов через SkyHook / Servarr."""
+        """Получение полных деталей и списка всех эпизодов через SkyHook / Servarr / TMDb."""
         ext_str = str(external_id or "").strip()
         if not ext_str:
             raise ValueError("external_id is empty")
@@ -1569,7 +1663,15 @@ class SkyHookClient(BaseMetadataClient):
             return await self._get_movie_details(clean_id[6:])
         elif clean_id.isdigit():
             return await self._get_series_details(clean_id)
-        elif ext_str.lower().startswith(("anilist:", "mal:", "imdb:", "tmdb:")):
+        elif ext_str.lower().startswith(("anilist:", "mal:", "imdb:", "tmdb:", "tv:")):
+            clean_tv = ext_str.split(":", 1)[1].strip() if ":" in ext_str else ext_str
+            if ext_str.lower().startswith(("tv:", "tmdb:")) and clean_tv.isdigit():
+                try:
+                    tmdb = TMDBClient(api_key=self.TMDB_TOKEN, overview_language=self.overview_language)
+                    return await tmdb._get_tv_details(clean_tv)
+                except Exception as e:
+                    logger.warning("Failed fetching TV details via TMDb for %s: %s", ext_str, e)
+
             # SkyHook Sonarr API умеет искать по anilist:id, mal:id, imdb:id, tmdb:id
             results = await self.search(ext_str)
             if results and results[0].external_id:
@@ -1583,8 +1685,17 @@ class SkyHookClient(BaseMetadataClient):
 
     async def _get_series_details(self, tvdb_id: str) -> MetadataShowDetails:
         async with httpx.AsyncClient(timeout=30, headers={"User-Agent": "Aliasarr/1.0.0 (Sonarr SkyHook Proxy)"}) as client:
-            resp = await client.get(f"{self.base_url}/shows/en/{tvdb_id}")
-            resp.raise_for_status()
+            resp = None
+            try:
+                resp = await client.get(f"{self.base_url}/shows/en/{tvdb_id}")
+                resp.raise_for_status()
+            except Exception as e:
+                logger.warning("Skyhook shows/en failed on %s: %s. Trying backup...", self.base_url, e)
+                if self.BACKUP_URL != self.base_url:
+                    resp = await client.get(f"{self.BACKUP_URL}/shows/en/{tvdb_id}")
+                    resp.raise_for_status()
+                else:
+                    raise
             data = resp.json()
 
         raw_title = data.get("title") or ""
@@ -1621,6 +1732,8 @@ class SkyHookClient(BaseMetadataClient):
                     continue
                 try:
                     lang_resp = await client.get(f"{self.base_url}/shows/{lang.lower()}/{tvdb_id}")
+                    if lang_resp.status_code != 200 and self.BACKUP_URL != self.base_url:
+                        lang_resp = await client.get(f"{self.BACKUP_URL}/shows/{lang.lower()}/{tvdb_id}")
                     if lang_resp.status_code == 200:
                         lang_data = lang_resp.json()
                         lt = lang_data.get("title")

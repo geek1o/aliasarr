@@ -2654,6 +2654,12 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   background: rgba(5, 20, 25, 0.82);
 }
 
+.meta-badge-glass.meta-type-anime {
+  color: #ff2a4d;
+  border-color: rgba(255, 42, 77, 0.35);
+  background: rgba(30, 8, 15, 0.82);
+}
+
 .metadata-poster-bottom {
   position: relative;
   z-index: 3;
@@ -3056,6 +3062,11 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   color: var(--teal, #00F0FF);
   border-color: rgba(0, 240, 255, 0.45);
 }
+.meta-badge-type-anime {
+  background: rgba(255, 42, 77, 0.16);
+  color: #ff2a4d;
+  border-color: rgba(255, 42, 77, 0.45);
+}
 [data-theme="light"] .meta-badge-type-movie {
   background: #e0e7ff;
   color: #4338ca;
@@ -3065,6 +3076,11 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   background: #cffafe;
   color: #0e7490;
   border-color: #67e8f9;
+}
+[data-theme="light"] .meta-badge-type-anime {
+  background: #ffe4e8;
+  color: #e11d48;
+  border-color: #fda4af;
 }
 .metadata-result-overview {
   font-size: 12px; color: var(--text-muted); margin: 0; display: -webkit-box;
