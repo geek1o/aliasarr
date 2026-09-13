@@ -16,6 +16,7 @@
         var theme = localStorage.getItem("vbeacon_theme") || "dark";
         if (theme !== "light") theme = "dark";
         document.documentElement.setAttribute("data-theme", theme);
+      document.documentElement.setAttribute("data-glass", localStorage.getItem("aliasarr_glass") || "off");
         var lang = localStorage.getItem("aliasarr_lang") || "ru";
         document.documentElement.setAttribute("lang", lang);
         document.title = lang === "en" ? "API Reference — Aliasarr" : "Справочник API — Aliasarr";
@@ -24,7 +25,10 @@
   </script>
 
   <style>
-    :root {
+    :root { --glass-blur: none; }
+  :root[data-glass="on"] { --glass-blur: initial; }
+
+  :root {
       --bg: #0b0f19;
       --panel: #121824;
       --panel-alt: #171e2e;
@@ -95,8 +99,8 @@
       z-index: 999;
       height: var(--header-h);
       background: rgba(11, 15, 25, 0.82);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      backdrop-filter: var(--glass-blur, blur(20px));
+      -webkit-backdrop-filter: var(--glass-blur, blur(20px));
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
