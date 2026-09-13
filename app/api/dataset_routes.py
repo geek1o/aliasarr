@@ -460,7 +460,9 @@ async def _run_harvest_task(targets: list[dict], indexer_id: Optional[int]):
 
 
 @router.get("/status")
-def get_harvest_status():
+def get_harvest_status(
+    current_user: User = Depends(require_any_permission("manual_search", "manage_settings")),
+):
     records = _load_stored_dataset()
     stats = _compute_stats(records)
     return {
@@ -551,6 +553,7 @@ def get_dataset_data(
     query: Optional[str] = None,
     page: int = 1,
     page_size: int = 50,
+    current_user: User = Depends(require_any_permission("manual_search", "manage_settings")),
 ):
     records = _load_stored_dataset()
     stats = _compute_stats(records)

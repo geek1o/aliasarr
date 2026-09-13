@@ -36,12 +36,27 @@ except ImportError:
 
 SESSION_COOKIE_NAME = "aliasarr_session"
 
-# Пути, доступные без авторизации (только статус авторизации, логин и health probe)
-_PUBLIC_PATHS_PREFIXES = (
+# Пути, доступные без авторизации. Сопоставление должно быть только точным:
+# префикс /api/v1/health не должен открывать /api/v1/health-check.
+_PUBLIC_PATHS = frozenset((
     "/api/v1/health",
     "/api/v1/auth/status",
     "/api/v1/auth/login",
-)
+    "/api/v1/auth/login-2fa",
+))
+# Совместимость для импортирующих старое внутреннее имя тестов и расширений.
+_PUBLIC_PATHS_PREFIXES = tuple(_PUBLIC_PATHS)
+
+
+def _get_scope_path(request: Request) -> str:
+    """Берёт маршрут из ASGI scope, не позволяя Host подменить URL path."""
+    scope = getattr(request, "scope", None)
+    if isinstance(scope, dict):
+        path = scope.get("path")
+        if isinstance(path, str):
+            return path
+    # Поддержка простых mock-объектов в unit-тестах; реальный Request всегда имеет scope.
+    return request.url.path
 
 
 def _trusted_proxy_networks() -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
@@ -170,10 +185,10 @@ def _get_valid_session_user(db, token: str | None):
 
 class ApiKeyMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        path = request.url.path
+        path = _get_scope_path(request)
 
         # Общедоступные маршруты (статика css/js/шрифты, вход, проверка статуса сессии, health probe и корень /)
-        if path == "/" or (path.startswith("/ui/static/") and not path.endswith(".html")) or any(path.startswith(p) for p in _PUBLIC_PATHS_PREFIXES):
+        if path == "/" or (path.startswith("/ui/static/") and not path.endswith(".html")) or path in _PUBLIC_PATHS:
             return await call_next(request)
 
         user = None

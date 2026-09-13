@@ -125,7 +125,10 @@ def get_stats(db: Session = Depends(get_db), current_user: User = Depends(requir
 
 
 @router.get("/health-check", summary="Расширенный статус здоровья и метрики системы")
-def get_health_check(db: Session = Depends(get_db)):
+def get_health_check(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("view_dashboard")),
+):
     """Расширенные проверки здоровья и метрики системы для дашборда."""
     checks = []
 
@@ -1716,5 +1719,4 @@ async def trigger_refresh_all_metadata(
 
     background_tasks.add_task(_runner)
     return {"success": True, "message": "Запущено фоновое обновление метаданных библиотеки"}
-
 
