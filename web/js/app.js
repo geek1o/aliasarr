@@ -4948,6 +4948,28 @@ function escapeHtml(s) {
   return (s || "").toString().replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+function safeBackgroundImageStyle(rawUrl) {
+  const value = String(rawUrl || "").trim();
+  if (!value) return "";
+
+  let parsed;
+  try {
+    parsed = new URL(value, window.location.origin);
+  } catch (_) {
+    return "";
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
+
+  const cssSafeUrl = parsed.href
+    .replace(/\\/g, "%5C")
+    .replace(/'/g, "%27")
+    .replace(/"/g, "%22")
+    .replace(/\(/g, "%28")
+    .replace(/\)/g, "%29")
+    .replace(/[\r\n]/g, "");
+  return `style="background-image:url('${escapeHtml(cssSafeUrl)}')"`;
+}
+
 function formatShowTitleWithYear(title, year) {
   if (!title) return "";
   const t = String(title).trim();
@@ -6527,7 +6549,7 @@ async function renderCollectionsView(query = "", force = false) {
 
 function renderCollectionCard(coll) {
   const posterImg = coll.poster_url || coll.backdrop_url;
-  const posterStyle = posterImg ? `style="background-image:url('${posterImg}')"` : "";
+  const posterStyle = safeBackgroundImageStyle(posterImg);
   const total = coll.parts_count || coll.shows_count || 0;
   const inLib = coll.shows_count || 0;
   const downloaded = coll.downloaded_count || 0;
@@ -6688,8 +6710,8 @@ async function openCollectionModal(collectionId) {
 
     const coll = await api(`/api/v1/collections/${collectionId}`);
     const bg = coll.backdrop_url || coll.poster_url;
-    const backdropStyle = bg ? `style="background-image:url('${bg}')"` : "";
-    const posterStyle = coll.poster_url ? `style="background-image:url('${coll.poster_url}')"` : "";
+    const backdropStyle = safeBackgroundImageStyle(bg);
+    const posterStyle = safeBackgroundImageStyle(coll.poster_url);
 
     const parts = coll.franchise_parts || [];
     const missingCount = coll.missing_count !== undefined ? coll.missing_count : parts.filter(p => !p.in_library).length;
@@ -6760,7 +6782,7 @@ async function openCollectionModal(collectionId) {
 
       <div class="franchise-parts-grid">
         ${parts.map((p, idx) => {
-          const partPosterStyle = p.poster_url ? `style="background-image:url('${p.poster_url}')"` : "";
+          const partPosterStyle = safeBackgroundImageStyle(p.poster_url);
           const isInLib = p.in_library;
           const statusBadge = isInLib
             ? `<span class="badge badge-success" style="font-size:11px;"><i data-lucide="check" class="ico-xxs"></i> ${t("collection.status_in_lib")}</span>`
@@ -7109,7 +7131,7 @@ function scrollToLetter(char) {
 
 function renderShowCard(show) {
   const initial = (show.title || "?").trim()[0]?.toUpperCase() || "?";
-  const posterStyle = show.poster_url ? `style="background-image:url('${show.poster_url}')"` : "";
+  const posterStyle = safeBackgroundImageStyle(show.poster_url);
   const canManageLib = (typeof hasPermission === "function") ? hasPermission("manage_library") : true;
   const aliases = (show.aliases || []).slice(0, 4).map(
     a => `<span class="alias-chip lang-${a.language} ${canManageLib ? 'interactive' : ''}" ${canManageLib ? `data-title="${escapeHtml(a.text)}" onclick="onAliasCardChipClick(event, ${show.id}, this)" title="${CURRENT_LANG === 'en' ? 'Click to set as main title: ' + escapeHtml(a.text) : 'Нажмите, чтобы сделать основным названием: ' + escapeHtml(a.text)}"` : ''}>${escapeHtml(a.text)}</span>`
@@ -7306,7 +7328,7 @@ function renderShowCard(show) {
 
 function renderShowTableRow(show) {
   const initial = (show.title || "?").trim()[0]?.toUpperCase() || "?";
-  const posterStyle = show.poster_url ? `style="background-image:url('${show.poster_url}')"` : "";
+  const posterStyle = safeBackgroundImageStyle(show.poster_url);
   const mTitle = show.monitored 
     ? (CURRENT_LANG === "en" ? "Monitored: automatic search for new releases is enabled" : "Отслеживается: автоматический поиск новых релизов включен") 
     : (CURRENT_LANG === "en" ? "Unmonitored: automatic search is disabled" : "Не отслеживается: автоматический поиск отключен");
@@ -7408,7 +7430,7 @@ function renderShowTableRow(show) {
 
 function renderShowOverviewRow(show) {
   const initial = (show.title || "?").trim()[0]?.toUpperCase() || "?";
-  const posterStyle = show.poster_url ? `style="background-image:url('${show.poster_url}')"` : "";
+  const posterStyle = safeBackgroundImageStyle(show.poster_url);
   const nextAiring = show.next_airing ? formatDateOnly(show.next_airing) : null;
   const mtext = show.monitored ? t("dash.monitored") : t("dash.unmonitored");
   const mClass = show.monitored ? "monitored" : "unmonitored";
@@ -8396,9 +8418,9 @@ async function refreshShowModal() {
     });
     const seasonNumbers = Object.keys(seasons).map(Number).sort((a, b) => a - b);
 
-    const posterStyle = show.poster_url ? `style="background-image:url('${show.poster_url}')"` : "";
+    const posterStyle = safeBackgroundImageStyle(show.poster_url);
     const backdropImg = show.collection_backdrop_url || show.backdrop_url || show.poster_url;
-    const backdropStyle = backdropImg ? `style="background-image:url('${backdropImg}')"` : "";
+    const backdropStyle = safeBackgroundImageStyle(backdropImg);
     const initial = (show.title || "?").trim()[0]?.toUpperCase() || "?";
 
     const qpObj = CACHED_QUALITY_PROFILES.find(qp => qp.id === show.quality_profile_id);
@@ -13995,7 +14017,7 @@ function renderCalendarAgendaList(byDay, rangeStart, rangeEnd) {
           const eKey = `${e.show_id}_${e.episode_id || 'prem'}`;
           const isMovie = e.content_type === "movie";
           const isAnime = e.content_type === "anime";
-          const posterStyle = e.poster_url ? `style="background-image:url('${e.poster_url}')"` : "";
+          const posterStyle = safeBackgroundImageStyle(e.poster_url);
           const epCode = (e.season != null && e.episode != null)
             ? `S${pad2(e.season)}E${pad2(e.episode)}${e.absolute_episode ? ` (${e.absolute_episode})` : ''}` : "";
           const epName = isMovie ? t("calendar.movie_premiere") : (e.title ? escapeHtml(truncateCalendarTitle(e.title, 50)) : "TBA");
