@@ -22,7 +22,9 @@ try:
         MetadataSourceType,
         User,
         UserRole,
+        AliasLanguage,
     )
+    from app.schemas import ShowOut
     from app.api.metadata_routes import cleanup_unallowed_aliases
     HAS_DB = True
 except ImportError:
@@ -220,6 +222,53 @@ class TestAliasCleanupAndSettings(unittest.TestCase):
         # Filtered out:
         self.assertNotIn("Hoży doktorzy", alias_texts)
         self.assertNotIn("Scrubs – Die Anfänger", alias_texts)
+
+    def test_show_with_multilingual_aliases_serialization(self):
+        """Проверяет, что карточка с алиасами на различных языках (zh, ja, ko, de и т.д.)
+        успешно считывается из БД и сериализуется в ShowOut без ошибки LookupError."""
+        show = Show(
+            title="Naruto Shippuden",
+            status="continuing",
+        )
+        self.db.add(show)
+        self.db.commit()
+        self.db.refresh(show)
+
+        aliases_to_add = [
+            ("Наруто: Ураганные хроники", "ru"),
+            ("Naruto: Shippuden", "en"),
+            ("火影忍者：疾风传", "zh"),
+            ("ナルト 疾風伝", "ja"),
+            ("나루토 질풍전", "ko"),
+            ("Naruto Shippuden (DE)", "de"),
+            ("Custom Lang Alias", "custom_iso"),
+        ]
+
+        for text, lang in aliases_to_add:
+            self.db.add(Alias(
+                show_id=show.id,
+                text=text,
+                language=lang,
+                source="skyhook",
+                priority=1,
+            ))
+        self.db.commit()
+
+        # Query show with aliases from DB
+        fetched_show = self.db.query(Show).filter(Show.id == show.id).first()
+        self.assertIsNotNone(fetched_show)
+        self.assertEqual(len(fetched_show.aliases), 7)
+
+        # Validate with Pydantic ShowOut (where the 500 error previously occurred)
+        show_out = ShowOut.model_validate(fetched_show)
+        self.assertEqual(show_out.title, "Naruto Shippuden")
+        self.assertEqual(len(show_out.aliases), 7)
+        languages = {a.language for a in show_out.aliases}
+        self.assertIn("zh", languages)
+        self.assertIn("ja", languages)
+        self.assertIn("ko", languages)
+        self.assertIn("de", languages)
+        self.assertIn("custom_iso", languages)
 
 
 if __name__ == "__main__":

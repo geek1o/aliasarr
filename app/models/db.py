@@ -55,7 +55,22 @@ class EpisodeStatus(str, enum.Enum):
 class AliasLanguage(str, enum.Enum):
     RU = "ru"
     EN = "en"
+    JA = "ja"
     JP = "jp"
+    KO = "ko"
+    ZH = "zh"
+    DE = "de"
+    ES = "es"
+    FR = "fr"
+    IT = "it"
+    PT = "pt"
+    PL = "pl"
+    HU = "hu"
+    CS = "cs"
+    TR = "tr"
+    RO = "ro"
+    AR = "ar"
+    UK = "uk"
     ROMAJI = "romaji"
     OTHER = "other"
 
@@ -194,7 +209,7 @@ class Alias(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     show_id: Mapped[int] = mapped_column(ForeignKey("shows.id"), nullable=False, index=True)
     text: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
-    language: Mapped[AliasLanguage] = mapped_column(SAEnum(AliasLanguage), default=AliasLanguage.RU)
+    language: Mapped[str] = mapped_column(String(20), default=AliasLanguage.RU.value)
     source: Mapped[str] = mapped_column(String(50), default="manual")  # manual | tmdb | tvmaze | thetvdb | skyhook | custom
     # Приоритет перебора алиасов при поиске: меньшее число = опрашивается раньше
     priority: Mapped[int] = mapped_column(Integer, default=1)
