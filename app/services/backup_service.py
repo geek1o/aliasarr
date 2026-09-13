@@ -83,7 +83,16 @@ LIBRARY_TABLES = {
 
 
 def _ensure_backup_dir() -> str:
-    os.makedirs(BACKUP_DIR, exist_ok=True)
+    os.makedirs(BACKUP_DIR, mode=0o700, exist_ok=True)
+    try:
+        os.chmod(BACKUP_DIR, 0o700)
+        for name in os.listdir(BACKUP_DIR):
+            if name.endswith(".zip"):
+                path = os.path.join(BACKUP_DIR, name)
+                if os.path.isfile(path):
+                    os.chmod(path, 0o600)
+    except OSError as exc:
+        logger.warning("Не удалось ограничить права на каталог резервных копий: %s", exc)
     return BACKUP_DIR
 
 
@@ -220,6 +229,8 @@ def create_backup(
                 zf.write(sqlite_file, arcname="aliasarr.db")
             except Exception as exc:
                 logger.warning("Не удалось упаковать бинарный файл SQLite: %s", exc)
+
+    os.chmod(archive_path, 0o600)
 
     stat = os.stat(archive_path)
     file_size = stat.st_size

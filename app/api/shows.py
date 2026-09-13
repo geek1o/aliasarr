@@ -74,8 +74,20 @@ from app.services.organizer import clean_show_title_and_year
 from app.services.settings_service import get_or_create_settings
 from app.services.user_service import require_permission, require_any_permission, get_current_user
 from app.services.metadata import get_metadata_client
+from app.services.path_security import (
+    UnsafeMediaPathError,
+    require_library_descendant,
+    require_library_descendants,
+)
 
 router = APIRouter(prefix="/api/v1/shows", tags=["shows"])
+
+
+def _validate_destructive_media_paths(settings, paths: list[str | None]) -> None:
+    try:
+        require_library_descendants((path for path in paths if path), settings)
+    except UnsafeMediaPathError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _attach_computed_fields(db: Session, shows: list[Show]) -> list[ShowOut]:
@@ -568,6 +580,12 @@ async def delete_show(
     episodes = db.query(Episode).filter_by(show_id=show.id).all()
 
     if delete_files:
+        settings = get_or_create_settings(db)
+        _validate_destructive_media_paths(
+            settings,
+            [show_path, *(ep.file_path for ep in episodes)],
+        )
+
         def _remove_files_sync(f_paths: list[str], s_path: Optional[str]):
             for f in f_paths:
                 if f and os.path.isfile(f):
@@ -646,6 +664,12 @@ async def delete_content(
         affected_eps = len(episodes)
 
         if payload.delete_files:
+            settings = get_or_create_settings(db)
+            _validate_destructive_media_paths(
+                settings,
+                [show_path, *(ep.file_path for ep in episodes)],
+            )
+
             def _remove_files_sync(f_paths: list[str], s_path: Optional[str]) -> int:
                 count = 0
                 for f in f_paths:
@@ -717,6 +741,13 @@ async def delete_content(
             Episode.season_number.in_(target_seasons)
         ).all()
         affected_eps = len(episodes)
+
+        if payload.delete_files:
+            settings = get_or_create_settings(db)
+            _validate_destructive_media_paths(
+                settings,
+                [ep.file_path for ep in episodes],
+            )
 
         season_folders_to_check = set()
 
@@ -797,6 +828,13 @@ async def delete_content(
             Episode.id.in_(target_ep_ids)
         ).all()
         affected_eps = len(episodes)
+
+        if payload.delete_files:
+            settings = get_or_create_settings(db)
+            _validate_destructive_media_paths(
+                settings,
+                [ep.file_path for ep in episodes],
+            )
 
         for ep in episodes:
             if ep.file_path:
@@ -3082,6 +3120,10 @@ def fix_show_permissions(
     total_files = 0
 
     if show_root and os.path.exists(show_root):
+        try:
+            require_library_descendant(show_root, settings)
+        except UnsafeMediaPathError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         stats = apply_media_permissions(show_root, is_dir=True, recursive=True)
         total_dirs += stats.get("dirs", 0)
         total_files += stats.get("files", 0)
@@ -3089,6 +3131,10 @@ def fix_show_permissions(
     # Дополнительно проходим по всем файлам серий тайтла и их директориям
     for ep in (show.episodes or []):
         if ep.file_path and os.path.exists(ep.file_path):
+            try:
+                require_library_descendant(ep.file_path, settings)
+            except UnsafeMediaPathError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
             st = apply_media_permissions(ep.file_path, is_dir=False)
             total_files += st.get("files", 0)
             total_dirs += st.get("dirs", 0)
