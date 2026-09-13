@@ -195,5 +195,121 @@ class TestLanguageCodeNormalization(unittest.TestCase):
         self.assertEqual(res_uk, "Даг і Гріфф — нерозлучні друзі з дитинства...")
 
 
+class TestTVDetailsAndSkyHookEnrichment(unittest.TestCase):
+    def test_tmdb_get_tv_details_variables_and_overview(self):
+        from app.services.metadata import TMDBClient
+
+        tmdb_data = {
+            "name": "The Expanse",
+            "original_name": "The Expanse",
+            "overview": "A thriller set two hundred years in the future...",
+            "translations": {
+                "translations": [
+                    {
+                        "iso_639_1": "ru",
+                        "iso_3166_1": "RU",
+                        "data": {
+                            "name": "Пространство",
+                            "overview": "В начале XXIII века детектив..."
+                        }
+                    },
+                    {
+                        "iso_639_1": "en",
+                        "iso_3166_1": "US",
+                        "data": {
+                            "name": "The Expanse",
+                            "overview": "A thriller set two hundred years in the future..."
+                        }
+                    }
+                ]
+            },
+            "alternative_titles": {
+                "results": [
+                    {"title": "Экспансия", "iso_3166_1": "RU"}
+                ]
+            },
+            "seasons": []
+        }
+
+        mock_client = AsyncMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = tmdb_data
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        mock_httpx = MagicMock()
+        mock_httpx.AsyncClient.return_value = mock_client
+
+        with patch("app.services.metadata.httpx", mock_httpx):
+            client = TMDBClient(overview_language="ru")
+            details = asyncio.run(client._get_tv_details("63639", fetch_episodes=False))
+            self.assertEqual(details.overview, "В начале XXIII века детектив...")
+            self.assertIn("Пространство", details.aliases)
+            self.assertIn("Экспансия", details.aliases)
+
+    def test_skyhook_client_enriches_tv_series_with_tmdb_russian_overview(self):
+        from app.services.metadata import SkyHookClient
+
+        skyhook_data = {
+            "title": "The Expanse",
+            "overview": "Two hundred years in the future (SkyHook English)",
+            "tmdbId": 63639,
+            "tvdbId": 280619,
+            "episodes": [],
+            "images": []
+        }
+        tmdb_data = {
+            "name": "The Expanse",
+            "overview": "Default TMDB English",
+            "translations": {
+                "translations": [
+                    {
+                        "iso_639_1": "ru",
+                        "iso_3166_1": "RU",
+                        "data": {
+                            "name": "Пространство",
+                            "overview": "В начале XXIII века детектив..."
+                        }
+                    }
+                ]
+            },
+            "alternative_titles": {
+                "results": [
+                    {"title": "Экспансия", "iso_3166_1": "RU"}
+                ]
+            },
+            "seasons": []
+        }
+
+        mock_client = AsyncMock()
+        async def mock_get(url, **kwargs):
+            m = MagicMock()
+            m.status_code = 200
+            if "skyhook" in url:
+                if "/shows/en/" in url:
+                    m.json.return_value = skyhook_data
+                else:
+                    m.status_code = 400
+            elif "api.themoviedb.org" in url:
+                m.json.return_value = tmdb_data
+            return m
+
+        mock_client.get = mock_get
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        mock_httpx = MagicMock()
+        mock_httpx.AsyncClient.return_value = mock_client
+
+        with patch("app.services.metadata.httpx", mock_httpx):
+            client = SkyHookClient(overview_language="ru")
+            details = asyncio.run(client.get_details("tvdb:280619"))
+            self.assertEqual(details.overview, "В начале XXIII века детектив...")
+            self.assertIn("Пространство", details.aliases)
+            self.assertIn("Экспансия", details.aliases)
+
+
 if __name__ == "__main__":
     unittest.main()

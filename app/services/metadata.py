@@ -1046,7 +1046,7 @@ class TMDBClient(BaseMetadataClient):
         _COLLECTION_DETAILS_CACHE[cache_key] = (now, result)
         return result
 
-    async def _get_tv_details(self, tmdb_id: str) -> MetadataShowDetails:
+    async def _get_tv_details(self, tmdb_id: str, fetch_episodes: bool = True) -> MetadataShowDetails:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.get(
                 f"{self.BASE_URL}/tv/{tmdb_id}",
@@ -1058,45 +1058,51 @@ class TMDBClient(BaseMetadataClient):
 
             # Английские названия эпизодов (для совместимости с Jellyfin)
             episodes: list[MetadataEpisode] = []
-            seasons_info = show_data.get("seasons") or []
-            season_numbers = [s.get("season_number") for s in seasons_info if s.get("season_number") is not None]
-            if not season_numbers:
-                season_count = show_data.get("number_of_seasons", 0)
-                season_numbers = list(range(1, season_count + 1))
-            season_numbers = sorted(set(season_numbers))
+            if fetch_episodes:
+                seasons_info = show_data.get("seasons") or []
+                season_numbers = [s.get("season_number") for s in seasons_info if s.get("season_number") is not None]
+                if not season_numbers:
+                    season_count = show_data.get("number_of_seasons", 0)
+                    season_numbers = list(range(1, season_count + 1))
+                season_numbers = sorted(set(season_numbers))
 
-            genres = [str(g.get("name", "")).lower() for g in (show_data.get("genres") or [])]
-            countries = [(c or "").upper() for c in (show_data.get("origin_country") or [])]
-            is_anime = ("anime" in genres or "animation" in genres) and ("JP" in countries or "JPN" in countries)
+                genres = [str(g.get("name", "")).lower() for g in (show_data.get("genres") or [])]
+                countries = [(c or "").upper() for c in (show_data.get("origin_country") or [])]
+                is_anime = ("anime" in genres or "animation" in genres) and ("JP" in countries or "JPN" in countries)
 
-            running_abs = 1
-            for snum in season_numbers:
-                sr = await client.get(
-                    f"{self.BASE_URL}/tv/{tmdb_id}/season/{snum}",
-                    params={"language": "en-US"},
-                    headers=self._headers(),
-                )
-                if sr.status_code != 200:
-                    continue
-                for ep in sr.json().get("episodes", []):
-                    ep_season = ep.get("season_number", snum)
-                    ep_num = ep.get("episode_number", 0)
-                    abs_num = None
-                    if is_anime and ep_season > 0 and ep_num > 0:
-                        abs_num = running_abs
-                        running_abs += 1
-                    episodes.append(MetadataEpisode(
-                        season_number=ep_season,
-                        episode_number=ep_num,
-                        title=ep.get("name"),
-                        air_date=ep.get("air_date"),
-                        absolute_number=abs_num,
-                    ))
+                running_abs = 1
+                for snum in season_numbers:
+                    try:
+                        sr = await client.get(
+                            f"{self.BASE_URL}/tv/{tmdb_id}/season/{snum}",
+                            params={"language": "en-US"},
+                            headers=self._headers(),
+                        )
+                        if sr.status_code != 200:
+                            continue
+                        for ep in sr.json().get("episodes", []):
+                            ep_season = ep.get("season_number", snum)
+                            ep_num = ep.get("episode_number", 0)
+                            abs_num = None
+                            if is_anime and ep_season > 0 and ep_num > 0:
+                                abs_num = running_abs
+                                running_abs += 1
+                            episodes.append(MetadataEpisode(
+                                season_number=ep_season,
+                                episode_number=ep_num,
+                                title=ep.get("name"),
+                                air_date=ep.get("air_date"),
+                                absolute_number=abs_num,
+                            ))
+                    except Exception as e:
+                        logger.debug("Failed to fetch TMDb season %s for %s: %s", snum, tmdb_id, e)
 
         allowed_langs = {"en", "eng"} | {l.lower() for l in (self.alias_languages or ["ru"])}
         raw_title = show_data.get("name") or show_data.get("original_name") or ""
         aliases = []
         ru_title = None
+        eng_trans_title = None
+        extra_lang_titles = []
         # Извлекаем русское и английское название и описания из переводов TMDB
         overviews_by_lang: dict[str, str] = {}
         if show_data.get("overview") and str(show_data.get("overview")).strip():
@@ -1625,7 +1631,7 @@ class SkyHookClient(BaseMetadataClient):
                     alias_languages=self.alias_languages,
                     overview_language=self.overview_language,
                 )
-                tmdb_details = await tmdb._get_tv_details(str(tmdb_id_val))
+                tmdb_details = await tmdb._get_tv_details(str(tmdb_id_val), fetch_episodes=False)
                 if tmdb_details:
                     for a in tmdb_details.aliases:
                         if a and a != raw_title and a not in aliases:
