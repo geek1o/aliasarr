@@ -11,7 +11,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
-from typing import Iterable, Optional
+from typing import Any, Iterable, Optional
 
 try:
     from rapidfuzz import fuzz
@@ -1169,5 +1169,4 @@ def get_show_title_words(show: Any) -> set[str]:
             if text:
                 words.update(normalize_title_words(text))
     return words
-
 

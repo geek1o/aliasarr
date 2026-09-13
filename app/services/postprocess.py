@@ -23,7 +23,7 @@ from app.services.release_log_service import log_release_event
 try:
     from sqlalchemy import func, or_
     from sqlalchemy.orm import Session
-    from app.models.db import Episode, EpisodeStatus, Show, DownloadHistory, Indexer, TrackedRelease
+    from app.models.db import DownloadHistory, Episode, EpisodeStatus, Indexer, ReleaseLog, Show, TrackedRelease
 except ImportError:
     class _MockFunc:
         def lower(self, col): return col
@@ -59,6 +59,7 @@ except ImportError:
     DownloadHistory = type("DownloadHistory", (), {"id": _MockCol(), "show_id": _MockCol(), "indexer_id": _MockCol(), "torrent_hash": _MockCol()})
     Indexer = type("Indexer", (), {"id": _MockCol(), "name": _MockCol(), "enable_seeding": _MockCol(), "seed_ratio_limit": _MockCol(), "seed_time_limit_hours": _MockCol()})
     TrackedRelease = type("TrackedRelease", (), {"id": _MockCol(), "show_id": _MockCol(), "indexer_id": _MockCol()})
+    ReleaseLog = type("ReleaseLog", (), {"id": _MockCol(), "torrent_hash": _MockCol()})
 
 from app.services.parser import ReleaseKind, parse_episode
 from app.services.quality import parse_quality, detect_file_quality
@@ -1162,8 +1163,6 @@ def process_download(
     context_hints = [os.path.basename(download_path), show.title]
     if db:
         try:
-            from app.models.db import DownloadHistory, TrackedRelease, ReleaseLog
-            from sqlalchemy import func
             if torrent_hash:
                 tr = (
                     db.query(TrackedRelease)
@@ -1708,7 +1707,6 @@ def process_download(
                     from app.models.db import QualityProfile
                     qp = db.get(QualityProfile, show.quality_profile_id)
                     if qp and qp.cutoff_quality:
-                        from app.services.quality import parse_quality
                         c_cutoff = parse_quality(qp.cutoff_quality)
                         if q_info.rank >= c_cutoff.rank:
                             episode.upgrade_requested = False
@@ -2022,8 +2020,6 @@ def process_movie_download(
     context_hints = [os.path.basename(download_path), show.title]
     if db:
         try:
-            from app.models.db import DownloadHistory, TrackedRelease, ReleaseLog
-            from sqlalchemy import func
             if torrent_hash:
                 tr = (
                     db.query(TrackedRelease)
@@ -2246,7 +2242,6 @@ def process_movie_download(
             from app.models.db import QualityProfile
             qp = db.get(QualityProfile, show.quality_profile_id)
             if qp and qp.cutoff_quality:
-                from app.services.quality import parse_quality
                 c_cutoff = parse_quality(qp.cutoff_quality)
                 if q_info.rank >= c_cutoff.rank:
                     episode.upgrade_requested = False

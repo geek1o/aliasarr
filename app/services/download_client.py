@@ -22,6 +22,7 @@ import logging
 import os
 import re
 import urllib.parse
+import xmlrpc.client
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -1339,7 +1340,6 @@ class RTorrentClient(BaseDownloadClient):
         self._auth = (username, password) if username and password else None
 
     async def _call(self, method: str, *args) -> Any:
-        import xmlrpc.client
         xml_req = xmlrpc.client.dumps(args, methodname=method)
         async with httpx.AsyncClient(timeout=15, auth=self._auth) as client:
             resp = await client.post(self._url, content=xml_req, headers={"Content-Type": "text/xml"})
@@ -1748,4 +1748,3 @@ def get_client(download_client_row) -> BaseDownloadClient:
         return NZBGetClient(host=host, port=port, username=username, password=password)
 
     raise ValueError(f"Неизвестный тип загрузчика: {ctype}")
-

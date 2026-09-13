@@ -21,6 +21,7 @@ from app.services.metadata import (
     get_allowed_metadata_languages,
     is_alias_allowed,
     detect_alias_language,
+    normalize_metadata_lang_code,
 )
 from app.services.user_service import require_permission, get_current_user
 import logging

@@ -50,7 +50,7 @@ from app.schemas import (
     SpecialsImportStatusOut,
 )
 from app.services.audit_service import log_audit
-from app.services.parser import ReleaseKind, parse_episode
+from app.services.parser import ParsedRelease, ReleaseKind, parse_episode
 from app.services.postprocess import (
     _SAMPLE_RE,
     VIDEO_EXTENSIONS,
@@ -2196,8 +2196,8 @@ def execute_manual_import(
     valid_items = [it for it in sorted_payload_items if os.path.exists(it.file_path)]
     total_bytes = sum(os.path.getsize(it.file_path) for it in valid_items) or 1
     overall_bytes_copied = 0
-    used_dest_paths = set()
-    just_written_files = set()
+    used_dest_paths: set[str] = set()
+    just_written_files: set[str] = set()
     today = dt.date.today()
 
     with task_manager.track_sync(
@@ -2723,6 +2723,8 @@ def execute_global_manual_import(
     valid_items = [it for it in sorted_payload_items if os.path.exists(it.file_path)]
     total_bytes = sum(os.path.getsize(it.file_path) for it in valid_items) or 1
     overall_bytes_copied = 0
+    used_dest_paths: set[str] = set()
+    just_written_files: set[str] = set()
 
     with task_manager.track_sync(
         name="global_manual_import",

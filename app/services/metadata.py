@@ -17,6 +17,8 @@ import threading
 import time
 from typing import Optional, List, Dict, Any
 
+from sqlalchemy.orm import Session
+
 # In-memory кеш для информации о коллекциях/сагах TMDb (24 часа)
 _COLLECTION_DETAILS_CACHE: dict[str, tuple[float, dict]] = {}
 
@@ -2237,6 +2239,8 @@ class RadarrClient(BaseMetadataClient):
                                 titles_by_lang["original"] = t_orig
                                 if "en" not in titles_by_lang and is_latin_text(t_orig):
                                     titles_by_lang["en"] = t_orig
+                            poster_path = item.get("poster_path")
+                            poster = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
 
                             results.append(MetadataResult(
                                 external_id=ext_id,
@@ -4270,4 +4274,3 @@ def seed_default_metadata_sources(db) -> None:
         except Exception:
             pass
         logger.warning("Ошибка инициализации источников метаданных: %s", exc)
-
