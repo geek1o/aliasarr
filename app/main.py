@@ -53,9 +53,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("aliasarr.main")
 
 try:
-    os.umask(0)
+    os.umask(int(os.getenv("UMASK", "0022").strip(), 8))
 except Exception:
-    pass
+    os.umask(0o022)
 
 _active_server = None
 _restart_requested = False
@@ -189,14 +189,14 @@ def _seed_default_metadata_sources(db: Session) -> None:
 
 @app.on_event("startup")
 async def on_startup():
-    # Устанавливаем umask (по умолчанию 0000), чтобы все создаваемые директории (0777) и файлы (0666)
-    # были сразу доступны для чтения и записи Jellyfin, Plex, Samba, Transmission и qBittorrent.
+    # Безопасный umask по умолчанию запрещает запись для group/other. Права на медиафайлы,
+    # которым нужен общий доступ, устанавливаются явно через apply_media_permissions.
     try:
-        env_umask = os.getenv("UMASK", "0000").strip()
+        env_umask = os.getenv("UMASK", "0022").strip()
         os.umask(int(env_umask, 8))
     except Exception:
         try:
-            os.umask(0o000)
+            os.umask(0o022)
         except Exception:
             pass
 

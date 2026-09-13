@@ -15,11 +15,11 @@ from app.services.ssl_service import ensure_ssl_certificate
 def run():
     # Настройка umask для Docker / Linux
     try:
-        env_umask = os.getenv("UMASK", "0000").strip()
+        env_umask = os.getenv("UMASK", "0022").strip()
         os.umask(int(env_umask, 8))
     except Exception:
         try:
-            os.umask(0o000)
+            os.umask(0o022)
         except Exception:
             pass
 

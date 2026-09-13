@@ -121,7 +121,10 @@ def regenerate_api_key(db: Session) -> AppSettings:
 def write_api_key_file(api_key: str) -> None:
     try:
         os.makedirs("/config", exist_ok=True)
-        with open("/config/api_key.txt", "w") as f:
+        key_path = "/config/api_key.txt"
+        fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w") as f:
             f.write(api_key + "\n")
     except OSError:
         pass  # напр. при локальном запуске без смонтированного /config

@@ -202,12 +202,6 @@ def apply_media_permissions(
             pass
 
     try:
-        # Убеждаемся, что umask не маскирует создаваемые и изменяемые права
-        try:
-            os.umask(0)
-        except Exception:
-            pass
-
         if is_dir or os.path.isdir(path):
             _apply_single(path, True)
             if recursive:
