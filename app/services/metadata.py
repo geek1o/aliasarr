@@ -27,7 +27,7 @@ except ImportError:
     httpx = None  # type: ignore
 
 try:
-    from app.models.db import Alias, AliasLanguage, Episode, EpisodeStatus, MetadataSource, Show, MovieCollection
+    from app.models.db import Alias, AliasLanguage, Episode, EpisodeStatus, MetadataSource, MetadataSourceType, Show, MovieCollection
 except ImportError:
     class _DummyExpr:
         def __eq__(self, other): return self
@@ -50,6 +50,15 @@ except ImportError:
     class AliasLanguage:  # type: ignore
         RU = "ru"
         EN = "en"
+
+    class MetadataSourceType:  # type: ignore
+        SKYHOOK = "skyhook"
+        RADARR = "radarr"
+        TMDB = "tmdb"
+        TVMAZE = "tvmaze"
+        THETVDB = "thetvdb"
+        SHIKIMORI = "shikimori"
+        ANILIST = "anilist"
 
     class Alias:  # type: ignore
         show_id = _DummyExpr()
@@ -299,21 +308,50 @@ def is_alias_allowed(
     t_clean = str(title).strip()
     norm_lang = normalize_metadata_lang_code(iso_or_lang)
 
-    # 1. Проверка специфических символов алфавитов (CJK, арабский, кириллица)
-    # Если в тексте есть кириллица — он допустим ТОЛЬКО если разрешен русский/украинский/белорусский
+    # 1. Если язык явно указан в источнике (например 'zh', 'ko', 'ja', 'it', 'de')
+    if norm_lang:
+        # Если язык явно не входит в разрешенные и не является разрешенным оригинальным языком тайтла -> отклоняем
+        is_orig_allowed = bool(original_lang and norm_lang == original_lang and original_lang in allowed_langs)
+        if norm_lang not in allowed_langs and not is_orig_allowed:
+            return False
+
+    # 2. Проверка специфических символов алфавитов
+    # Кириллица: допустима ТОЛЬКО если разрешен русский/украинский/белорусский
     if any('\u0400' <= c <= '\u04ff' for c in t_clean):
         return bool(allowed_langs.intersection({"ru", "rus", "russian", "uk", "ukr", "be"}))
 
-    # CJK / Японские / Корейские / Китайские иероглифы
-    is_cjk = any(
-        ('\u3040' <= c <= '\u309f') or  # Hiragana
-        ('\u30a0' <= c <= '\u30ff') or  # Katakana
-        ('\u4e00' <= c <= '\u9fff') or  # Kanji / Hanzi
-        ('\uac00' <= c <= '\ud7af')      # Hangul
+    # Корейский алфавит (Hangul)
+    has_hangul = any(
+        ('\uac00' <= c <= '\ud7af') or
+        ('\u1100' <= c <= '\u11ff') or
+        ('\u3130' <= c <= '\u318f')
         for c in t_clean
     )
-    if is_cjk:
-        return bool(allowed_langs.intersection({"ja", "jp", "jpn", "japanese", "zh", "zho", "chi", "chinese", "ko", "kor", "korean"}))
+    if has_hangul:
+        return bool(allowed_langs.intersection({"ko", "kor", "korean"}))
+
+    # Японская слоговая азбука (Hiragana / Katakana)
+    has_kana = any(
+        ('\u3040' <= c <= '\u309f') or
+        ('\u30a0' <= c <= '\u30ff')
+        for c in t_clean
+    )
+    if has_kana:
+        return bool(allowed_langs.intersection({"ja", "jp", "jpn", "japanese"}))
+
+    # Китайские иероглифы (Hanzi) / Японские иероглифы (Kanji без каны)
+    has_han = any('\u4e00' <= c <= '\u9fff' for c in t_clean)
+    if has_han:
+        # Если язык явно помечен как японский, проверяем японский
+        if norm_lang in ("ja", "jp", "jpn", "japanese"):
+            return bool(allowed_langs.intersection({"ja", "jp", "jpn", "japanese"}))
+        # Иначе для иероглифов требуется китайский язык
+        if bool(allowed_langs.intersection({"zh", "zho", "chi", "chinese"})):
+            return True
+        # Если китайский не разрешен, но разрешен японский и текст японского происхождения
+        if bool(allowed_langs.intersection({"ja", "jp", "jpn", "japanese"})) and norm_lang in ("ja", "jp", "jpn", "japanese"):
+            return True
+        return False
 
     # Арабская вязь
     if any('\u0600' <= c <= '\u06ff' for c in t_clean):
@@ -325,16 +363,11 @@ def is_alias_allowed(
             if not allowed_langs.intersection(lang_set):
                 return False
 
-    # 2. Если язык/страна явно указаны
+    # 3. Если язык был явно указан и прошел проверку
     if norm_lang:
-        if norm_lang in allowed_langs:
-            return True
-        if original_lang and norm_lang == original_lang and original_lang in allowed_langs:
-            return True
-        # Язык явно определен и НЕ входит в разрешенные (например 'ja', 'hu', 'fr', 'id', 'az') -> отклоняем
-        return False
+        return norm_lang in allowed_langs or bool(original_lang and norm_lang == original_lang and original_lang in allowed_langs)
 
-    # 3. Латиница и цифры без указания конкретного языка (считаем допустимым для английского/оригинала)
+    # 4. Латиница и цифры без указания конкретного языка (считаем допустимым для английского/оригинала)
     if is_latin_text(t_clean) and bool(allowed_langs.intersection({"en", "eng", "english"})):
         return True
 
@@ -346,25 +379,94 @@ def get_allowed_metadata_languages(db=None, show=None) -> set[str]:
     Возвращает множество кодов разрешенных языков для алиасов на основе
     настроек источника метаданных (field_mapping['alias_languages']) и дефолтных источников.
     Всегда включает базовый английский ('en', 'eng').
+    Фильмы строго привязываются к провайдеру фильмов (Radarr SkyHook).
     """
     try:
-        from app.models.db import MetadataSource
+        from app.models.db import MetadataSource, MetadataSourceType
     except (ImportError, Exception):
         MetadataSource = None
+        MetadataSourceType = None
 
     custom_langs: set[str] = set()
     source = None
     if db and MetadataSource:
         try:
-            if show and getattr(show, "metadata_source", None):
+            content_type = getattr(show, "content_type", None) if show else None
+            is_movie = content_type == "movie"
+            is_anime = content_type == "anime"
+
+            # 1. Приоритетный подбор источника по категории контента
+            if is_movie:
+                # Фильмы всегда берут настройки из провайдера фильмов Radarr SkyHook
+                radarr_type = getattr(MetadataSourceType, "RADARR", "radarr")
+                source = (
+                    db.query(MetadataSource)
+                    .filter(
+                        MetadataSource.type.in_([radarr_type, "radarr"]),
+                        MetadataSource.enabled == True,
+                    )
+                    .first()
+                )
+                if not source:
+                    source = (
+                        db.query(MetadataSource)
+                        .filter(
+                            MetadataSource.type.in_([radarr_type, "radarr", getattr(MetadataSourceType, "TMDB", "tmdb"), "tmdb"]),
+                            MetadataSource.enabled == True,
+                        )
+                        .first()
+                    )
+            elif is_anime:
+                # Аниме: специализированные источники (Shikimori, AniList) либо SkyHook
+                if show and getattr(show, "metadata_source", None) in ("shikimori", "anilist", "skyhook"):
+                    source = (
+                        db.query(MetadataSource)
+                        .filter(MetadataSource.type == show.metadata_source, MetadataSource.enabled == True)
+                        .first()
+                    )
+                if not source:
+                    skyhook_type = getattr(MetadataSourceType, "SKYHOOK", "skyhook")
+                    source = (
+                        db.query(MetadataSource)
+                        .filter(
+                            MetadataSource.type.in_([skyhook_type, "skyhook"]),
+                            MetadataSource.enabled == True,
+                        )
+                        .first()
+                    )
+            elif show and getattr(show, "metadata_source", None):
+                # Сериалы или тайтлы с явно заданным валидным источником
                 source = (
                     db.query(MetadataSource)
                     .filter(MetadataSource.type == show.metadata_source, MetadataSource.enabled == True)
                     .first()
                 )
+
+            # 2. Резервный подбор источника
             if not source:
-                # Берем первый активный источник, у которого настроены языки
+                if is_movie:
+                    source = (
+                        db.query(MetadataSource)
+                        .filter(
+                            MetadataSource.type.in_(["radarr", "tmdb"]),
+                            MetadataSource.enabled == True,
+                        )
+                        .first()
+                    )
+                else:
+                    source = (
+                        db.query(MetadataSource)
+                        .filter(
+                            MetadataSource.type.in_(["skyhook", "thetvdb", "tvmaze"]),
+                            MetadataSource.enabled == True,
+                        )
+                        .first()
+                    )
+
+            if not source:
                 for s in db.query(MetadataSource).filter(MetadataSource.enabled == True).all():
+                    if is_movie and s.type not in ("radarr", getattr(MetadataSourceType, "RADARR", "radarr")):
+                        continue
                     if isinstance(getattr(s, "field_mapping", None), dict) and s.field_mapping.get("alias_languages"):
                         source = s
                         break
@@ -2628,7 +2730,21 @@ async def refresh_show_metadata(db, show) -> dict:
     # 1. Разрешаем клиент источника метаданных
     client = None
     source = None
-    if getattr(show, "metadata_source", None):
+    if is_movie:
+        source = (
+            db.query(MetadataSource)
+            .filter(
+                MetadataSource.type.in_(["radarr", getattr(MetadataSourceType, "RADARR", "radarr")]),
+                MetadataSource.enabled == True,
+            )
+            .first()
+        )
+        if source:
+            try:
+                client = get_metadata_client(source)
+            except Exception:
+                client = None
+    elif getattr(show, "metadata_source", None):
         source = (
             db.query(MetadataSource)
             .filter(MetadataSource.type == show.metadata_source, MetadataSource.enabled == True)  # noqa: E712
@@ -2645,6 +2761,8 @@ async def refresh_show_metadata(db, show) -> dict:
         alias_langs = source.field_mapping.get("alias_languages")
     if not alias_langs:
         for s in db.query(MetadataSource).filter(MetadataSource.enabled == True).all():
+            if is_movie and s.type not in ("radarr", getattr(MetadataSourceType, "RADARR", "radarr")):
+                continue
             if isinstance(s.field_mapping, dict) and s.field_mapping.get("alias_languages"):
                 alias_langs = s.field_mapping["alias_languages"]
                 break
@@ -2762,7 +2880,7 @@ async def refresh_show_metadata(db, show) -> dict:
     if details.external_id and show.metadata_id != details.external_id:
         show.metadata_id = details.external_id
         changed = True
-    if not show.metadata_source:
+    if not show.metadata_source or (is_movie and show.metadata_source not in ("radarr", "tmdb")):
         show.metadata_source = "radarr" if is_movie else "skyhook"
         changed = True
 
@@ -3010,7 +3128,7 @@ async def refresh_show_metadata(db, show) -> dict:
                     show_id=show.id,
                     text=clean_alias,
                     language=det_lang,
-                    source="skyhook",
+                    source="radarr" if is_movie else "skyhook",
                     priority=cur_max_p,
                 ))
                 changed = True

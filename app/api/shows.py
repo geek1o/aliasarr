@@ -3014,7 +3014,7 @@ async def remap_show_metadata(
             if not source:
                 source = MetadataSource(name="SkyHook (Sonarr)", type="skyhook", base_url="https://skyhook.sonarr.tv/v1/tvdb", enabled=True)
         elif ext_str.startswith("movie:") or ext_str.startswith("radarr:") or source_type_name in ("radarr", "radarr_skyhook") or is_movie:
-            source = db.query(MetadataSource).filter(MetadataSource.type.in_([MetadataSourceType.RADARR, MetadataSourceType.SKYHOOK, MetadataSourceType.TMDB]), MetadataSource.enabled == True).first()
+            source = db.query(MetadataSource).filter(MetadataSource.type.in_([MetadataSourceType.RADARR, MetadataSourceType.TMDB]), MetadataSource.enabled == True).first()
             if not source:
                 source = MetadataSource(name="Radarr SkyHook (Movie Cloud)", type="radarr", base_url="https://api.radarr.video/v1", enabled=True)
         elif ext_str.startswith("tmdb:") or ext_str.startswith("tv:") or source_type_name == "tmdb":

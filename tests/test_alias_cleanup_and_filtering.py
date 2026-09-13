@@ -74,6 +74,36 @@ class TestAliasLanguageDetectionAndFiltering(unittest.TestCase):
         self.assertTrue(is_alias_allowed("Großstadt", None, allowed_with_de))
         self.assertTrue(is_alias_allowed("Scrubs – Die Anfänger", "de", allowed_with_de))
 
+        # When Italian is added, Italian words are allowed
+        allowed_with_it = {"ru", "en", "it"}
+        self.assertTrue(is_alias_allowed("La vita è bella", "it", allowed_with_it))
+        self.assertTrue(is_alias_allowed("Il padrino", "it", allowed_with_it))
+
+        # CJK separation: allowing Japanese does NOT allow Korean or Chinese
+        allowed_with_ja = {"ru", "en", "ja", "jpn"}
+        self.assertTrue(is_alias_allowed("ナルト 疾風伝", "ja", allowed_with_ja))
+        self.assertTrue(is_alias_allowed("ナルト 疾風伝", None, allowed_with_ja))
+        self.assertTrue(is_alias_allowed("俺たちのアナコンダ", None, allowed_with_ja))
+        # Korean and Chinese must be rejected!
+        self.assertFalse(is_alias_allowed("아나콘다", "ko", allowed_with_ja))
+        self.assertFalse(is_alias_allowed("아나콘다", None, allowed_with_ja))
+        self.assertFalse(is_alias_allowed("新狂蟒之灾", "zh", allowed_with_ja))
+        self.assertFalse(is_alias_allowed("新狂蟒之灾", None, allowed_with_ja))
+
+        # Allowing Korean does NOT allow Japanese or Chinese
+        allowed_with_ko = {"ru", "en", "ko", "kor"}
+        self.assertTrue(is_alias_allowed("아나콘다", "ko", allowed_with_ko))
+        self.assertTrue(is_alias_allowed("아나콘다", None, allowed_with_ko))
+        self.assertFalse(is_alias_allowed("ナルト 疾風伝", "ja", allowed_with_ko))
+        self.assertFalse(is_alias_allowed("新狂蟒之灾", "zh", allowed_with_ko))
+
+        # Allowing Chinese does NOT allow Japanese or Korean
+        allowed_with_zh = {"ru", "en", "zh", "chi"}
+        self.assertTrue(is_alias_allowed("新狂蟒之灾", "zh", allowed_with_zh))
+        self.assertTrue(is_alias_allowed("新狂蟒之灾", None, allowed_with_zh))
+        self.assertFalse(is_alias_allowed("ナルト 疾風伝", "ja", allowed_with_zh))
+        self.assertFalse(is_alias_allowed("아나콘다", "ko", allowed_with_zh))
+
 
 @unittest.skipUnless(HAS_DB, "Requires sqlalchemy, fastapi, and pydantic")
 class TestAliasCleanupAndSettings(unittest.TestCase):
@@ -269,6 +299,119 @@ class TestAliasCleanupAndSettings(unittest.TestCase):
         self.assertIn("ko", languages)
         self.assertIn("de", languages)
         self.assertIn("custom_iso", languages)
+
+    def test_get_allowed_metadata_languages_separation_by_content_type(self):
+        """Проверяет, что фильмы берут настройки из Radarr/Films, а сериалы и аниме — из Sonarr."""
+        # Удаляем предыдущие источники
+        self.db.query(MetadataSource).delete()
+        # Добавляем Sonarr с японским языком для аниме
+        sonarr = MetadataSource(
+            name="Sonarr SkyHook",
+            type="skyhook",
+            enabled=True,
+            field_mapping={"alias_languages": ["ru", "ja"]},
+        )
+        # Добавляем Radarr (Films) только с русским языком
+        radarr = MetadataSource(
+            name="Films",
+            type="radarr",
+            enabled=True,
+            field_mapping={"alias_languages": ["ru"]},
+        )
+        self.db.add_all([sonarr, radarr])
+        self.db.commit()
+
+        movie_show = Show(title="Anaconda", content_type="movie", metadata_source="tmdb")
+        anime_show = Show(title="Naruto", content_type="anime", metadata_source="skyhook")
+        series_show = Show(title="Scrubs", content_type="series", metadata_source="skyhook")
+
+        movie_langs = get_allowed_metadata_languages(self.db, movie_show)
+        anime_langs = get_allowed_metadata_languages(self.db, anime_show)
+        series_langs = get_allowed_metadata_languages(self.db, series_show)
+
+        # Фильмы должны содержать только русский и английский
+        self.assertIn("ru", movie_langs)
+        self.assertIn("en", movie_langs)
+        self.assertNotIn("ja", movie_langs)
+        self.assertNotIn("zh", movie_langs)
+        self.assertNotIn("ko", movie_langs)
+
+        # Аниме и сериалы должны содержать японский из Sonarr
+        self.assertIn("ja", anime_langs)
+        self.assertIn("ja", series_langs)
+
+    def test_cleanup_unallowed_aliases_movie_vs_anime(self):
+        """Проверяет, что при очистке алиасов в фильмах удаляются лишние CJK,
+        но в аниме сохраняются разрешенные японские алиасы."""
+        self.db.query(MetadataSource).delete()
+        sonarr = MetadataSource(
+            name="Sonarr SkyHook",
+            type="skyhook",
+            enabled=True,
+            field_mapping={"alias_languages": ["ru", "ja"]},
+        )
+        radarr = MetadataSource(
+            name="Films",
+            type="radarr",
+            enabled=True,
+            field_mapping={"alias_languages": ["ru"]},
+        )
+        self.db.add_all([sonarr, radarr])
+        self.db.commit()
+
+        # Создаем фильм "Anaconda" с мультиязычными авто-алиасами
+        movie = Show(title="Anaconda", content_type="movie", metadata_source="skyhook")  # даже если ошибочный skyhook
+        self.db.add(movie)
+        self.db.commit()
+        self.db.refresh(movie)
+
+        movie_aliases = [
+            ("Anaconda", "en"),
+            ("Анаконда", "ru"),
+            ("아나콘다", "ko"),
+            ("新狂蟒之灾", "zh"),
+            ("俺たちのアナコンダ", "ja"),
+        ]
+        for t, l in movie_aliases:
+            self.db.add(Alias(show_id=movie.id, text=t, language=l, source="skyhook", priority=1))
+
+        # Создаем аниме "Naruto"
+        anime = Show(title="Naruto", content_type="anime", metadata_source="skyhook")
+        self.db.add(anime)
+        self.db.commit()
+        self.db.refresh(anime)
+
+        anime_aliases = [
+            ("Naruto", "en"),
+            ("Наруто", "ru"),
+            ("ナルト", "ja"),
+            ("火影忍者", "zh"),
+        ]
+        for t, l in anime_aliases:
+            self.db.add(Alias(show_id=anime.id, text=t, language=l, source="skyhook", priority=1))
+
+        self.db.commit()
+
+        # Запускаем процедуру очистки
+        from unittest.mock import MagicMock
+        req = MagicMock()
+        import asyncio
+        asyncio.run(cleanup_unallowed_aliases(req, db=self.db, current_user=self.user))
+
+        # Проверяем фильм: корейский, китайский и японский должны быть удалены!
+        remaining_movie = {a.text for a in self.db.query(Alias).filter(Alias.show_id == movie.id).all()}
+        self.assertIn("Anaconda", remaining_movie)
+        self.assertIn("Анаконда", remaining_movie)
+        self.assertNotIn("아나콘다", remaining_movie)
+        self.assertNotIn("新狂蟒之灾", remaining_movie)
+        self.assertNotIn("俺たちのアナコンダ", remaining_movie)
+
+        # Проверяем аниме: японский "ナルト" должен остаться, а китайский "火影忍者" удален!
+        remaining_anime = {a.text for a in self.db.query(Alias).filter(Alias.show_id == anime.id).all()}
+        self.assertIn("Naruto", remaining_anime)
+        self.assertIn("Наруто", remaining_anime)
+        self.assertIn("ナルト", remaining_anime)
+        self.assertNotIn("火影忍者", remaining_anime)
 
 
 if __name__ == "__main__":
