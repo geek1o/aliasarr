@@ -14378,24 +14378,6 @@ async function saveAutoSearchSettings(btn) {
   });
 }
 
-async function toggleExperimentalRemap(checked, inputEl) {
-  try {
-    const val = Boolean(checked);
-    await api("/api/v1/settings", {
-      method: "PUT",
-      body: JSON.stringify({ enable_remap_button: val }),
-    });
-    if (CACHED_APP_SETTINGS) {
-      CACHED_APP_SETTINGS.enable_remap_button = val;
-    }
-    localStorage.setItem("aliasarr_enable_remap_button", val ? "true" : "false");
-    toast(t("settings.toast_saved"));
-  } catch (e) {
-    if (inputEl) inputEl.checked = !checked;
-    toast((CURRENT_LANG === "en" ? "Error: " : "Ошибка: ") + e.message, true);
-  }
-}
-
 async function saveExperimentalSettings(btn) {
   await withLoading(btn, async () => {
     try {
