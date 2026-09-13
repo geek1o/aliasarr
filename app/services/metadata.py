@@ -2300,7 +2300,13 @@ async def refresh_show_release_dates(db, show, override_source_type: Optional[st
                 episode.status = EpisodeStatus.UNAIRED if not already_released else EpisodeStatus.WANTED
                 db.add(episode)
                 changed = True
-    else:
+        future_seasons = set()
+        for me in details.episodes:
+            mad = _parse_date(me.air_date)
+            ms = me.season_number if me.season_number is not None else 1
+            if mad and mad > now:
+                future_seasons.add(ms)
+
         seen_added_keys = set()
         for meta_ep in details.episodes:
             if meta_ep.episode_number is None:
@@ -2312,6 +2318,10 @@ async def refresh_show_release_dates(db, show, override_source_type: Optional[st
                 continue
 
             air_date = _parse_date(meta_ep.air_date)
+            is_unaired = bool(
+                (air_date and air_date > now)
+                or (air_date is None and (s_num in future_seasons or (show.premiere_date and show.premiere_date > now)))
+            )
             episode = (
                 db.query(Episode)
                 .filter(
@@ -2330,13 +2340,24 @@ async def refresh_show_release_dates(db, show, override_source_type: Optional[st
                     changed = True
                 if air_date and episode.air_date != air_date:
                     episode.air_date = air_date
-                    if episode.status in (EpisodeStatus.MISSING, EpisodeStatus.WANTED, EpisodeStatus.UNAIRED):
-                        episode.status = EpisodeStatus.UNAIRED if air_date > now else EpisodeStatus.WANTED
-                    db.add(episode)
                     changed = True
+                if is_unaired and episode.status not in (EpisodeStatus.IGNORED, EpisodeStatus.DOWNLOADED) and not getattr(episode, "file_path", None):
+                    if episode.status != EpisodeStatus.UNAIRED:
+                        episode.status = EpisodeStatus.UNAIRED
+                        changed = True
+                    if not episode.monitored:
+                        episode.monitored = True
+                        changed = True
+                elif air_date and episode.status in (EpisodeStatus.MISSING, EpisodeStatus.WANTED, EpisodeStatus.UNAIRED):
+                    target_status = EpisodeStatus.UNAIRED if air_date > now else EpisodeStatus.WANTED
+                    if episode.status != target_status:
+                        episode.status = target_status
+                        changed = True
+                db.add(episode)
             elif e_num:
                 seen_added_keys.add(ep_key)
-                status = EpisodeStatus.UNAIRED if (air_date and air_date > now) else EpisodeStatus.WANTED
+                status = EpisodeStatus.UNAIRED if is_unaired else EpisodeStatus.WANTED
+                monitored = True if is_unaired else getattr(show, "monitored", True)
                 db.add(Episode(
                     show_id=show.id,
                     season_number=s_num,
@@ -2345,6 +2366,7 @@ async def refresh_show_release_dates(db, show, override_source_type: Optional[st
                     title=meta_ep.title,
                     air_date=air_date,
                     status=status,
+                    monitored=monitored,
                 ))
                 changed = True
 
@@ -2721,6 +2743,13 @@ async def refresh_show_metadata(db, show) -> dict:
             episodes_added += 1
     else:
         if details.episodes:
+            future_seasons = set()
+            for me in details.episodes:
+                mad = _parse_date(me.air_date)
+                ms = me.season_number if me.season_number is not None else 1
+                if mad and mad > now:
+                    future_seasons.add(ms)
+
             seen_added_keys = set()
             for meta_ep in details.episodes:
                 if meta_ep.episode_number is None:
@@ -2732,6 +2761,10 @@ async def refresh_show_metadata(db, show) -> dict:
                     continue
 
                 air_date = _parse_date(meta_ep.air_date)
+                is_unaired = bool(
+                    (air_date and air_date > now)
+                    or (air_date is None and (s_num in future_seasons or (show.premiere_date and show.premiere_date > now)))
+                )
                 
                 # Очищаем заглушки названий
                 raw_ep_title = (meta_ep.title or "").strip()
@@ -2770,9 +2803,19 @@ async def refresh_show_metadata(db, show) -> dict:
                         ep_changed = True
                     if air_date and episode.air_date != air_date:
                         episode.air_date = air_date
-                        if episode.status in (EpisodeStatus.MISSING, EpisodeStatus.WANTED, EpisodeStatus.UNAIRED):
-                            episode.status = EpisodeStatus.UNAIRED if air_date > now else EpisodeStatus.WANTED
                         ep_changed = True
+                    if is_unaired and episode.status not in (EpisodeStatus.IGNORED, EpisodeStatus.DOWNLOADED) and not getattr(episode, "file_path", None):
+                        if episode.status != EpisodeStatus.UNAIRED:
+                            episode.status = EpisodeStatus.UNAIRED
+                            ep_changed = True
+                        if not episode.monitored:
+                            episode.monitored = True
+                            ep_changed = True
+                    elif air_date and episode.status in (EpisodeStatus.MISSING, EpisodeStatus.WANTED, EpisodeStatus.UNAIRED):
+                        target_status = EpisodeStatus.UNAIRED if air_date > now else EpisodeStatus.WANTED
+                        if episode.status != target_status:
+                            episode.status = target_status
+                            ep_changed = True
                     if meta_ep.absolute_number is not None and episode.absolute_number != meta_ep.absolute_number:
                         episode.absolute_number = meta_ep.absolute_number
                         ep_changed = True
@@ -2782,7 +2825,8 @@ async def refresh_show_metadata(db, show) -> dict:
                         episodes_updated += 1
                 elif e_num:
                     seen_added_keys.add(ep_key)
-                    status = EpisodeStatus.UNAIRED if (air_date and air_date > now) else EpisodeStatus.WANTED
+                    status = EpisodeStatus.UNAIRED if is_unaired else EpisodeStatus.WANTED
+                    monitored = True if is_unaired else getattr(show, "monitored", True)
                     db.add(Episode(
                         show_id=show.id,
                         season_number=s_num,
@@ -2791,6 +2835,7 @@ async def refresh_show_metadata(db, show) -> dict:
                         title=raw_ep_title or "TBA",
                         air_date=air_date,
                         status=status,
+                        monitored=monitored,
                     ))
                     changed = True
                     episodes_added += 1

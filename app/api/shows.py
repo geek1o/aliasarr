@@ -308,6 +308,10 @@ def get_show(show_id: int, db: Session = Depends(get_db), current_user: User = D
                 if is_ep_ignored
                 else (EpisodeStatus.UNAIRED if air_d and air_d > today else EpisodeStatus.WANTED)
             )
+            if target_default_status == EpisodeStatus.UNAIRED and not getattr(ep, "file_path", None) and ep.status != EpisodeStatus.DOWNLOADED:
+                if not ep.monitored:
+                    ep.monitored = True
+                    needs_commit = True
 
             # Проверяем физический файл серии на диске
             if getattr(ep, "file_path", None):
@@ -914,6 +918,10 @@ def list_episodes(show_id: int, db: Session = Depends(get_db), current_user: Use
             if is_ep_ignored
             else (EpisodeStatus.UNAIRED if air_d and air_d > today else EpisodeStatus.WANTED)
         )
+        if target_default_status == EpisodeStatus.UNAIRED and not getattr(ep, "file_path", None) and ep.status != EpisodeStatus.DOWNLOADED:
+            if not ep.monitored:
+                ep.monitored = True
+                needs_commit = True
 
         has_real_file = False
         if getattr(ep, "file_path", None):
@@ -1046,7 +1054,7 @@ def set_all_seasons_monitored(
                 air_d = getattr(ep, "air_date", None)
                 if isinstance(air_d, dt.datetime):
                     air_d = air_d.date()
-                if not include_unaired and air_d and air_d > today:
+                if air_d and air_d > today:
                     ep.status = EpisodeStatus.UNAIRED
                 else:
                     ep.status = EpisodeStatus.WANTED
@@ -1066,7 +1074,7 @@ def set_unaired_monitored(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("manage_library")),
 ):
-    """Переводит все будущие/невышедшие серии тайтла в статус WANTED («в поиске») или IGNORED."""
+    """Переводит все будущие/невышедшие серии тайтла в статус UNAIRED/WANTED или IGNORED."""
     show = db.get(Show, show_id)
     if not show:
         raise HTTPException(404, "Show not found")
@@ -1089,7 +1097,10 @@ def set_unaired_monitored(
         is_unaired = (air_d and air_d > today) or status in (EpisodeStatus.UNAIRED, "unaired")
         if is_unaired:
             ep.monitored = monitored
-            ep.status = EpisodeStatus.WANTED if monitored else EpisodeStatus.IGNORED
+            if monitored:
+                ep.status = EpisodeStatus.UNAIRED
+            else:
+                ep.status = EpisodeStatus.IGNORED
             db.add(ep)
             affected += 1
 
@@ -1136,7 +1147,7 @@ def set_season_monitored(
                 air_d = getattr(ep, "air_date", None)
                 if isinstance(air_d, dt.datetime):
                     air_d = air_d.date()
-                if not include_unaired and air_d and air_d > today:
+                if air_d and air_d > today:
                     ep.status = EpisodeStatus.UNAIRED
                 else:
                     ep.status = EpisodeStatus.WANTED
@@ -3134,6 +3145,16 @@ async def remap_show_metadata(
             existing_by_key[(1, 1)] = new_ep
             added_episodes_count += 1
     elif details.episodes:
+        future_seasons = set()
+        for me in details.episodes:
+            if me.air_date:
+                try:
+                    mad = dt.datetime.fromisoformat(str(me.air_date)[:10])
+                    if mad > now:
+                        future_seasons.add(me.season_number if me.season_number is not None else 1)
+                except Exception:
+                    pass
+
         seen_added_keys = set()
         for meta_ep in details.episodes:
             if meta_ep.episode_number is None:
@@ -3156,6 +3177,11 @@ async def remap_show_metadata(
             if raw_ep_title in ("None", "null", "TBA", "tba", ""):
                 raw_ep_title = None
 
+            is_unaired = bool(
+                (air_date and air_date > now)
+                or (air_date is None and (s_num in future_seasons or (show.premiere_date and show.premiere_date > now)))
+            )
+
             ep_db = existing_by_key.get(ep_key)
             if ep_db:
                 if raw_ep_title:
@@ -3166,12 +3192,16 @@ async def remap_show_metadata(
                     ep_db.air_date = air_date
                 if meta_ep.absolute_number is not None:
                     ep_db.absolute_number = meta_ep.absolute_number
-                if ep_db.status in (EpisodeStatus.UNAIRED, EpisodeStatus.MISSING, EpisodeStatus.WANTED):
-                    ep_db.status = EpisodeStatus.UNAIRED if (air_date and air_date > now) else EpisodeStatus.WANTED
+                if is_unaired and ep_db.status not in (EpisodeStatus.IGNORED, EpisodeStatus.DOWNLOADED) and not getattr(ep_db, "file_path", None):
+                    ep_db.status = EpisodeStatus.UNAIRED
+                    ep_db.monitored = True
+                elif air_date and ep_db.status in (EpisodeStatus.UNAIRED, EpisodeStatus.MISSING, EpisodeStatus.WANTED):
+                    ep_db.status = EpisodeStatus.UNAIRED if air_date > now else EpisodeStatus.WANTED
                 db.add(ep_db)
                 updated_episodes_count += 1
             else:
-                status = EpisodeStatus.UNAIRED if (air_date and air_date > now) else EpisodeStatus.WANTED
+                status = EpisodeStatus.UNAIRED if is_unaired else EpisodeStatus.WANTED
+                monitored = True if is_unaired else getattr(show, "monitored", True)
                 new_ep = Episode(
                     show_id=show.id,
                     season_number=s_num,
@@ -3180,6 +3210,7 @@ async def remap_show_metadata(
                     title=raw_ep_title or "TBA",
                     air_date=air_date,
                     status=status,
+                    monitored=monitored,
                 )
                 db.add(new_ep)
                 existing_by_key[ep_key] = new_ep

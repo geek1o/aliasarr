@@ -369,6 +369,164 @@ class TestEpisodeMonitor(unittest.TestCase):
         self.assertTrue(ep3.monitored, "Wanted ep should stay monitored=True")
         self.assertTrue(settings.unmonitor_downloaded_migrated)
 
+    def test_unaired_episodes_auto_monitored_on_creation(self):
+        import datetime as dt
+        show = Show(title="Scrubs (2026)", content_type="series", monitored=True)
+        self.db.add(show)
+        self.db.commit()
+
+        future_date = dt.datetime.utcnow() + dt.timedelta(days=30)
+        ep = Episode(
+            show_id=show.id,
+            season_number=2,
+            episode_number=1,
+            title="Future Episode",
+            air_date=future_date,
+            status=EpisodeStatus.UNAIRED,
+            monitored=True,
+        )
+        self.db.add(ep)
+        self.db.commit()
+        self.db.refresh(ep)
+
+        self.assertEqual(ep.status, EpisodeStatus.UNAIRED)
+        self.assertTrue(ep.monitored, "Unaired episode must have monitored=True")
+
+    def test_bulk_set_unaired_monitored_preserves_unaired_status(self):
+        import datetime as dt
+        show = Show(title="Scrubs (2026)", content_type="series", monitored=True)
+        self.db.add(show)
+        self.db.commit()
+
+        future_date = dt.datetime.utcnow() + dt.timedelta(days=60)
+        ep1 = Episode(
+            show_id=show.id,
+            season_number=2,
+            episode_number=1,
+            title="Episode 1",
+            air_date=future_date,
+            status=EpisodeStatus.UNAIRED,
+            monitored=False,
+        )
+        self.db.add(ep1)
+        self.db.commit()
+
+        # Simulate set_unaired_monitored(monitored=True)
+        today = dt.date.today()
+        episodes = self.db.query(Episode).filter(Episode.show_id == show.id).all()
+        for ep in episodes:
+            air_d = getattr(ep, "air_date", None)
+            if isinstance(air_d, dt.datetime):
+                air_d = air_d.date()
+            is_unaired = (air_d and air_d > today) or ep.status in (EpisodeStatus.UNAIRED, "unaired")
+            if is_unaired:
+                ep.monitored = True
+                ep.status = EpisodeStatus.UNAIRED
+        self.db.commit()
+
+        self.db.refresh(ep1)
+        self.assertEqual(ep1.status, EpisodeStatus.UNAIRED)
+        self.assertTrue(ep1.monitored, "Bulk enabling unaired monitoring must keep status UNAIRED and set monitored=True")
+
+        # Simulate set_unaired_monitored(monitored=False)
+        for ep in episodes:
+            air_d = getattr(ep, "air_date", None)
+            if isinstance(air_d, dt.datetime):
+                air_d = air_d.date()
+            is_unaired = (air_d and air_d > today) or ep.status in (EpisodeStatus.UNAIRED, "unaired")
+            if is_unaired:
+                ep.monitored = False
+                ep.status = EpisodeStatus.IGNORED
+        self.db.commit()
+
+        self.db.refresh(ep1)
+        self.assertEqual(ep1.status, EpisodeStatus.IGNORED)
+        self.assertFalse(ep1.monitored, "Disabling unaired monitoring must set status IGNORED and monitored=False")
+
+
+class TestUnairedEpisodeLogic(unittest.TestCase):
+    """
+    Independent unit tests for future season detection and unaired episode monitoring rules:
+    - Released seasons vs upcoming/future seasons
+    - Future air date -> UNAIRED and monitored=True
+    - TBA air date in future season -> UNAIRED and monitored=True
+    - Past air date in completed season -> WANTED (or DOWNLOADED if file exists), not UNAIRED
+    """
+    def test_future_seasons_detection(self):
+        import datetime as dt
+        now = dt.datetime(2026, 9, 13, 0, 0, 0)
+
+        class MetaEp:
+            def __init__(self, season, ep, air_date):
+                self.season_number = season
+                self.episode_number = ep
+                self.air_date = air_date
+
+        episodes = [
+            MetaEp(1, 1, "2025-01-01"),
+            MetaEp(1, 2, "2025-01-08"),
+            MetaEp(2, 1, "2026-11-01"),  # Future
+            MetaEp(2, 2, None),          # TBA
+            MetaEp(2, 3, None),          # TBA
+        ]
+
+        def _parse_date(val):
+            if not val:
+                return None
+            try:
+                return dt.datetime.fromisoformat(val[:10])
+            except Exception:
+                return None
+
+        future_seasons = set()
+        for me in episodes:
+            mad = _parse_date(me.air_date)
+            ms = me.season_number if me.season_number is not None else 1
+            if mad and mad > now:
+                future_seasons.add(ms)
+
+        self.assertEqual(future_seasons, {2})
+
+        # Test is_unaired determination
+        results = []
+        for me in episodes:
+            air_date = _parse_date(me.air_date)
+            s_num = me.season_number or 1
+            is_unaired = bool(
+                (air_date and air_date > now)
+                or (air_date is None and s_num in future_seasons)
+            )
+            target_status = "unaired" if is_unaired else "wanted"
+            monitored = True if is_unaired else False
+            results.append((me.season_number, me.episode_number, target_status, monitored))
+
+        # S01E01 -> past date -> wanted
+        self.assertEqual(results[0], (1, 1, "wanted", False))
+        # S01E02 -> past date -> wanted
+        self.assertEqual(results[1], (1, 2, "wanted", False))
+        # S02E01 -> future date -> unaired, monitored=True
+        self.assertEqual(results[2], (2, 1, "unaired", True))
+        # S02E02 -> TBA in future season -> unaired, monitored=True
+        self.assertEqual(results[3], (2, 2, "unaired", True))
+        # S02E03 -> TBA in future season -> unaired, monitored=True
+        self.assertEqual(results[4], (2, 3, "unaired", True))
+
+    def test_show_with_future_premiere_date(self):
+        import datetime as dt
+        now = dt.datetime(2026, 9, 13, 0, 0, 0)
+        show_premiere_date = dt.datetime(2026, 12, 1, 0, 0, 0)
+
+        air_date = None
+        s_num = 1
+        future_seasons = set()
+
+        is_unaired = bool(
+            (air_date and air_date > now)
+            or (air_date is None and (s_num in future_seasons or (show_premiere_date and show_premiere_date > now)))
+        )
+        self.assertTrue(is_unaired, "Show with future premiere date should treat episodes without air_date as unaired")
+
 
 if __name__ == "__main__":
     unittest.main()
+

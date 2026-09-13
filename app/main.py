@@ -212,6 +212,30 @@ async def on_startup():
                 logger.warning("Ошибка при выполнении миграции unmonitor_downloaded: %s", e_mig)
                 db.rollback()
 
+        # 5. Автоматическое включение мониторинга для невышедших серий
+        try:
+            from app.models.db import Episode, EpisodeStatus, Show
+            now_dt = dt.datetime.utcnow()
+            unaired_updated = (
+                db.query(Episode)
+                .join(Show, Show.id == Episode.show_id)
+                .filter(
+                    Show.monitored == True,
+                    Episode.monitored == False,
+                    Episode.file_path.is_(None),
+                    Episode.status != EpisodeStatus.DOWNLOADED,
+                    Episode.status != EpisodeStatus.IGNORED,
+                    (Episode.status == EpisodeStatus.UNAIRED) | (Episode.air_date > now_dt),
+                )
+                .update({Episode.monitored: True, Episode.status: EpisodeStatus.UNAIRED}, synchronize_session=False)
+            )
+            if unaired_updated > 0:
+                db.commit()
+                logger.info("Синхронизация: включен мониторинг для %d невышедших серий", unaired_updated)
+        except Exception as e_un:
+            logger.warning("Ошибка при синхронизации мониторинга невышедших серий: %s", e_un)
+            db.rollback()
+
         monitor_interval = settings.monitor_interval_minutes or 15
         tracker_interval = getattr(settings, "tracker_check_interval_minutes", 30) or 30
         unaired_interval = getattr(settings, "unaired_check_interval_minutes", 10) or 10

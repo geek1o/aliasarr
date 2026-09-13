@@ -701,6 +701,16 @@ async def import_show(
             ))
             episodes_imported = 1
         else:
+            future_seasons = set()
+            for ep in details.episodes:
+                mad = _parse_date(ep.air_date)
+                try:
+                    s_n = int(ep.season_number) if ep.season_number is not None else 1
+                except (ValueError, TypeError):
+                    s_n = 1
+                if mad and mad > now:
+                    future_seasons.add(s_n)
+
             seen_episodes = set()
             for ep in details.episodes:
                 if ep.episode_number is None:
@@ -719,7 +729,12 @@ async def import_show(
                 seen_episodes.add(ep_key)
 
                 air_date = _parse_date(ep.air_date)
-                status = EpisodeStatus.UNAIRED if (air_date and air_date > now) else EpisodeStatus.WANTED
+                is_unaired = bool(
+                    (air_date and air_date > now)
+                    or (air_date is None and (s_num in future_seasons or (show.premiere_date and show.premiere_date > now)))
+                )
+                status = EpisodeStatus.UNAIRED if is_unaired else EpisodeStatus.WANTED
+                monitored = True
                 db.add(Episode(
                     show_id=show.id,
                     season_number=s_num,
@@ -728,6 +743,7 @@ async def import_show(
                     title=ep.title or f"Episode {e_num}",
                     air_date=air_date,
                     status=status,
+                    monitored=monitored,
                 ))
                 episodes_imported += 1
 
