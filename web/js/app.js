@@ -8066,6 +8066,7 @@ window._SHOW_EXPANDED_SEASONS = SHOW_EXPANDED_SEASONS;
 
 async function openShowModal(showId) {
   CURRENT_SHOW_ID = showId;
+  delete SHOW_EXPANDED_SEASONS[showId];
   const content = document.getElementById("show-modal-content");
   content.innerHTML = `<p>${t("common.loading")}</p>`;
   updateShowModalTaskBanner(CURRENT_ACTIVE_TASKS);
@@ -9781,8 +9782,6 @@ function renderSeasonBlock(seasonNumber, episodes, canManageLib = true, canSearc
   const expandedSet = SHOW_EXPANDED_SEASONS[targetShowId];
   if (expandedSet !== undefined) {
     isCollapsed = !expandedSet.has(seasonNumber);
-  } else {
-    isCollapsed = (seasonNumber !== 1);
   }
 
   return `
