@@ -78,8 +78,7 @@ htmlcov/
 node_modules/
 
 # Agent & Assistant configs
-.agents/*
-!.agents/skills/
+.agents/
 
 # External references & source repositories
 Sonarr/
