@@ -129,6 +129,67 @@ class TestCollectionTitleLanguage(unittest.TestCase):
             self.assertEqual(res["titles_by_lang"].get("en"), "Dune Collection")
             self.assertEqual(res["titles_by_lang"].get("ru"), "Дюна (Коллекция)")
 
+    def test_tmdb_client_collection_details_cjk_fallback_does_not_map_to_ru(self):
+        from app.services.metadata import TMDBClient
+
+        client = TMDBClient(overview_language="ru")
+        cjk_resp = MagicMock()
+        cjk_resp.status_code = 200
+        cjk_resp.raise_for_status = MagicMock()
+        cjk_resp.json.return_value = {
+            "id": 99999,
+            "name": "罗小黑战记（系列）",
+            "original_language": "zh",
+            "overview": "",
+            "parts": [],
+        }
+
+        en_resp = MagicMock()
+        en_resp.status_code = 200
+        en_resp.raise_for_status = MagicMock()
+        en_resp.json.return_value = {
+            "id": 99999,
+            "name": "The Legend of Hei Collection",
+            "overview": "Fantasy anime series...",
+            "parts": [],
+        }
+
+        trans_resp = MagicMock()
+        trans_resp.status_code = 200
+        trans_resp.raise_for_status = MagicMock()
+        trans_resp.json.return_value = {
+            "id": 99999,
+            "translations": [
+                {"iso_639_1": "en", "data": {"title": "The Legend of Hei Collection"}},
+                {"iso_639_1": "zh", "data": {"title": "罗小黑战记（系列）"}},
+                {"iso_639_1": "ru", "data": {"title": ""}},
+            ],
+        }
+
+        async def fake_get(url, **kwargs):
+            if "translations" in str(url):
+                return trans_resp
+            params = kwargs.get("params", {})
+            lang = params.get("language")
+            if lang == "ru-RU":
+                return cjk_resp
+            return en_resp
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=fake_get)
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        mock_httpx = MagicMock()
+        mock_httpx.AsyncClient.return_value = mock_client
+
+        with patch("app.services.metadata.httpx", mock_httpx):
+            res = asyncio.run(client.get_collection_details(99999, lang="ru"))
+            self.assertEqual(res["name"], "The Legend of Hei Collection")
+            self.assertNotIn("ru", res["titles_by_lang"])
+            self.assertEqual(res["titles_by_lang"].get("en"), "The Legend of Hei Collection")
+            self.assertEqual(res["titles_by_lang"].get("zh"), "罗小黑战记（系列）")
+
     def test_refresh_all_collections_metadata_updates_title_by_lang_setting(self):
         coll = MagicMock()
         coll.id = 55

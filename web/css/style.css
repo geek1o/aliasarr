@@ -5555,6 +5555,31 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   background: rgba(255, 255, 255, 0.06);
 }
 
+.meta-pill-status.status-complete {
+  color: var(--success, #10b981);
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.12);
+}
+
+.meta-pill.meta-pill-in-lib {
+  color: var(--teal, #00f0ff);
+  background: rgba(0, 240, 255, 0.12);
+  border-color: rgba(0, 240, 255, 0.35);
+}
+
+[data-theme="light"] .meta-pill-status.status-complete {
+  color: #047857;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+[data-theme="light"] .meta-pill.meta-pill-in-lib {
+  color: #0e7490;
+  background: #ecfeff;
+  border-color: #a5f3fc;
+}
+
 .meta-pill-text {
   font-weight: 500;
   color: #cbd5e1;

@@ -1121,17 +1121,30 @@ class TMDBClient(BaseMetadataClient):
 
         # Сбор словаря названий на разных языках (RU, EN, translations)
         titles_by_lang: dict[str, str] = {}
+        has_cyrillic = lambda s: any('\u0400' <= ch <= '\u04ff' for ch in (s or ""))
+        orig_name = (data.get("name") or "").strip()
+        orig_lang = (data.get("original_language") or "").strip().lower()
+
         if target_lang != "en-US":
-            if data.get("name"):
-                lang_key = "ru" if norm_lang in ("ru", "rus") else norm_lang
-                titles_by_lang[lang_key] = data.get("name").strip()
+            if orig_name:
+                if norm_lang in ("ru", "rus"):
+                    if has_cyrillic(orig_name):
+                        titles_by_lang["ru"] = orig_name
+                    elif orig_lang and orig_lang not in titles_by_lang:
+                        titles_by_lang[orig_lang] = orig_name
+                else:
+                    titles_by_lang[norm_lang] = orig_name
             if fallback_data and fallback_data.get("name"):
                 titles_by_lang["en"] = fallback_data.get("name").strip()
         else:
-            if data.get("name"):
-                titles_by_lang["en"] = data.get("name").strip()
+            if orig_name:
+                titles_by_lang["en"] = orig_name
             if ru_data and ru_data.get("name"):
-                titles_by_lang["ru"] = ru_data.get("name").strip()
+                ru_cand = ru_data.get("name").strip()
+                if has_cyrillic(ru_cand):
+                    titles_by_lang["ru"] = ru_cand
+                elif orig_lang and orig_lang not in titles_by_lang:
+                    titles_by_lang[orig_lang] = ru_cand
 
         # Дополнительно опрашиваем эндпоинт переводов TMDb для максимального охвата языков
         try:
@@ -1147,9 +1160,10 @@ class TMDBClient(BaseMetadataClient):
                         t_title = t_obj.get("title") or t_obj.get("name")
                         if iso and t_title and t_title.strip():
                             clean_t = t_title.strip()
-                            if iso not in titles_by_lang or not titles_by_lang[iso]:
-                                titles_by_lang[iso] = clean_t
-                            elif iso == "ru" and not any('\u0400' <= ch <= '\u04ff' for ch in titles_by_lang[iso]) and any('\u0400' <= ch <= '\u04ff' for ch in clean_t):
+                            if iso == "ru":
+                                if has_cyrillic(clean_t):
+                                    titles_by_lang["ru"] = clean_t
+                            elif iso not in titles_by_lang or not titles_by_lang[iso]:
                                 titles_by_lang[iso] = clean_t
         except Exception as ex:
             logger.debug("TMDb collection translations fetch failed: %s", ex)
@@ -1191,12 +1205,12 @@ class TMDBClient(BaseMetadataClient):
         c_poster = data.get("poster_path") or (fallback_data.get("poster_path") if fallback_data else None)
         c_backdrop = data.get("backdrop_path") or (fallback_data.get("backdrop_path") if fallback_data else None)
         chosen_name = None
-        if norm_lang in ("ru", "rus") and titles_by_lang.get("ru"):
-            chosen_name = titles_by_lang["ru"]
-        elif norm_lang in ("en", "eng") and titles_by_lang.get("en"):
-            chosen_name = titles_by_lang["en"]
+        if norm_lang in ("ru", "rus"):
+            chosen_name = titles_by_lang.get("ru") or titles_by_lang.get("en") or (fallback_data.get("name") if fallback_data else None) or data.get("name")
+        elif norm_lang in ("en", "eng"):
+            chosen_name = titles_by_lang.get("en") or data.get("name") or (fallback_data.get("name") if fallback_data else None)
         else:
-            chosen_name = titles_by_lang.get(norm_lang) or data.get("name") or (fallback_data.get("name") if fallback_data else None)
+            chosen_name = titles_by_lang.get(norm_lang) or titles_by_lang.get("en") or data.get("name") or (fallback_data.get("name") if fallback_data else None)
 
         result = {
             "id": data.get("id"),
@@ -4340,11 +4354,15 @@ async def refresh_all_collections_metadata(db=None, force: bool = False) -> dict
 
                 pref_title = None
                 if coll_title_lang in ("ru", "rus"):
-                    pref_title = tbl.get("ru") or (c_det.get("name") if any('\u0400' <= ch <= '\u04ff' for ch in (c_det.get("name") or "")) else None) or c_det.get("name")
+                    pref_title = tbl.get("ru")
+                    if not pref_title and any('\u0400' <= ch <= '\u04ff' for ch in (c_det.get("name") or "")):
+                        pref_title = c_det.get("name")
+                    if not pref_title:
+                        pref_title = tbl.get("en") or c_det.get("name")
                 elif coll_title_lang in ("en", "eng"):
                     pref_title = tbl.get("en") or c_det.get("name")
                 else:
-                    pref_title = tbl.get(coll_title_lang) or c_det.get("name")
+                    pref_title = tbl.get(coll_title_lang) or tbl.get("en") or c_det.get("name")
 
                 if pref_title and pref_title.strip():
                     db_coll.title = pref_title.strip()

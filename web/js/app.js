@@ -5310,7 +5310,11 @@ function getCollectionDisplayTitle(coll) {
   const s = CACHED_APP_SETTINGS || {};
   const prefLang = (s.metadata_collection_title_language || "ru").toLowerCase();
   const tbl = coll.titles_by_lang || {};
-  if (prefLang === "ru" && tbl.ru) return tbl.ru;
+  if (prefLang === "ru") {
+    if (tbl.ru && /[а-яёА-ЯЁ]/.test(tbl.ru)) return tbl.ru;
+    if (coll.title && /[а-яёА-ЯЁ]/.test(coll.title)) return coll.title;
+    if (tbl.en) return tbl.en;
+  }
   if (prefLang === "en" && tbl.en) return tbl.en;
   if (prefLang in tbl && tbl[prefLang]) return tbl[prefLang];
   return coll.title || "";
@@ -5335,8 +5339,8 @@ function renderCollectionTitleLangSwitcher(coll, canManageLib = true) {
     });
   }
 
-  // 1. RU
-  if (tbl.ru) {
+  // 1. RU - strictly Cyrillic
+  if (tbl.ru && /[а-яёА-ЯЁ]/.test(tbl.ru)) {
     addVariant("ru", tbl.ru, "RU");
   } else if (/[а-яёА-ЯЁ]/.test(currentTitle)) {
     addVariant("ru", currentTitle, "RU");
@@ -5362,8 +5366,8 @@ function renderCollectionTitleLangSwitcher(coll, canManageLib = true) {
   }
 
   if (variants.length < 2 && coll.tmdb_collection_id) {
-    if (!variants.some(v => v.langKey === "ru")) {
-      variants.push({ langKey: "ru", langTag: "RU", title: "" });
+    if (!variants.some(v => v.langKey === "ru") && (tbl.ru && /[а-яёА-ЯЁ]/.test(tbl.ru))) {
+      variants.push({ langKey: "ru", langTag: "RU", title: tbl.ru });
     }
     if (!variants.some(v => v.langKey === "en")) {
       variants.push({ langKey: "en", langTag: "EN", title: "" });
@@ -5372,14 +5376,39 @@ function renderCollectionTitleLangSwitcher(coll, canManageLib = true) {
 
   if (variants.length <= 1) return "";
 
+  window._COLL_TITLE_LANG_EXPANDED = window._COLL_TITLE_LANG_EXPANDED || {};
+  const isExpanded = Boolean(window._COLL_TITLE_LANG_EXPANDED[coll.id]);
+
   const isCurrentRu = /[а-яёА-ЯЁ]/.test(currentTitle);
   const activeVariant = variants.find(v => v.title && v.title.toLowerCase() === currentTitle.toLowerCase()) ||
                         variants.find(v => (isCurrentRu && v.langKey === "ru") || (!isCurrentRu && v.langKey === "en")) ||
                         variants[0];
   const otherVariants = variants.filter(v => v !== activeVariant);
 
+  if (otherVariants.length === 0) {
+    return `
+      <div class="show-title-lang-bar" id="collection-title-lang-bar-${coll.id}" style="margin: 4px 0 6px 0;">
+        <span class="show-title-lang-icon" title="${CURRENT_LANG === 'en' ? 'Franchise title language' : 'Язык названия саги'}">
+          <i data-lucide="languages" class="ico-xs"></i>
+        </span>
+        <div class="show-title-lang-chips">
+          <button type="button" class="title-lang-chip active" 
+            data-title="${escapeHtml(activeVariant.title || currentTitle)}" 
+            data-lang="${activeVariant.langKey}" 
+            title="${escapeHtml(activeVariant.title || currentTitle)}">
+            <span class="title-lang-tag">${activeVariant.langTag}</span>
+            <span class="title-lang-val">${escapeHtml(activeVariant.title || currentTitle)}</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  const moreText = t("show.alt_titles_more") || (CURRENT_LANG === "en" ? "more" : "еще");
+  const collapseText = t("show.alt_titles_collapse") || (CURRENT_LANG === "en" ? "Collapse" : "Свернуть");
+
   return `
-    <div class="show-title-lang-bar" id="collection-title-lang-bar-${coll.id}" style="margin: 4px 0 6px 0;">
+    <div class="show-title-lang-bar ${isExpanded ? 'is-expanded' : 'is-collapsed'}" id="collection-title-lang-bar-${coll.id}" style="margin: 4px 0 6px 0;">
       <span class="show-title-lang-icon" title="${CURRENT_LANG === 'en' ? 'Franchise title language' : 'Язык названия саги'}">
         <i data-lucide="languages" class="ico-xs"></i>
       </span>
@@ -5391,22 +5420,65 @@ function renderCollectionTitleLangSwitcher(coll, canManageLib = true) {
           <span class="title-lang-tag">${activeVariant.langTag}</span>
           <span class="title-lang-val">${escapeHtml(activeVariant.title || currentTitle)}</span>
         </button>
-        ${otherVariants.map(v => {
-          const displayVal = v.title || (v.langKey === "ru" ? (CURRENT_LANG === "en" ? "Fetch RU" : "Загрузить RU") : (CURRENT_LANG === "en" ? "Fetch EN" : "Загрузить EN"));
-          return `
-            <button type="button" class="title-lang-chip" 
-              data-title="${escapeHtml(v.title || '')}" 
-              data-lang="${v.langKey}" 
-              ${canManageLib ? `onclick="onCollectionTitleLangChipClick(this, ${coll.id})"` : 'disabled'}
-              title="${escapeHtml(v.title || (CURRENT_LANG === 'en' ? 'Fetch title in this language' : 'Получить название на этом языке'))}">
-              <span class="title-lang-tag">${v.langTag}</span>
-              <span class="title-lang-val">${escapeHtml(displayVal)}</span>
-            </button>
-          `;
-        }).join("")}
+        <button type="button" class="title-lang-more-btn" onclick="toggleCollectionTitleLangVariants(${coll.id})" 
+          title="${isExpanded ? collapseText : (CURRENT_LANG === 'en' ? 'Show alternative titles' : 'Показать альтернативные названия')}">
+          <span class="title-lang-more-text">${isExpanded ? collapseText : `+${otherVariants.length} ${moreText}`}</span>
+          <i data-lucide="${isExpanded ? 'chevron-up' : 'chevron-down'}" class="ico-xxs title-lang-more-icon"></i>
+        </button>
+        <div class="show-title-lang-extra" id="collection-title-lang-extra-${coll.id}" style="${isExpanded ? '' : 'display: none;'}">
+          ${otherVariants.map(v => {
+            const displayVal = v.title || (v.langKey === "ru" ? (CURRENT_LANG === "en" ? "Fetch RU" : "Загрузить RU") : (CURRENT_LANG === "en" ? "Fetch EN" : "Загрузить EN"));
+            return `
+              <button type="button" class="title-lang-chip" 
+                data-title="${escapeHtml(v.title || '')}" 
+                data-lang="${v.langKey}" 
+                ${canManageLib ? `onclick="onCollectionTitleLangChipClick(this, ${coll.id})"` : 'disabled'}
+                title="${escapeHtml(v.title || (CURRENT_LANG === 'en' ? 'Fetch title in this language' : 'Получить название на этом языке'))}">
+                <span class="title-lang-tag">${v.langTag}</span>
+                <span class="title-lang-val">${escapeHtml(displayVal)}</span>
+              </button>
+            `;
+          }).join("")}
+        </div>
       </div>
     </div>
   `;
+}
+
+function toggleCollectionTitleLangVariants(collId) {
+  window._COLL_TITLE_LANG_EXPANDED = window._COLL_TITLE_LANG_EXPANDED || {};
+  const current = Boolean(window._COLL_TITLE_LANG_EXPANDED[collId]);
+  window._COLL_TITLE_LANG_EXPANDED[collId] = !current;
+  const isExpanded = !current;
+
+  const bar = document.getElementById(`collection-title-lang-bar-${collId}`);
+  const extra = document.getElementById(`collection-title-lang-extra-${collId}`);
+  const moreBtn = bar?.querySelector(".title-lang-more-btn");
+  if (!bar || !extra || !moreBtn) return;
+
+  if (isExpanded) {
+    bar.classList.remove("is-collapsed");
+    bar.classList.add("is-expanded");
+    extra.style.display = "";
+  } else {
+    bar.classList.remove("is-expanded");
+    bar.classList.add("is-collapsed");
+    extra.style.display = "none";
+  }
+
+  const extraCount = extra.querySelectorAll(".title-lang-chip").length;
+  const moreText = t("show.alt_titles_more") || (CURRENT_LANG === "en" ? "more" : "еще");
+  const collapseText = t("show.alt_titles_collapse") || (CURRENT_LANG === "en" ? "Collapse" : "Свернуть");
+
+  moreBtn.title = isExpanded ? collapseText : (CURRENT_LANG === "en" ? "Show alternative titles" : "Показать альтернативные названия");
+  moreBtn.innerHTML = `
+    <span class="title-lang-more-text">${isExpanded ? collapseText : `+${extraCount} ${moreText}`}</span>
+    <i data-lucide="${isExpanded ? 'chevron-up' : 'chevron-down'}" class="ico-xxs title-lang-more-icon"></i>
+  `;
+
+  if (typeof lucide !== "undefined" && lucide.createIcons) {
+    lucide.createIcons();
+  }
 }
 
 async function onCollectionTitleLangChipClick(btn, collectionId) {
@@ -5418,6 +5490,8 @@ async function onCollectionTitleLangChipClick(btn, collectionId) {
 
 async function switchCollectionTitleLanguage(collectionId, targetLang, targetTitle, btn) {
   if (btn) btn.classList.add("is-loading");
+  window._COLL_TITLE_LANG_EXPANDED = window._COLL_TITLE_LANG_EXPANDED || {};
+  window._COLL_TITLE_LANG_EXPANDED[collectionId] = false;
   try {
     const res = await api(`/api/v1/collections/${collectionId}/switch-title-language`, {
       method: "POST",
@@ -7018,8 +7092,8 @@ async function openCollectionModal(collectionId) {
               </div>
             </div>
             <div class="show-hero-meta-bar" style="margin: 0; align-items:center; flex-wrap:wrap; gap:8px;">
-              <span class="meta-pill mono"><i data-lucide="film" class="ico-xs"></i> ${coll.shows_count} ${t("collection.in_library")}</span>
-              ${missingCount > 0 ? `<span class="meta-pill mono text-warning"><i data-lucide="circle-dashed" class="ico-xs"></i> ${missingCount} ${t("collection.missing")}</span>` : `<span class="meta-pill meta-pill-status status-ended"><i data-lucide="check-circle-2" class="ico-xs"></i> <span>${CURRENT_LANG === 'en' ? 'Collection Complete' : 'Коллекция собрана'}</span></span>`}
+              <span class="meta-pill mono meta-pill-in-lib"><i data-lucide="film" class="ico-xs"></i> ${coll.shows_count} ${t("collection.in_library")}</span>
+              ${missingCount > 0 ? `<span class="meta-pill mono text-warning"><i data-lucide="circle-dashed" class="ico-xs"></i> ${missingCount} ${t("collection.missing")}</span>` : `<span class="meta-pill meta-pill-status status-complete"><i data-lucide="check-circle-2" class="ico-xs"></i> <span>${CURRENT_LANG === 'en' ? 'Collection Complete' : 'Коллекция собрана'}</span></span>`}
               ${canManageLib ? `
                 <div style="display:inline-flex; align-items:center; gap:6px; margin-left:auto;">
                   <span style="font-size:11.5px; color:var(--text-muted); font-weight:500;">

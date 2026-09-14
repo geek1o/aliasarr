@@ -425,11 +425,15 @@ async def refresh_collection(
 
     pref_title = None
     if coll_title_lang in ("ru", "rus"):
-        pref_title = tbl.get("ru") or (data.get("name") if any('\u0400' <= ch <= '\u04ff' for ch in (data.get("name") or "")) else None) or data.get("name")
+        pref_title = tbl.get("ru")
+        if not pref_title and any('\u0400' <= ch <= '\u04ff' for ch in (data.get("name") or "")):
+            pref_title = data.get("name")
+        if not pref_title:
+            pref_title = tbl.get("en") or data.get("name")
     elif coll_title_lang in ("en", "eng"):
         pref_title = tbl.get("en") or data.get("name")
     else:
-        pref_title = tbl.get(coll_title_lang) or data.get("name")
+        pref_title = tbl.get(coll_title_lang) or tbl.get("en") or data.get("name")
 
     if pref_title and pref_title.strip():
         coll.title = pref_title.strip()
@@ -492,7 +496,9 @@ async def switch_collection_title_language(
     if payload.title and payload.title.strip():
         new_title = payload.title.strip()
     elif target_lang in ("ru", "rus"):
-        new_title = tbl.get("ru")
+        cand = tbl.get("ru")
+        if cand and any('\u0400' <= ch <= '\u04ff' for ch in cand):
+            new_title = cand
     elif target_lang in ("en", "eng"):
         new_title = tbl.get("en")
     elif target_lang:
@@ -505,10 +511,16 @@ async def switch_collection_title_language(
             client = RadarrClient()
             c_det = await client.get_collection_details(coll.tmdb_collection_id, lang=target_lang, bypass_cache=True)
             if c_det:
-                new_title = c_det.get("name")
-                if c_det.get("titles_by_lang"):
-                    tbl.update(c_det["titles_by_lang"])
+                fetched_tbl = c_det.get("titles_by_lang") or {}
+                if fetched_tbl:
+                    tbl.update(fetched_tbl)
                     coll.titles_cache = json.dumps(tbl, ensure_ascii=False)
+                if target_lang in ("ru", "rus"):
+                    cand = fetched_tbl.get("ru") or (c_det.get("name") if any('\u0400' <= ch <= '\u04ff' for ch in (c_det.get("name") or "")) else None)
+                    if cand:
+                        new_title = cand
+                else:
+                    new_title = fetched_tbl.get(target_lang) or c_det.get("name")
         except Exception as e:
             logger.debug("Failed direct language fetch for collection %s: %s", coll.id, e)
 
@@ -518,6 +530,8 @@ async def switch_collection_title_language(
         db.commit()
         db.refresh(coll)
     else:
+        if target_lang in ("ru", "rus"):
+            raise HTTPException(400, "В базе TMDb отсутствует перевод названия этой коллекции на русский язык")
         raise HTTPException(400, f"Не удалось определить название саги для языка '{target_lang or payload.title}'")
 
     return await get_collection_detail(collection_id=coll.id, db=db, current_user=current_user)
