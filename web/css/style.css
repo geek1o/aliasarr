@@ -10754,6 +10754,52 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   color: var(--text-muted);
 }
 
+/* Light Theme overrides for Activity Progress Bar */
+[data-theme="light"] .queue-status-bar {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .queue-status-bar.status-paused {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+}
+[data-theme="light"] .queue-status-bar.status-paused .queue-status-bar-fill {
+  background: #cbd5e1;
+}
+[data-theme="light"] .queue-status-bar.status-paused .queue-status-bar-text {
+  color: #334155;
+  text-shadow: none;
+  font-weight: 700;
+}
+
+[data-theme="light"] .queue-status-bar.status-downloading {
+  border-color: #38bdf8;
+  background: #e0f2fe;
+}
+[data-theme="light"] .queue-status-bar.status-downloading .queue-status-bar-fill {
+  background: linear-gradient(90deg, #6366f1 0%, #0284c7 100%);
+  box-shadow: 0 1px 4px rgba(2, 132, 199, 0.25);
+}
+[data-theme="light"] .queue-status-bar.status-downloading .queue-status-bar-text {
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+}
+
+[data-theme="light"] .queue-status-bar.status-seeding {
+  border-color: #4ade80;
+  background: #dcfce7;
+}
+[data-theme="light"] .queue-status-bar.status-seeding .queue-status-bar-fill {
+  background: linear-gradient(90deg, #059669 0%, #10b981 100%);
+  box-shadow: 0 1px 4px rgba(16, 185, 129, 0.25);
+}
+[data-theme="light"] .queue-status-bar.status-seeding .queue-status-bar-text {
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+}
+
 .queue-progress-meta {
   display: flex;
   align-items: center;
