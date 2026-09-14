@@ -176,6 +176,56 @@ class TestCollectionTitleLanguage(unittest.TestCase):
             self.assertEqual(tbl.get("ru"), "Аватар (Коллекция)")
             self.assertEqual(tbl.get("en"), "Avatar Collection")
 
+    def test_refresh_all_collections_metadata_with_session_local(self):
+        coll = MagicMock()
+        coll.id = 55
+        coll.tmdb_collection_id = 87096
+        coll.title = "Avatar Collection"
+        coll.titles_cache = None
+        coll.overview = None
+        coll.poster_url = None
+        coll.backdrop_url = None
+        coll.parts_cache = None
+        coll.last_metadata_refresh_at = None
+
+        app_settings = MagicMock()
+        app_settings.metadata_overview_language = "ru"
+        app_settings.metadata_collection_title_language = "ru"
+
+        query_mock = MagicMock()
+        filter_mock = MagicMock()
+        query_mock.filter.return_value = filter_mock
+        filter_mock.all.return_value = [coll]
+        filter_mock.first.return_value = app_settings
+
+        mock_db = MagicMock()
+        mock_db.query.return_value = query_mock
+        mock_db.get.return_value = coll
+
+        fake_details = {
+            "id": 87096,
+            "name": "Аватар (Коллекция)",
+            "overview": "Описание франшизы",
+            "parts": [{"id": 19995, "title": "Аватар"}],
+            "titles_by_lang": {
+                "ru": "Аватар (Коллекция)",
+                "en": "Avatar Collection",
+            },
+        }
+
+        mock_radarr_client = MagicMock()
+        mock_radarr_client.get_collection_details = AsyncMock(return_value=fake_details)
+
+        mock_session_factory = MagicMock(return_value=mock_db)
+        mock_database_module = MagicMock()
+        mock_database_module.SessionLocal = mock_session_factory
+
+        with patch.dict("sys.modules", {"app.database": mock_database_module}), \
+             patch("app.services.metadata.RadarrClient", return_value=mock_radarr_client):
+            res = asyncio.run(refresh_all_collections_metadata(db=None))
+            self.assertEqual(res.get("updated"), 1)
+            self.assertEqual(coll.title, "Аватар (Коллекция)")
+
 
 if __name__ == "__main__":
     unittest.main()

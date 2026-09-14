@@ -4315,10 +4315,16 @@ async def refresh_all_collections_metadata(db=None, force: bool = False) -> dict
     client = RadarrClient(overview_language=overview_lang)
     updated = 0
     for coll in candidates:
-        s_db = SessionLocal() if SessionLocal else (db or init_db)
+        s_db = db if db is not None else (SessionLocal() if SessionLocal else None)
+        if s_db is None:
+            continue
         try:
-            db_coll = s_db.get(MovieCollClass, coll.id) if (s_db and hasattr(s_db, "get")) else coll
-            if not db_coll or not db_coll.tmdb_collection_id:
+            db_coll = None
+            if hasattr(s_db, "get"):
+                db_coll = s_db.get(MovieCollClass, coll.id)
+            if not db_coll:
+                db_coll = coll
+            if not db_coll or not getattr(db_coll, "tmdb_collection_id", None):
                 continue
             c_det = await client.get_collection_details(db_coll.tmdb_collection_id, lang=coll_title_lang, bypass_cache=force)
             if c_det and c_det.get("parts"):
@@ -4353,13 +4359,15 @@ async def refresh_all_collections_metadata(db=None, force: bool = False) -> dict
                     from app.services.cover_service import download_and_store_collection_backdrop
                     b_loc = await download_and_store_collection_backdrop(db_coll.id, c_det.get("backdrop_url"))
                     db_coll.backdrop_url = b_loc or c_det.get("backdrop_url")
-                s_db.add(db_coll)
-                s_db.commit()
+                if hasattr(s_db, "add"):
+                    s_db.add(db_coll)
+                if hasattr(s_db, "commit"):
+                    s_db.commit()
                 updated += 1
         except Exception as e:
             logger.debug("Failed to background refresh collection %s: %s", coll.id, e)
         finally:
-            if s_db and s_db is not db and hasattr(s_db, "close"):
+            if db is None and s_db and hasattr(s_db, "close"):
                 s_db.close()
         await asyncio.sleep(0.1)
 
