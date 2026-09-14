@@ -2193,12 +2193,18 @@ async def _do_search_and_grab(
             is_movie = show.content_type == "movie"
             yr_str = f" ({show.year})" if show.year else ""
 
-            # Выставляем лимиты сидирования в торрент-клиенте, если для этого трекера включена раздача
-            if indexer and getattr(indexer, "enable_seeding", False):
+            # Выставляем лимиты сидирования в торрент-клиенте, если для этого трекера или клиента включена раздача
+            if (indexer and getattr(indexer, "enable_seeding", False)) or (download_client_row and (getattr(download_client_row, "seed_time_limit", None) or getattr(download_client_row, "seed_ratio_limit", None))):
                 try:
-                    ratio_lim = getattr(indexer, "seed_ratio_limit", None)
-                    time_hrs = getattr(indexer, "seed_time_limit_hours", None)
+                    ratio_lim = getattr(indexer, "seed_ratio_limit", None) if indexer else None
+                    if ratio_lim is None and download_client_row:
+                        ratio_lim = getattr(download_client_row, "seed_ratio_limit", None)
+
+                    time_hrs = getattr(indexer, "seed_time_limit_hours", None) if indexer else None
                     time_mins = int(time_hrs * 60) if time_hrs else None
+                    if time_mins is None and download_client_row and getattr(download_client_row, "seed_time_limit", None):
+                        time_mins = int(getattr(download_client_row, "seed_time_limit", 0))
+
                     await dl_client.set_seeding_limits(torrent_hash, seed_ratio_limit=ratio_lim, seed_time_limit_minutes=time_mins)
                 except Exception as seed_err:
                     logger.debug("Не удалось выставить лимиты сидирования для %s: %s", torrent_hash, seed_err)

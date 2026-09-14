@@ -37,6 +37,7 @@ class FakeClient:
 
     async def remove_torrent(self, h, delete_files=False):
         self.remove_torrent_called.append((h, delete_files))
+        self._torrents = [t for t in self._torrents if t.hash != h]
 
     async def set_files_wanted_unwanted(self, h, wanted, unwanted):
         pass
@@ -335,8 +336,9 @@ class TestDownloadsMonitor(unittest.TestCase):
                 results2 = loop.run_until_complete(check_downloads(db2))
                 loop.close()
 
-                # Torrent should be paused and imported
-                fake_client2.pause_torrent.assert_called_once_with("hash1")
+                # Torrent should be removed after seeding limit reached and imported
+                self.assertEqual(fake_client2.remove_torrent_called, [("hash1", True)])
+                fake_client2.pause_torrent.assert_not_called()
                 self.assertEqual(len(results2), 1)
         finally:
             shutil.rmtree(tmp_seeding, ignore_errors=True)
@@ -392,7 +394,7 @@ class TestDownloadsMonitor(unittest.TestCase):
             id=102, show_id=1, season_number=2, episode_number=9,
             status="downloading", torrent_hash="hash-missing",
             download_client_id=10, download_progress=1.0,
-            air_date=dt.datetime(2026, 9, 15),
+            air_date=dt.datetime.now() + dt.timedelta(days=30),
         )
 
         db_mock = MagicMock()
@@ -686,10 +688,10 @@ class TestDownloadsMonitor(unittest.TestCase):
                  patch("app.services.notifications.notify_all", new_callable=AsyncMock):
                 results = asyncio.run(check_downloads(db_mock))
 
-                # Торрент НЕ должен быть удален с диска
+                # Торрент НЕ должен быть удален с диска и НЕ должен принудительно ставиться на паузу,
+                # чтобы не нарушать сидирование на приватных трекерах
                 self.assertEqual(len(fake_client.remove_torrent_called), 0)
-                # Торрент должен быть поставлен на паузу, если сидирование выключено
-                self.assertIn("hash-frieren", fake_client.pause_torrent_called)
+                self.assertNotIn("hash-frieren", fake_client.pause_torrent_called)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -924,9 +926,9 @@ class TestDownloadsMonitor(unittest.TestCase):
                 # 2. Проверяем, что торрент с неимпортированным видео зарегистрирован в _PENDING_MANUAL_IMPORT_TORRENTS
                 self.assertTrue(is_torrent_pending_manual_import(th))
 
-                # 3. Проверяем, что раздача НЕ удалена из клиента и поставлена на паузу
+                # 3. Проверяем, что раздача НЕ удалена из клиента и НЕ поставлена на паузу (продолжает сидироваться)
                 self.assertEqual(len(fake_client.remove_torrent_called), 0)
-                self.assertIn(th, fake_client.pause_torrent_called)
+                self.assertNotIn(th, fake_client.pause_torrent_called)
 
             # Теперь запускаем _check_seeding_torrents при выключенном сидировании
             with patch("app.services.downloads_monitor.get_client", return_value=fake_client):

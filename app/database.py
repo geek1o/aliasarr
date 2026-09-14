@@ -135,6 +135,14 @@ def _migrate_add_missing_columns() -> None:
             except Exception as exc:
                 logger.warning("DB-миграция: не удалось добавить %s.%s (%s)", table.name, column.name, exc)
 
+    # Очищаем устаревшие 0 значения лимитов сидирования (0 трактуется как без лимита / NULL)
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE indexers SET seed_time_limit_hours = NULL WHERE seed_time_limit_hours = 0"))
+            conn.execute(text("UPDATE indexers SET seed_ratio_limit = NULL WHERE seed_ratio_limit = 0"))
+    except Exception:
+        pass
+
 
 def _ensure_performance_indexes() -> None:
     """Создаёт критически важные индексы для мгновенного выполнения запросов и устранения full table scan."""

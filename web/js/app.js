@@ -16813,7 +16813,7 @@ async function loadIndexers() {
   try {
     const items = await api("/api/v1/indexers");
     tbody.innerHTML = items.map(i => {
-      const seedingBadge = i.enable_seeding ? `<span class="badge badge-teal" style="margin-left:6px; font-size:11px;" title="${CURRENT_LANG === "en" ? `Seeding enabled (ratio: ${i.seed_ratio_limit ?? '∞'}, time: ${i.seed_time_limit_hours ? i.seed_time_limit_hours + 'h' : '∞'})` : `Раздача включена (ratio: ${i.seed_ratio_limit ?? '∞'}, время: ${i.seed_time_limit_hours ? i.seed_time_limit_hours + 'ч' : '∞'})`}"><i data-lucide="upload-cloud" class="ico-xs"></i> ${CURRENT_LANG === "en" ? "Seed" : "Раздача"}${i.seed_ratio_limit ? ` ${i.seed_ratio_limit}x` : ''}</span>` : "";
+      const seedingBadge = i.enable_seeding ? `<span class="badge badge-teal" style="margin-left:6px; font-size:11px;" title="${CURRENT_LANG === "en" ? `Seeding enabled (ratio: ${i.seed_ratio_limit ?? '∞'}, time: ${(i.seed_time_limit_hours && i.seed_time_limit_hours > 0) ? i.seed_time_limit_hours + 'h' : '∞'})` : `Раздача включена (ratio: ${i.seed_ratio_limit ?? '∞'}, время: ${(i.seed_time_limit_hours && i.seed_time_limit_hours > 0) ? i.seed_time_limit_hours + 'ч' : '∞'})`}"><i data-lucide="upload-cloud" class="ico-xs"></i> ${CURRENT_LANG === "en" ? "Seed" : "Раздача"}${i.seed_ratio_limit ? ` ${i.seed_ratio_limit}x` : ''}</span>` : "";
       return `
       <tr>
         <td><strong>${escapeHtml(i.name)}</strong>${seedingBadge}</td>
@@ -16949,8 +16949,8 @@ function editIndexer(i) {
   if (seedingCheck) {
     seedingCheck.checked = !!i.enable_seeding;
     toggleIndexerSeedingFields();
-    document.getElementById("idx-seed-ratio").value = (i.seed_ratio_limit !== null && i.seed_ratio_limit !== undefined) ? i.seed_ratio_limit : "";
-    document.getElementById("idx-seed-time").value = (i.seed_time_limit_hours !== null && i.seed_time_limit_hours !== undefined) ? i.seed_time_limit_hours : "";
+    document.getElementById("idx-seed-ratio").value = (i.seed_ratio_limit !== null && i.seed_ratio_limit !== undefined && i.seed_ratio_limit > 0) ? i.seed_ratio_limit : "";
+    document.getElementById("idx-seed-time").value = (i.seed_time_limit_hours !== null && i.seed_time_limit_hours !== undefined && i.seed_time_limit_hours > 0) ? i.seed_time_limit_hours : "";
   }
   onIndexerTypeChange();
   clearInlineStatus("idx-test-result");
@@ -16980,8 +16980,13 @@ function resetIndexerForm() {
 
 async function submitIndexer() {
   const enableSeeding = document.getElementById("idx-enable-seeding") ? document.getElementById("idx-enable-seeding").checked : false;
-  const seedRatioVal = document.getElementById("idx-seed-ratio") && document.getElementById("idx-seed-ratio").value !== "" ? parseFloat(document.getElementById("idx-seed-ratio").value) : null;
-  const seedTimeVal = document.getElementById("idx-seed-time") && document.getElementById("idx-seed-time").value !== "" ? parseInt(document.getElementById("idx-seed-time").value, 10) : null;
+  const seedRatioInput = document.getElementById("idx-seed-ratio");
+  const rawRatio = seedRatioInput ? seedRatioInput.value.trim() : "";
+  const seedRatioVal = rawRatio !== "" && !isNaN(parseFloat(rawRatio)) && parseFloat(rawRatio) > 0 ? parseFloat(rawRatio) : null;
+
+  const seedTimeInput = document.getElementById("idx-seed-time");
+  const rawTime = seedTimeInput ? seedTimeInput.value.trim() : "";
+  const seedTimeVal = rawTime !== "" && !isNaN(parseInt(rawTime, 10)) && parseInt(rawTime, 10) > 0 ? parseInt(rawTime, 10) : null;
 
   const payload = {
     name: document.getElementById("idx-name").value.trim(),

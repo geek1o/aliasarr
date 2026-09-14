@@ -94,7 +94,12 @@ def create_indexer(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("manage_indexers")),
 ):
-    indexer = Indexer(**payload.model_dump())
+    data = payload.model_dump()
+    if data.get("seed_time_limit_hours") is not None and data["seed_time_limit_hours"] <= 0:
+        data["seed_time_limit_hours"] = None
+    if data.get("seed_ratio_limit") is not None and data["seed_ratio_limit"] <= 0:
+        data["seed_ratio_limit"] = None
+    indexer = Indexer(**data)
     db.add(indexer)
     db.commit()
     db.refresh(indexer)
@@ -111,7 +116,12 @@ def update_indexer(
     indexer = db.get(Indexer, indexer_id)
     if not indexer:
         raise HTTPException(404, "Indexer not found")
-    for field, value in payload.model_dump().items():
+    data = payload.model_dump()
+    if data.get("seed_time_limit_hours") is not None and data["seed_time_limit_hours"] <= 0:
+        data["seed_time_limit_hours"] = None
+    if data.get("seed_ratio_limit") is not None and data["seed_ratio_limit"] <= 0:
+        data["seed_ratio_limit"] = None
+    for field, value in data.items():
         setattr(indexer, field, value)
     db.add(indexer)
     db.commit()
@@ -768,13 +778,19 @@ async def grab_release(
             except Exception as exc:
                 logger.warning("Не удалось запланировать ограничение файлов раздачи: %s", exc)
 
-    # Выставляем лимиты сидирования в торрент-клиенте, если для этого трекера включена раздача
+    # Выставляем лимиты сидирования в торрент-клиенте, если для этого трекера или клиента включена раздача
     indexer_row = db.get(Indexer, payload.indexer_id) if payload.indexer_id else None
-    if indexer_row and getattr(indexer_row, "enable_seeding", False):
+    if (indexer_row and getattr(indexer_row, "enable_seeding", False)) or (download_client_row and (getattr(download_client_row, "seed_time_limit", None) or getattr(download_client_row, "seed_ratio_limit", None))):
         try:
-            ratio_lim = getattr(indexer_row, "seed_ratio_limit", None)
-            time_hrs = getattr(indexer_row, "seed_time_limit_hours", None)
+            ratio_lim = getattr(indexer_row, "seed_ratio_limit", None) if indexer_row else None
+            if ratio_lim is None and download_client_row:
+                ratio_lim = getattr(download_client_row, "seed_ratio_limit", None)
+
+            time_hrs = getattr(indexer_row, "seed_time_limit_hours", None) if indexer_row else None
             time_mins = int(time_hrs * 60) if time_hrs else None
+            if time_mins is None and download_client_row and getattr(download_client_row, "seed_time_limit", None):
+                time_mins = int(getattr(download_client_row, "seed_time_limit", 0))
+
             await client.set_seeding_limits(torrent_hash, seed_ratio_limit=ratio_lim, seed_time_limit_minutes=time_mins)
         except Exception as seed_err:
             logger.debug("Не удалось выставить лимиты сидирования для %s: %s", torrent_hash, seed_err)

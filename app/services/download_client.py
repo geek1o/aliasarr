@@ -561,15 +561,15 @@ class QBittorrentClient(BaseDownloadClient):
         seed_ratio_limit: Optional[float] = None,
         seed_time_limit_minutes: Optional[int] = None,
     ) -> None:
-        if seed_ratio_limit is None and seed_time_limit_minutes is None:
-            return
         try:
+            ratio_val = str(seed_ratio_limit) if (seed_ratio_limit is not None and seed_ratio_limit > 0) else "-1"
+            time_val = str(seed_time_limit_minutes) if (seed_time_limit_minutes is not None and seed_time_limit_minutes > 0) else "-1"
             async with httpx.AsyncClient(timeout=8.0, cookies=self._cookies) as client:
                 await self._ensure_auth(client)
                 data = {
                     "hashes": torrent_hash,
-                    "ratioLimit": str(seed_ratio_limit) if seed_ratio_limit is not None else "-2",
-                    "seedingTimeLimit": str(seed_time_limit_minutes) if seed_time_limit_minutes is not None else "-2",
+                    "ratioLimit": ratio_val,
+                    "seedingTimeLimit": time_val,
                 }
                 await client.post(f"{self._base_url}/api/v2/torrents/setShareLimits", data=data, cookies=self._cookies, timeout=8.0)
         except Exception as exc:
@@ -1117,14 +1117,14 @@ class TransmissionClient(BaseDownloadClient):
         seed_ratio_limit: Optional[float] = None,
         seed_time_limit_minutes: Optional[int] = None,
     ) -> None:
-        if seed_ratio_limit is None:
-            return
         args: dict[str, Any] = {"ids": [torrent_hash]}
         if seed_ratio_limit is not None and seed_ratio_limit > 0:
             args["seedRatioLimit"] = float(seed_ratio_limit)
             args["seedRatioMode"] = 1  # 1 = use torrent-specific limit
         elif seed_ratio_limit == 0:
             args["seedRatioMode"] = 0  # 0 = global limit
+        else:
+            args["seedRatioMode"] = 2  # 2 = unlimited
 
         try:
             await self._rpc_call("torrent-set", args)

@@ -125,6 +125,25 @@ class TestHardlinksAndSeeding(unittest.TestCase):
             self.assertEqual(kwargs["data"]["ratioLimit"], "1.5")
             self.assertEqual(kwargs["data"]["seedingTimeLimit"], "4320")
 
+    def test_qbittorrent_set_seeding_limits_unlimited(self):
+        """Проверяет отправку -1 (unlimited) в qBittorrent, если лимиты не заданы."""
+        client = QBittorrentClient("127.0.0.1", 8080, "admin", "adminadmin")
+
+        mock_http_client = AsyncMock()
+        mock_httpx_mod = MagicMock()
+        mock_httpx_mod.AsyncClient.return_value.__aenter__.return_value = mock_http_client
+
+        with patch("app.services.download_client.httpx", mock_httpx_mod), \
+             patch.object(client, "_ensure_auth", new_callable=AsyncMock):
+            asyncio.run(client.set_seeding_limits("hash123", seed_ratio_limit=None, seed_time_limit_minutes=None))
+
+            mock_http_client.post.assert_called_once()
+            args, kwargs = mock_http_client.post.call_args
+            self.assertIn("/api/v2/torrents/setShareLimits", args[0])
+            self.assertEqual(kwargs["data"]["hashes"], "hash123")
+            self.assertEqual(kwargs["data"]["ratioLimit"], "-1")
+            self.assertEqual(kwargs["data"]["seedingTimeLimit"], "-1")
+
     def test_transmission_set_seeding_limits(self):
         """Проверяет отправку RPC-запроса лимитов сидирования в Transmission без ошибочного seedIdleLimit."""
         client = TransmissionClient("127.0.0.1", 9091, "admin", "admin")
@@ -140,6 +159,45 @@ class TestHardlinksAndSeeding(unittest.TestCase):
             self.assertEqual(args["seedRatioMode"], 1)
             self.assertNotIn("seedIdleLimit", args)
             self.assertNotIn("seedIdleMode", args)
+
+    def test_transmission_set_seeding_limits_unlimited(self):
+        """Проверяет отправку seedRatioMode=2 (unlimited) в Transmission при отсутствии лимита ratio."""
+        client = TransmissionClient("127.0.0.1", 9091, "admin", "admin")
+
+        with patch.object(client, "_rpc_call", new_callable=AsyncMock) as mock_rpc:
+            asyncio.run(client.set_seeding_limits("hash456", seed_ratio_limit=None, seed_time_limit_minutes=None))
+
+            mock_rpc.assert_called_once()
+            method, args = mock_rpc.call_args[0]
+            self.assertEqual(method, "torrent-set")
+            self.assertEqual(args["ids"], ["hash456"])
+            self.assertEqual(args["seedRatioMode"], 2)
+
+    def test_check_seeding_torrents_keeps_unlimited_torrents_alive(self):
+        """Проверяет, что торрент с бесконечным сидированием (лимиты None) не удаляется даже при ratio > 1.0."""
+        db_mock = MagicMock()
+        dc = SimpleNamespace(id=1, name="qBit", type="qbittorrent", enabled=True, seed_time_limit=None, seed_ratio_limit=None)
+        indexer = SimpleNamespace(id=5, name="PrivateUnlimitedTracker", enable_seeding=True, seed_ratio_limit=None, seed_time_limit_hours=None)
+        dh = SimpleNamespace(id=10, show_id=1, indexer_id=5, torrent_hash="unlimited_hash")
+
+        db_mock.query.return_value.filter.return_value.order_by.return_value.first.return_value = dh
+        db_mock.query.return_value.filter.return_value.count.return_value = 0
+        db_mock.get.side_effect = lambda model, obj_id: indexer if obj_id == 5 else None
+
+        torrent_unlimited = TorrentInfo(
+            hash="unlimited_hash", name="Anime.Show.S01", progress=1.0,
+            state="seeding", save_path=self.src_dir, size=5000000,
+            ratio=3.5, seeding_time=86400 * 5,
+        )
+
+        mock_client = AsyncMock()
+        mock_client.list_torrents.return_value = [torrent_unlimited]
+
+        with patch("app.services.downloads_monitor.get_client", return_value=mock_client), \
+             patch("app.services.downloads_monitor.log_release_event"):
+            asyncio.run(_check_seeding_torrents(db_mock, [dc]))
+
+        mock_client.remove_torrent.assert_not_called()
 
     def test_check_seeding_torrents_cleans_up_when_limit_reached(self):
         """Проверяет, что _check_seeding_torrents удаляет раздачу и временные файлы при достижении ratio."""
