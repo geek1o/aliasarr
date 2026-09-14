@@ -13209,18 +13209,32 @@ async function loadQueue() {
       // 1. Колонка Имя / Серии / Трекер
       const showLabel = i.show_title ? `<div class="queue-show-title">${escapeHtml(i.show_title)}</div>` : "";
       const releaseName = `<div class="queue-release-name mono" title="${escapeHtml(i.name)}">${escapeHtml(i.name)}</div>`;
-      let epBadgeHtml = "";
-      if (i.episode_label) {
-        if (i.episode_label === "Фильм" || i.episode_label === "Movie" || i.content_type === "movie") {
-          epBadgeHtml = `<span class="badge category-badge-movies" style="display:inline-flex; align-items:center; gap:4px;"><i data-lucide="film" style="width:11px; height:11px;"></i>${CURRENT_LANG === "en" ? "Movie" : "Фильм"}</span>`;
-        } else {
-          epBadgeHtml = `<span class="badge badge-primary">${escapeHtml(i.episode_label)}</span>`;
+
+      let badgesParts = [];
+      const isMovie = i.content_type === "movie" || i.episode_label === "Фильм" || i.episode_label === "Movie";
+      const isAnime = i.content_type === "anime";
+      const isSeries = i.content_type === "series" || (i.show_title && !isMovie && !isAnime);
+
+      if (isMovie) {
+        badgesParts.push(`<span class="badge category-badge-movies" style="display:inline-flex; align-items:center; gap:4px;"><i data-lucide="film" style="width:11px; height:11px;"></i>${CURRENT_LANG === "en" ? "Movie" : "Фильм"}</span>`);
+      } else {
+        if (isAnime) {
+          badgesParts.push(`<span class="badge category-badge-anime" style="display:inline-flex; align-items:center; gap:4px;"><i data-lucide="clapperboard" style="width:11px; height:11px;"></i>${CURRENT_LANG === "en" ? "Anime" : "Аниме"}</span>`);
+        } else if (isSeries) {
+          badgesParts.push(`<span class="badge category-badge-series" style="display:inline-flex; align-items:center; gap:4px;"><i data-lucide="tv" style="width:11px; height:11px;"></i>${CURRENT_LANG === "en" ? "Series" : "Сериал"}</span>`);
+        }
+        if (i.episode_label) {
+          badgesParts.push(`<span class="badge badge-primary">${escapeHtml(i.episode_label)}</span>`);
         }
       }
-      const badgesHtml = (epBadgeHtml || i.indexer_name) ? `
+
+      if (i.indexer_name) {
+        badgesParts.push(`<span class="badge queue-indexer-badge" title="${escapeHtml(i.indexer_name)}">${escapeHtml(i.indexer_name)}</span>`);
+      }
+
+      const badgesHtml = badgesParts.length > 0 ? `
         <div class="queue-badges-row">
-          ${epBadgeHtml}
-          ${i.indexer_name ? `<span class="badge queue-indexer-badge" title="${escapeHtml(i.indexer_name)}">${escapeHtml(i.indexer_name)}</span>` : ""}
+          ${badgesParts.join("")}
         </div>` : "";
 
       // 2. Колонка Скорость / Сидирование

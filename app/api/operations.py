@@ -1295,6 +1295,19 @@ async def get_queue(db: Session = Depends(get_db), current_user: User = Depends(
                         indexer_cache[tr.indexer_id] = db.get(Indexer, tr.indexer_id)
                     indexer_row = indexer_cache.get(tr.indexer_id)
 
+            if not matching_eps:
+                fallback_show_id = (dh.show_id if dh and getattr(dh, "show_id", None) else None) or (tr.show_id if tr and getattr(tr, "show_id", None) else None)
+                if fallback_show_id:
+                    show_id = fallback_show_id
+                    if fallback_show_id not in show_cache:
+                        show_cache[fallback_show_id] = db.get(Show, fallback_show_id)
+                    current_show = show_cache.get(fallback_show_id)
+                    if current_show:
+                        show_title = getattr(current_show, "title", None)
+                        content_type = getattr(current_show, "content_type", None)
+                        if content_type == "movie" and not ep_label:
+                            ep_label = "Фильм"
+
             seeding_sec = int(getattr(t, "seeding_time", 0) or 0)
             ratio = float(getattr(t, "ratio", 0.0) or 0.0)
             state_str = str(getattr(t, "state", "")).lower()

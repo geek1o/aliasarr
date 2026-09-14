@@ -15153,6 +15153,24 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   border: 1px solid rgba(255, 42, 77, 0.35);
 }
 
+[data-theme="light"] .category-badge-movies {
+  background: #fef3c7;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+[data-theme="light"] .category-badge-series {
+  background: #ccfbf1;
+  color: #0f766e;
+  border-color: #99f6e4;
+}
+
+[data-theme="light"] .category-badge-anime {
+  background: #ffe4e6;
+  color: #e11d48;
+  border-color: #fecdd3;
+}
+
 /* Terminal Command Code Box with Copy Button */
 .terminal-code-box {
   position: relative;
