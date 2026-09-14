@@ -81,6 +81,7 @@ class SettingsOut(BaseModel):
     metadata_refresh_aliases: bool = True
     metadata_overview_language: str = "ru"
     metadata_title_language: str = "ru"
+    metadata_collection_title_language: str = "ru"
 
     session_timeout_minutes: int
     backup_interval_days: int = 7
@@ -149,6 +150,7 @@ class SettingsUpdate(BaseModel):
     metadata_refresh_aliases: Optional[bool] = None
     metadata_overview_language: Optional[str] = None
     metadata_title_language: Optional[str] = None
+    metadata_collection_title_language: Optional[str] = None
 
     session_timeout_minutes: Optional[int] = None
     backup_interval_days: Optional[int] = None
@@ -212,6 +214,7 @@ def _to_settings_out(settings, is_owner: bool = False) -> SettingsOut:
         metadata_refresh_aliases=getattr(settings, "metadata_refresh_aliases", True),
         metadata_overview_language=getattr(settings, "metadata_overview_language", "ru") or "ru",
         metadata_title_language=getattr(settings, "metadata_title_language", "ru") or "ru",
+        metadata_collection_title_language=getattr(settings, "metadata_collection_title_language", "ru") or "ru",
         session_timeout_minutes=getattr(settings, "session_timeout_minutes", 43200) or 43200,
         backup_interval_days=getattr(settings, "backup_interval_days", 7) or 7,
         backup_retention_count=getattr(settings, "backup_retention_count", 10) or 10,
@@ -445,6 +448,14 @@ def update_settings(
     if payload.metadata_title_language is not None:
         t_val = str(payload.metadata_title_language).strip().lower()
         settings.metadata_title_language = t_val or "ru"
+    if payload.metadata_collection_title_language is not None:
+        c_val = str(payload.metadata_collection_title_language).strip().lower()
+        settings.metadata_collection_title_language = c_val or "ru"
+        try:
+            from app.services.metadata import _COLLECTION_DETAILS_CACHE
+            _COLLECTION_DETAILS_CACHE.clear()
+        except Exception:
+            pass
 
     if payload.session_timeout_minutes is not None:
         if payload.session_timeout_minutes < 5:

@@ -292,12 +292,13 @@ class TestMovieSuite(unittest.TestCase):
             res1 = asyncio.run(client.get_collection_details(12345))
             self.assertEqual(res1["name"], "Test Saga")
             self.assertEqual(len(res1["parts"]), 2)
-            self.assertEqual(mock_client_instance.get.call_count, 1)
+            first_calls = mock_client_instance.get.call_count
+            self.assertGreater(first_calls, 0)
 
             # Second call should use cache and not call httpx get again
             res2 = asyncio.run(client.get_collection_details(12345))
             self.assertEqual(res2["name"], "Test Saga")
-            self.assertEqual(mock_client_instance.get.call_count, 1)
+            self.assertEqual(mock_client_instance.get.call_count, first_calls)
 
     def test_get_collection_detail_fallback_on_shows(self):
         try:

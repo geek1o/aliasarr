@@ -779,16 +779,30 @@ async def import_show(
                     if coll.tmdb_collection_id and hasattr(client, "get_collection_details"):
                         if not getattr(coll, "parts_cache", None) or coll.parts_count is None:
                             try:
-                                c_det = await client.get_collection_details(coll.tmdb_collection_id)
+                                c_lang = getattr(settings, "metadata_collection_title_language", "ru") if settings else "ru"
+                                c_lang = (c_lang or "ru").strip().lower()
+                                c_det = await client.get_collection_details(coll.tmdb_collection_id, lang=c_lang)
                                 if c_det and c_det.get("parts"):
                                     import json
                                     coll.parts_count = len(c_det["parts"])
-                                    coll.parts_cache = json.dumps(c_det["parts"])
+                                    coll.parts_cache = json.dumps(c_det["parts"], ensure_ascii=False)
                                     coll.last_metadata_refresh_at = dt.datetime.utcnow()
                                     if c_det.get("overview"):
                                         coll.overview = c_det.get("overview")
-                                    if c_det.get("name") and not coll.title:
-                                        coll.title = c_det.get("name")
+                                    tbl = c_det.get("titles_by_lang") or {}
+                                    if tbl:
+                                        coll.titles_cache = json.dumps(tbl, ensure_ascii=False)
+                                    pref_title = None
+                                    if c_lang in ("ru", "rus"):
+                                        pref_title = tbl.get("ru") or (c_det.get("name") if any('\u0400' <= ch <= '\u04ff' for ch in (c_det.get("name") or "")) else None)
+                                    elif c_lang in ("en", "eng"):
+                                        pref_title = tbl.get("en")
+                                    else:
+                                        pref_title = tbl.get(c_lang)
+                                    if pref_title and pref_title.strip():
+                                        coll.title = pref_title.strip()
+                                    elif c_det.get("name") and not coll.title:
+                                        coll.title = c_det.get("name").strip()
                                     if c_det.get("poster_url") and not coll.poster_url:
                                         coll.poster_source_url = c_det.get("poster_url")
                                         from app.services.cover_service import download_and_store_collection_cover

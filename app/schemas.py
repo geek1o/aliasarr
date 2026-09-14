@@ -122,6 +122,7 @@ class MovieCollectionOut(BaseModel):
     parts_count: Optional[int] = 0
     downloaded_count: int = 0
     missing_count: int = 0
+    titles_by_lang: Optional[dict[str, str]] = None
 
 
 class ShowCreate(BaseModel):

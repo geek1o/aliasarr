@@ -1088,10 +1088,10 @@ class TMDBClient(BaseMetadataClient):
             resp.raise_for_status()
             data = resp.json()
 
-        # Fallback на английский язык, если в TMDb отсутствует локализованное описание саги
+        # Fallback на английский язык, если целевой язык не en-US (для синопсиса и англоязычного названия)
         c_overview = (data.get("overview") or "").strip()
         fallback_data = None
-        if target_lang != "en-US" and not c_overview:
+        if target_lang != "en-US":
             try:
                 async with httpx.AsyncClient(timeout=6) as client:
                     f_resp = await client.get(
@@ -1103,6 +1103,56 @@ class TMDBClient(BaseMetadataClient):
                         fallback_data = f_resp.json()
             except Exception as ex:
                 logger.debug("TMDb collection fallback fetch failed: %s", ex)
+
+        # Если целевой язык en-US, пробуем подтянуть русскую локализацию
+        ru_data = None
+        if target_lang == "en-US":
+            try:
+                async with httpx.AsyncClient(timeout=6) as client:
+                    ru_resp = await client.get(
+                        f"{self.BASE_URL}/collection/{tmdb_collection_id}",
+                        params={"language": "ru-RU"},
+                        headers=self._headers(),
+                    )
+                    if ru_resp.status_code == 200:
+                        ru_data = ru_resp.json()
+            except Exception as ex:
+                logger.debug("TMDb collection RU fetch failed: %s", ex)
+
+        # Сбор словаря названий на разных языках (RU, EN, translations)
+        titles_by_lang: dict[str, str] = {}
+        if target_lang != "en-US":
+            if data.get("name"):
+                lang_key = "ru" if norm_lang in ("ru", "rus") else norm_lang
+                titles_by_lang[lang_key] = data.get("name").strip()
+            if fallback_data and fallback_data.get("name"):
+                titles_by_lang["en"] = fallback_data.get("name").strip()
+        else:
+            if data.get("name"):
+                titles_by_lang["en"] = data.get("name").strip()
+            if ru_data and ru_data.get("name"):
+                titles_by_lang["ru"] = ru_data.get("name").strip()
+
+        # Дополнительно опрашиваем эндпоинт переводов TMDb для максимального охвата языков
+        try:
+            async with httpx.AsyncClient(timeout=6) as client:
+                tr_resp = await client.get(
+                    f"{self.BASE_URL}/collection/{tmdb_collection_id}/translations",
+                    headers=self._headers(),
+                )
+                if tr_resp.status_code == 200:
+                    for item in tr_resp.json().get("translations", []):
+                        iso = (item.get("iso_639_1") or "").lower()
+                        t_obj = item.get("data") or {}
+                        t_title = t_obj.get("title") or t_obj.get("name")
+                        if iso and t_title and t_title.strip():
+                            clean_t = t_title.strip()
+                            if iso not in titles_by_lang or not titles_by_lang[iso]:
+                                titles_by_lang[iso] = clean_t
+                            elif iso == "ru" and not any('\u0400' <= ch <= '\u04ff' for ch in titles_by_lang[iso]) and any('\u0400' <= ch <= '\u04ff' for ch in clean_t):
+                                titles_by_lang[iso] = clean_t
+        except Exception as ex:
+            logger.debug("TMDb collection translations fetch failed: %s", ex)
 
         fallback_parts_map = {}
         fallback_overview = None
@@ -1140,9 +1190,18 @@ class TMDBClient(BaseMetadataClient):
 
         c_poster = data.get("poster_path") or (fallback_data.get("poster_path") if fallback_data else None)
         c_backdrop = data.get("backdrop_path") or (fallback_data.get("backdrop_path") if fallback_data else None)
+        chosen_name = None
+        if norm_lang in ("ru", "rus") and titles_by_lang.get("ru"):
+            chosen_name = titles_by_lang["ru"]
+        elif norm_lang in ("en", "eng") and titles_by_lang.get("en"):
+            chosen_name = titles_by_lang["en"]
+        else:
+            chosen_name = titles_by_lang.get(norm_lang) or data.get("name") or (fallback_data.get("name") if fallback_data else None)
+
         result = {
             "id": data.get("id"),
-            "name": data.get("name") or (fallback_data.get("name") if fallback_data else None),
+            "name": chosen_name or data.get("name") or (fallback_data.get("name") if fallback_data else None),
+            "titles_by_lang": titles_by_lang,
             "overview": c_overview or fallback_overview,
             "poster_url": f"{self.IMAGE_BASE}{c_poster}" if c_poster else None,
             "backdrop_url": f"{self.IMAGE_BASE}{c_backdrop}" if c_backdrop else None,
@@ -3468,9 +3527,10 @@ async def refresh_show_metadata(db, show) -> dict:
     title = (getattr(show, "title", None) or "").strip()
     # 0. Загружаем глобальную настройку языка описания (синопсиса)
     app_settings = None
-    if db and AppSettings:
+    if db:
         try:
-            app_settings = db.query(AppSettings).filter(getattr(AppSettings, "id", None) == 1).first()
+            from app.models.db import AppSettings as _AppSettingsModel
+            app_settings = db.query(_AppSettingsModel).filter(getattr(_AppSettingsModel, "id", None) == 1).first()
         except Exception:
             app_settings = None
     overview_lang = getattr(app_settings, "metadata_overview_language", "ru") if app_settings else "ru"
@@ -3708,14 +3768,36 @@ async def refresh_show_metadata(db, show) -> dict:
             if coll and coll.tmdb_collection_id and hasattr(client, "get_collection_details"):
                 if not getattr(coll, "parts_cache", None) or coll.parts_count is None:
                     try:
-                        c_det = await client.get_collection_details(coll.tmdb_collection_id)
+                        from app.models.db import AppSettings
+                        app_settings = db.query(AppSettings).filter(getattr(AppSettings, "id", None) == 1).first()
+                        c_lang = getattr(app_settings, "metadata_collection_title_language", "ru") if app_settings else "ru"
+                        c_lang = (c_lang or "ru").strip().lower()
+
+                        c_det = await client.get_collection_details(coll.tmdb_collection_id, lang=c_lang)
                         if c_det and c_det.get("parts"):
                             import json
                             coll.parts_count = len(c_det["parts"])
-                            coll.parts_cache = json.dumps(c_det["parts"])
+                            coll.parts_cache = json.dumps(c_det["parts"], ensure_ascii=False)
                             coll.last_metadata_refresh_at = dt.datetime.utcnow()
                             if c_det.get("overview"):
                                 coll.overview = c_det.get("overview")
+                            
+                            tbl = c_det.get("titles_by_lang") or {}
+                            if tbl:
+                                coll.titles_cache = json.dumps(tbl, ensure_ascii=False)
+                            
+                            pref_title = None
+                            if c_lang in ("ru", "rus"):
+                                pref_title = tbl.get("ru") or (c_det.get("name") if any('\u0400' <= ch <= '\u04ff' for ch in (c_det.get("name") or "")) else None)
+                            elif c_lang in ("en", "eng"):
+                                pref_title = tbl.get("en")
+                            else:
+                                pref_title = tbl.get(c_lang)
+                            if pref_title and pref_title.strip():
+                                coll.title = pref_title.strip()
+                            elif c_det.get("name") and not coll.title:
+                                coll.title = c_det.get("name").strip()
+
                             if c_det.get("poster_url"):
                                 coll.poster_source_url = c_det.get("poster_url")
                                 from app.services.cover_service import download_and_store_collection_cover
@@ -4148,6 +4230,14 @@ async def refresh_all_shows_metadata(db=None, force: bool = False, username: str
         if errors_count:
             summary_msg += f" (ошибок: {errors_count})"
 
+        # Также обновляем метаданные и названия киноколлекций/саг
+        try:
+            coll_res = await refresh_all_collections_metadata(None, force=force)
+            if coll_res and coll_res.get("updated"):
+                summary_msg += f", саг: {coll_res['updated']}"
+        except Exception as c_err:
+            logger.debug("Ошибка обновления саг при общем обновлении метаданных: %s", c_err)
+
         task_manager.finish_task(task.id, message=summary_msg)
         audit_db = db or SessionLocal()
         try:
@@ -4170,20 +4260,32 @@ async def refresh_all_shows_metadata(db=None, force: bool = False, username: str
 async def refresh_all_collections_metadata(db=None, force: bool = False) -> dict:
     """
     Фоновое регулярное обновление метаданных киноколлекций/саг из TMDb.
-    Синхронизирует список частей франшизы, постеры и описания в БД.
+    Синхронизирует список частей франшизы, названия на выбранном языке, постеры и описания в БД.
     """
-    from app.models.db import MovieCollection
+    try:
+        from app.models.db import MovieCollection as _MC, AppSettings as _AS
+        MovieCollClass = _MC
+        AppSettingsClass = _AS
+    except ImportError:
+        MovieCollClass = MovieCollection
+        AppSettingsClass = AppSettings
     import json
-    from app.database import SessionLocal
+    try:
+        from app.database import SessionLocal
+    except ImportError:
+        SessionLocal = None
 
     needs_close = False
     init_db = db
     if init_db is None:
-        init_db = SessionLocal()
-        needs_close = True
+        if SessionLocal:
+            init_db = SessionLocal()
+            needs_close = True
+        else:
+            return {"total": 0, "updated": 0}
 
     try:
-        colls = init_db.query(MovieCollection).filter(MovieCollection.tmdb_collection_id.isnot(None)).all()
+        colls = init_db.query(MovieCollClass).filter(MovieCollClass.tmdb_collection_id.isnot(None)).all()
         if not colls:
             return {"total": 0, "updated": 0}
 
@@ -4192,36 +4294,55 @@ async def refresh_all_collections_metadata(db=None, force: bool = False) -> dict
         for c in colls:
             if force or not getattr(c, "parts_cache", None) or not getattr(c, "last_metadata_refresh_at", None):
                 candidates.append(c)
+            elif not getattr(c, "titles_cache", None):
+                candidates.append(c)
             elif (now - c.last_metadata_refresh_at).days >= 7:
                 candidates.append(c)
 
         if not candidates:
             return {"total": len(colls), "updated": 0}
 
-        from app.models.db import AppSettings
-        app_settings = init_db.query(AppSettings).filter(getattr(AppSettings, "id", None) == 1).first()
+        app_settings = init_db.query(AppSettingsClass).filter(getattr(AppSettingsClass, "id", None) == 1).first()
         overview_lang = getattr(app_settings, "metadata_overview_language", "ru") if app_settings else "ru"
-        overview_lang = overview_lang or "ru"
+        overview_lang = (overview_lang or "ru").strip().lower()
+        coll_title_lang = getattr(app_settings, "metadata_collection_title_language", "ru") if app_settings else "ru"
+        coll_title_lang = (coll_title_lang or "ru").strip().lower()
     finally:
-        if needs_close:
+        if needs_close and init_db:
             init_db.close()
             init_db = None
 
     client = RadarrClient(overview_language=overview_lang)
     updated = 0
     for coll in candidates:
-        s_db = SessionLocal()
+        s_db = SessionLocal() if SessionLocal else (db or init_db)
         try:
-            db_coll = s_db.get(MovieCollection, coll.id)
+            db_coll = s_db.get(MovieCollClass, coll.id) if (s_db and hasattr(s_db, "get")) else coll
             if not db_coll or not db_coll.tmdb_collection_id:
                 continue
-            c_det = await client.get_collection_details(db_coll.tmdb_collection_id, bypass_cache=force)
+            c_det = await client.get_collection_details(db_coll.tmdb_collection_id, lang=coll_title_lang, bypass_cache=force)
             if c_det and c_det.get("parts"):
                 db_coll.parts_count = len(c_det["parts"])
-                db_coll.parts_cache = json.dumps(c_det["parts"])
+                db_coll.parts_cache = json.dumps(c_det["parts"], ensure_ascii=False)
                 db_coll.last_metadata_refresh_at = dt.datetime.utcnow()
                 if c_det.get("overview"):
                     db_coll.overview = c_det.get("overview")
+
+                tbl = c_det.get("titles_by_lang") or {}
+                if tbl:
+                    db_coll.titles_cache = json.dumps(tbl, ensure_ascii=False)
+
+                pref_title = None
+                if coll_title_lang in ("ru", "rus"):
+                    pref_title = tbl.get("ru") or (c_det.get("name") if any('\u0400' <= ch <= '\u04ff' for ch in (c_det.get("name") or "")) else None) or c_det.get("name")
+                elif coll_title_lang in ("en", "eng"):
+                    pref_title = tbl.get("en") or c_det.get("name")
+                else:
+                    pref_title = tbl.get(coll_title_lang) or c_det.get("name")
+
+                if pref_title and pref_title.strip():
+                    db_coll.title = pref_title.strip()
+
                 if c_det.get("poster_url"):
                     db_coll.poster_source_url = c_det.get("poster_url")
                     from app.services.cover_service import download_and_store_collection_cover
@@ -4238,7 +4359,8 @@ async def refresh_all_collections_metadata(db=None, force: bool = False) -> dict
         except Exception as e:
             logger.debug("Failed to background refresh collection %s: %s", coll.id, e)
         finally:
-            s_db.close()
+            if s_db and s_db is not db and hasattr(s_db, "close"):
+                s_db.close()
         await asyncio.sleep(0.1)
 
     return {"total": len(colls), "updated": updated}

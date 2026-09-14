@@ -1004,6 +1004,12 @@ const TRANSLATIONS = {
     "md.title_language_ru": "Русский (если доступен в базах)",
     "md.title_language_en": "Английский / Оригинальный (как в Skyhook/Radarr)",
     "md.title_language_saved": "Язык названий при поиске сохранен",
+    "md.collection_title_language_label": "Основной язык названий коллекций (саг)",
+    "md.collection_title_language_desc": "Определяет, на каком языке сохранять и отображать названия кинофраншиз и коллекций (TMDb Collections).",
+    "md.collection_title_language_ru": "Русский (если доступен в базах)",
+    "md.collection_title_language_en": "Английский / Оригинальный (как в TMDb/Radarr)",
+    "md.collection_title_language_saved": "Язык названий коллекций сохранен",
+    "collections.title_lang_tooltip": "Язык названий коллекций",
     "md.refresh_started": "Запущено фоновое обновление метаданных библиотеки...",
     "md.refresh_aliases_toggle": "Обновлять поисковые алиасы при синхронизации метаданных",
     "md.refresh_aliases_hint": "Автоматически актуализировать список альтернативных названий тайтла согласно разрешенным языкам при фоновом или ручном обновлении метаданных",
@@ -2446,6 +2452,12 @@ const TRANSLATIONS = {
     "md.title_language_ru": "Russian (if available in sources)",
     "md.title_language_en": "English / Original (as in Skyhook/Radarr)",
     "md.title_language_saved": "Search title language saved",
+    "md.collection_title_language_label": "Primary Collection (Saga) Title Language",
+    "md.collection_title_language_desc": "Determines default language for movie franchise and collection titles (TMDb Collections).",
+    "md.collection_title_language_ru": "Russian (if available in sources)",
+    "md.collection_title_language_en": "English / Original (as in TMDb/Radarr)",
+    "md.collection_title_language_saved": "Collection title language saved",
+    "collections.title_lang_tooltip": "Collection title language",
     "md.refresh_started": "Background library metadata refresh started...",
     "md.refresh_aliases_toggle": "Update search aliases during metadata synchronization",
     "md.refresh_aliases_hint": "Automatically update title alternative names according to allowed languages during background or manual metadata refresh",
@@ -5293,6 +5305,150 @@ async function switchShowMainTitle(showId, newTitle) {
   }
 }
 
+function getCollectionDisplayTitle(coll) {
+  if (!coll) return "";
+  const s = CACHED_APP_SETTINGS || {};
+  const prefLang = (s.metadata_collection_title_language || "ru").toLowerCase();
+  const tbl = coll.titles_by_lang || {};
+  if (prefLang === "ru" && tbl.ru) return tbl.ru;
+  if (prefLang === "en" && tbl.en) return tbl.en;
+  if (prefLang in tbl && tbl[prefLang]) return tbl[prefLang];
+  return coll.title || "";
+}
+
+function renderCollectionTitleLangSwitcher(coll, canManageLib = true) {
+  if (!coll) return "";
+  const tbl = coll.titles_by_lang || {};
+  const currentTitle = (coll.title || "").trim();
+  const variants = [];
+  const addedTitles = new Set();
+
+  function addVariant(langKey, title, label) {
+    if (!title || typeof title !== "string") return;
+    const clean = title.trim();
+    if (!clean || addedTitles.has(clean.toLowerCase())) return;
+    addedTitles.add(clean.toLowerCase());
+    variants.push({
+      langKey: langKey,
+      langTag: label || langKey.toUpperCase(),
+      title: clean,
+    });
+  }
+
+  // 1. RU
+  if (tbl.ru) {
+    addVariant("ru", tbl.ru, "RU");
+  } else if (/[а-яёА-ЯЁ]/.test(currentTitle)) {
+    addVariant("ru", currentTitle, "RU");
+  }
+
+  // 2. EN
+  if (tbl.en) {
+    addVariant("en", tbl.en, "EN");
+  } else if (!/[а-яёА-ЯЁ]/.test(currentTitle)) {
+    addVariant("en", currentTitle, "EN");
+  }
+
+  // 3. Translations
+  for (const [k, v] of Object.entries(tbl)) {
+    if (k !== "ru" && k !== "en" && typeof v === "string") {
+      addVariant(k, v, k.toUpperCase());
+    }
+  }
+
+  // 4. Fallback for current title
+  if (currentTitle && !addedTitles.has(currentTitle.toLowerCase())) {
+    addVariant("def", currentTitle, "DEF");
+  }
+
+  if (variants.length < 2 && coll.tmdb_collection_id) {
+    if (!variants.some(v => v.langKey === "ru")) {
+      variants.push({ langKey: "ru", langTag: "RU", title: "" });
+    }
+    if (!variants.some(v => v.langKey === "en")) {
+      variants.push({ langKey: "en", langTag: "EN", title: "" });
+    }
+  }
+
+  if (variants.length <= 1) return "";
+
+  const isCurrentRu = /[а-яёА-ЯЁ]/.test(currentTitle);
+  const activeVariant = variants.find(v => v.title && v.title.toLowerCase() === currentTitle.toLowerCase()) ||
+                        variants.find(v => (isCurrentRu && v.langKey === "ru") || (!isCurrentRu && v.langKey === "en")) ||
+                        variants[0];
+  const otherVariants = variants.filter(v => v !== activeVariant);
+
+  return `
+    <div class="show-title-lang-bar" id="collection-title-lang-bar-${coll.id}" style="margin: 4px 0 6px 0;">
+      <span class="show-title-lang-icon" title="${CURRENT_LANG === 'en' ? 'Franchise title language' : 'Язык названия саги'}">
+        <i data-lucide="languages" class="ico-xs"></i>
+      </span>
+      <div class="show-title-lang-chips">
+        <button type="button" class="title-lang-chip active" 
+          data-title="${escapeHtml(activeVariant.title || currentTitle)}" 
+          data-lang="${activeVariant.langKey}" 
+          title="${escapeHtml(activeVariant.title || currentTitle)}">
+          <span class="title-lang-tag">${activeVariant.langTag}</span>
+          <span class="title-lang-val">${escapeHtml(activeVariant.title || currentTitle)}</span>
+        </button>
+        ${otherVariants.map(v => {
+          const displayVal = v.title || (v.langKey === "ru" ? (CURRENT_LANG === "en" ? "Fetch RU" : "Загрузить RU") : (CURRENT_LANG === "en" ? "Fetch EN" : "Загрузить EN"));
+          return `
+            <button type="button" class="title-lang-chip" 
+              data-title="${escapeHtml(v.title || '')}" 
+              data-lang="${v.langKey}" 
+              ${canManageLib ? `onclick="onCollectionTitleLangChipClick(this, ${coll.id})"` : 'disabled'}
+              title="${escapeHtml(v.title || (CURRENT_LANG === 'en' ? 'Fetch title in this language' : 'Получить название на этом языке'))}">
+              <span class="title-lang-tag">${v.langTag}</span>
+              <span class="title-lang-val">${escapeHtml(displayVal)}</span>
+            </button>
+          `;
+        }).join("")}
+      </div>
+    </div>
+  `;
+}
+
+async function onCollectionTitleLangChipClick(btn, collectionId) {
+  if (!collectionId || !btn) return;
+  const targetLang = btn.dataset.lang;
+  const targetTitle = btn.dataset.title;
+  await switchCollectionTitleLanguage(collectionId, targetLang, targetTitle, btn);
+}
+
+async function switchCollectionTitleLanguage(collectionId, targetLang, targetTitle, btn) {
+  if (btn) btn.classList.add("is-loading");
+  try {
+    const res = await api(`/api/v1/collections/${collectionId}/switch-title-language`, {
+      method: "POST",
+      body: JSON.stringify({
+        target_language: targetLang || null,
+        title: targetTitle || null,
+      }),
+    });
+
+    if (Array.isArray(CACHED_COLLECTIONS)) {
+      const c = CACHED_COLLECTIONS.find(x => x.id === collectionId);
+      if (c) {
+        c.title = res.title;
+        if (res.titles_by_lang) c.titles_by_lang = res.titles_by_lang;
+      }
+    }
+
+    const cardTitleEl = document.querySelector(`#collection-card-${collectionId} .collection-card-title, #collection-card-${collectionId} .poster-cinematic-title`);
+    if (cardTitleEl) cardTitleEl.textContent = res.title;
+
+    if (CURRENT_COLLECTION_ID === collectionId && document.getElementById("collection-modal")?.classList.contains("active")) {
+      await openCollectionModal(collectionId);
+    }
+    toast(CURRENT_LANG === "en" ? `Collection title updated: ${res.title}` : `Название коллекции обновлено: ${res.title}`);
+  } catch (e) {
+    showToast(e.message || "Ошибка смены языка названия коллекции", "error");
+  } finally {
+    if (btn) btn.classList.remove("is-loading");
+  }
+}
+
 function selectWizardTitle(btn) {
   const chosen = btn?.dataset?.title;
   if (!chosen) return;
@@ -6616,14 +6772,21 @@ async function renderCollectionsView(query = "", force = false) {
     clearBtn.style.display = (searchInput && searchInput.value.length > 0) ? "inline-flex" : "none";
   }
 
+  const toolbarLangSelect = document.getElementById("collections-title-lang-select");
+  if (toolbarLangSelect && CACHED_APP_SETTINGS && CACHED_APP_SETTINGS.metadata_collection_title_language) {
+    toolbarLangSelect.value = CACHED_APP_SETTINGS.metadata_collection_title_language;
+  }
+
   const collections = await loadCollections(force);
   let filtered = collections || [];
 
   if (q) {
-    filtered = filtered.filter(c =>
-      (c.title && c.title.toLowerCase().includes(q)) ||
-      (c.overview && c.overview.toLowerCase().includes(q))
-    );
+    filtered = filtered.filter(c => {
+      const dispTitle = getCollectionDisplayTitle(c);
+      return (c.title && c.title.toLowerCase().includes(q)) ||
+        (dispTitle && dispTitle.toLowerCase().includes(q)) ||
+        (c.overview && c.overview.toLowerCase().includes(q));
+    });
   }
 
   const alphaIndex = document.getElementById("collections-alphabet-index");
@@ -6692,6 +6855,7 @@ function renderCollectionCard(coll) {
     `;
   }
 
+  const collDisplayTitle = getCollectionDisplayTitle(coll);
   let partsBadgeHtml = "";
   if (COLLECTIONS_POSTER_OPTIONS.partsCount !== false) {
     partsBadgeHtml = `<div style="margin: 2px 0;"><span class="badge-collection" title="${escapeHtml(partsTooltip)}"><i data-lucide="boxes" class="ico-xxs"></i> ${total} ${partsWord}</span></div>`;
@@ -6715,13 +6879,13 @@ function renderCollectionCard(coll) {
 
     let infoHtml = "";
     if (COLLECTIONS_POSTER_OPTIONS.title !== false) {
-      infoHtml += `<h3 class="collection-card-title show-title" title="${escapeHtml(coll.title)}">${escapeHtml(coll.title)}</h3>`;
+      infoHtml += `<h3 class="collection-card-title show-title" title="${escapeHtml(collDisplayTitle)}">${escapeHtml(collDisplayTitle)}</h3>`;
     }
     if (monitoredBadgeHtml) infoHtml += monitoredBadgeHtml;
     if (partsBadgeHtml) infoHtml += partsBadgeHtml;
 
     return `
-      <div class="collection-card show-card" id="collection-card-${coll.id}" data-alpha="${alphaChar}" onclick="openCollectionModal(${coll.id})" title="${escapeHtml(coll.title)} • ${escapeHtml(statusTooltip)}">
+      <div class="collection-card show-card" id="collection-card-${coll.id}" data-alpha="${alphaChar}" onclick="openCollectionModal(${coll.id})" title="${escapeHtml(collDisplayTitle)} • ${escapeHtml(statusTooltip)}">
         <div class="collection-poster-wrap show-poster" ${posterStyle} title="${escapeHtml(statusTooltip)}">
           ${!posterImg ? `<div style="font-size: 36px; color: var(--text-muted); opacity: 0.5;"><i data-lucide="boxes"></i></div>` : ""}
           ${statusPillHtml}
@@ -6735,7 +6899,7 @@ function renderCollectionCard(coll) {
   if (CURRENT_COLLECTIONS_CARD_STYLE === "cinematic") {
     const cinematicOverlayHtml = `
       <div class="poster-cinematic-overlay">
-        ${COLLECTIONS_POSTER_OPTIONS.title !== false ? `<div class="poster-cinematic-title" title="${escapeHtml(coll.title)}">${escapeHtml(coll.title)}</div>` : ""}
+        ${COLLECTIONS_POSTER_OPTIONS.title !== false ? `<div class="poster-cinematic-title" title="${escapeHtml(collDisplayTitle)}">${escapeHtml(collDisplayTitle)}</div>` : ""}
         <div class="poster-cinematic-status" title="${escapeHtml(statusTooltip)}">
           <span class="status-dot ${statusClass}"></span>
           <span class="poster-cinematic-status-text">${downloaded}/${total} • ${pct}% • ${escapeHtml(mTitle)}</span>
@@ -6750,7 +6914,7 @@ function renderCollectionCard(coll) {
     if (monitoredBadgeHtml) cinematicInfoHtml += monitoredBadgeHtml;
 
     return `
-      <div class="collection-card show-card" id="collection-card-${coll.id}" data-alpha="${alphaChar}" onclick="openCollectionModal(${coll.id})" title="${escapeHtml(coll.title)} • ${escapeHtml(statusTooltip)}">
+      <div class="collection-card show-card" id="collection-card-${coll.id}" data-alpha="${alphaChar}" onclick="openCollectionModal(${coll.id})" title="${escapeHtml(collDisplayTitle)} • ${escapeHtml(statusTooltip)}">
         <div class="collection-poster-wrap show-poster" ${posterStyle} title="${escapeHtml(statusTooltip)}">
           ${!posterImg ? `<div style="font-size: 36px; color: var(--text-muted); opacity: 0.5;"><i data-lucide="boxes"></i></div>` : ""}
           ${cinematicOverlayHtml}
@@ -6778,13 +6942,13 @@ function renderCollectionCard(coll) {
 
   let classicInfoHtml = "";
   if (COLLECTIONS_POSTER_OPTIONS.title !== false) {
-    classicInfoHtml += `<h3 class="collection-card-title" title="${escapeHtml(coll.title)}">${escapeHtml(coll.title)}</h3>`;
+    classicInfoHtml += `<h3 class="collection-card-title" title="${escapeHtml(collDisplayTitle)}">${escapeHtml(collDisplayTitle)}</h3>`;
   }
   if (monitoredBadgeHtml) classicInfoHtml += monitoredBadgeHtml;
   if (partsBadgeHtml) classicInfoHtml += partsBadgeHtml;
 
   return `
-    <div class="collection-card" id="collection-card-${coll.id}" data-alpha="${alphaChar}" onclick="openCollectionModal(${coll.id})" title="${escapeHtml(coll.title)} • ${escapeHtml(statusTooltip)}">
+    <div class="collection-card" id="collection-card-${coll.id}" data-alpha="${alphaChar}" onclick="openCollectionModal(${coll.id})" title="${escapeHtml(collDisplayTitle)} • ${escapeHtml(statusTooltip)}">
       <div class="collection-poster-wrap" ${posterStyle} title="${escapeHtml(statusTooltip)}">
         ${!posterImg ? `<div style="font-size: 36px; color: var(--text-muted); opacity: 0.5;"><i data-lucide="boxes"></i></div>` : ""}
         ${progressHtml}
@@ -6834,7 +6998,10 @@ async function openCollectionModal(collectionId) {
           </div>
           <div class="collection-hero-meta">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
-              <h2 class="collection-hero-title">${escapeHtml(coll.title)}</h2>
+              <div style="flex: 1; min-width: 200px;">
+                <h2 class="collection-hero-title" style="margin-bottom: 2px;">${escapeHtml(coll.title)}</h2>
+                ${renderCollectionTitleLangSwitcher(coll, canManageLib)}
+              </div>
               <div style="display:flex; align-items:center; gap:8px;">
                 ${canManageLib && coll.tmdb_collection_id ? `
                   <button class="btn btn-secondary btn-small" id="btn-refresh-collection-${coll.id}" onclick="refreshCollectionMetadata(${coll.id}, this)" title="${CURRENT_LANG === 'en' ? 'Refresh franchise metadata from TMDb' : 'Обновить метаданные саги из TMDb'}">
@@ -18143,6 +18310,14 @@ async function loadMetadataSources() {
     if (titleLangEl && s && s.metadata_title_language) {
       titleLangEl.value = s.metadata_title_language;
     }
+    const collTitleLangEl = document.getElementById("setting-metadata-collection-title-language");
+    if (collTitleLangEl && s && s.metadata_collection_title_language) {
+      collTitleLangEl.value = s.metadata_collection_title_language;
+    }
+    const toolbarCollSelect = document.getElementById("collections-title-lang-select");
+    if (toolbarCollSelect && s && s.metadata_collection_title_language) {
+      toolbarCollSelect.value = s.metadata_collection_title_language;
+    }
   } catch (_) {}
   const tbody = document.querySelector("#md-table tbody");
   if (!tbody) return;
@@ -18241,6 +18416,31 @@ async function changeMetadataTitleLanguage(val) {
   } catch (e) {
     showToast("Ошибка: " + e.message, "error");
   }
+}
+
+async function changeMetadataCollectionTitleLanguage(val) {
+  try {
+    const langVal = String(val || "ru").trim().toLowerCase();
+    await api("/api/v1/settings", {
+      method: "PUT",
+      body: JSON.stringify({ metadata_collection_title_language: langVal }),
+    });
+    if (CACHED_APP_SETTINGS) {
+      CACHED_APP_SETTINGS.metadata_collection_title_language = langVal;
+    }
+    const collTitleLangEl = document.getElementById("setting-metadata-collection-title-language");
+    if (collTitleLangEl) collTitleLangEl.value = langVal;
+    const toolbarCollSelect = document.getElementById("collections-title-lang-select");
+    if (toolbarCollSelect) toolbarCollSelect.value = langVal;
+    showToast(t("md.collection_title_language_saved") || (CURRENT_LANG === "en" ? "Collection title language saved" : "Язык названий коллекций сохранен"));
+  } catch (e) {
+    showToast("Ошибка: " + e.message, "error");
+  }
+}
+
+async function onCollectionsTitleLangChange(val) {
+  await changeMetadataCollectionTitleLanguage(val);
+  await renderCollectionsView("", true);
 }
 
 async function triggerCleanupAliases(btn) {

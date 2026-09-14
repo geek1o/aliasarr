@@ -124,6 +124,7 @@ class MovieCollection(Base):
     backdrop_source_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     parts_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
     parts_cache: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON-кеш структуры всех частей саги
+    titles_cache: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON-словарь локализованных названий саги {"ru": "...", "en": "..."}
     last_metadata_refresh_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime, nullable=True)  # Время последней синхронизации саги
     monitored: Mapped[bool] = mapped_column(Boolean, default=True)
     quality_profile_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quality_profiles.id", ondelete="SET NULL"), nullable=True)
@@ -570,6 +571,7 @@ class AppSettings(Base):
     metadata_refresh_aliases: Mapped[bool] = mapped_column(Boolean, default=True)
     metadata_overview_language: Mapped[str] = mapped_column(String(20), default="ru")
     metadata_title_language: Mapped[str] = mapped_column(String(20), default="ru")
+    metadata_collection_title_language: Mapped[str] = mapped_column(String(20), default="ru")
 
     # Таймаут сессии авторизации в минутах (по умолчанию 30 дней = 43200 минут)
     session_timeout_minutes: Mapped[int] = mapped_column(Integer, default=43200)

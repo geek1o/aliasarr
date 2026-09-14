@@ -618,6 +618,12 @@
             </div>
           </div>
           <div class="toolbar-right">
+            <div class="collections-title-lang-wrap" style="display: inline-flex; align-items: center; gap: 6px;">
+              <select id="collections-title-lang-select" class="input input-small" style="max-width: 155px; height: 32px; font-size: 12px;" onchange="onCollectionsTitleLangChange(this.value)" title="Язык названий коллекций" data-i18n-title="collections.title_lang_tooltip">
+                <option value="ru" data-i18n="library.bulk_title_lang_ru">Русский (RU)</option>
+                <option value="en" data-i18n="library.bulk_title_lang_en">Английский (EN)</option>
+              </select>
+            </div>
             <button class="btn btn-secondary card-style-btn" id="collections-card-style-btn" onclick="openCollectionsCardStyleModal()" title="Стиль карточек саг" data-i18n-title="card_style.btn_title">
               <i data-lucide="layout-template" class="ico-xs text-teal"></i>
               <span class="card-style-btn-label" data-i18n="card_style.btn_title">Стиль карточек</span>
@@ -3068,6 +3074,19 @@
                 <select id="setting-metadata-title-language" class="input" style="max-width: 320px;" onchange="changeMetadataTitleLanguage(this.value)">
                   <option value="ru" data-i18n="md.title_language_ru">Русский (если доступен в базах)</option>
                   <option value="en" data-i18n="md.title_language_en">Английский / Оригинальный (как в Skyhook/Radarr)</option>
+                </select>
+              </div>
+
+              <div class="settings-field-group" style="margin-bottom: 20px; max-width: 580px;">
+                <label class="settings-field-label" for="setting-metadata-collection-title-language">
+                  <span data-i18n="md.collection_title_language_label">Основной язык названий коллекций (саг)</span>
+                </label>
+                <p class="field-hint" style="margin: 0 0 8px 0; color: var(--text-muted); font-size: 12.5px; line-height: 1.4;" data-i18n="md.collection_title_language_desc">
+                  Определяет, на каком языке сохранять и отображать названия кинофраншиз и коллекций (TMDb Collections).
+                </p>
+                <select id="setting-metadata-collection-title-language" class="input" style="max-width: 320px;" onchange="changeMetadataCollectionTitleLanguage(this.value)">
+                  <option value="ru" data-i18n="md.collection_title_language_ru">Русский (если доступен в базах)</option>
+                  <option value="en" data-i18n="md.collection_title_language_en">Английский / Оригинальный (как в TMDb/Radarr)</option>
                 </select>
               </div>
 

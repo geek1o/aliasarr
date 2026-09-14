@@ -58,6 +58,12 @@ class MovieCollectionDetailOut(BaseModel):
     missing_count: int = 0
     shows: list[ShowOut] = []
     franchise_parts: list[FranchisePart] = []
+    titles_by_lang: Optional[dict[str, str]] = None
+
+
+class SwitchCollectionTitleLanguageRequest(BaseModel):
+    target_language: Optional[str] = None
+    title: Optional[str] = None
 
 
 class ImportMissingPayload(BaseModel):
@@ -116,6 +122,14 @@ def list_collections(
         shows_in_lib = coll_shows_count.get(c.id, 0)
         dl_s = coll_downloaded_count.get(c.id, 0)
         total_parts = c.parts_count or shows_in_lib
+        tbl = None
+        if getattr(c, "titles_cache", None):
+            try:
+                import json
+                tbl = json.loads(c.titles_cache)
+            except Exception:
+                pass
+
         out.append(
             MovieCollectionOut(
                 id=c.id,
@@ -132,6 +146,7 @@ def list_collections(
                 parts_count=total_parts,
                 downloaded_count=dl_s,
                 missing_count=max(0, total_parts - shows_in_lib),
+                titles_by_lang=tbl,
             )
         )
 
@@ -188,13 +203,16 @@ async def get_collection_detail(
             from app.services.settings_service import get_or_create_settings
             settings = get_or_create_settings(db)
             overview_lang = getattr(settings, "metadata_overview_language", "ru") or "ru"
+            c_lang = getattr(settings, "metadata_collection_title_language", "ru") or "ru"
             client = RadarrClient(overview_language=overview_lang)
-            c_det = await client.get_collection_details(coll.tmdb_collection_id)
+            c_det = await client.get_collection_details(coll.tmdb_collection_id, lang=c_lang)
             if c_det and c_det.get("parts"):
                 import json
                 raw_parts = c_det["parts"]
                 coll.parts_count = len(raw_parts)
-                coll.parts_cache = json.dumps(raw_parts)
+                coll.parts_cache = json.dumps(raw_parts, ensure_ascii=False)
+                if c_det.get("titles_by_lang"):
+                    coll.titles_cache = json.dumps(c_det["titles_by_lang"], ensure_ascii=False)
                 if c_det.get("overview") and not coll.overview:
                     coll.overview = c_det.get("overview")
                 if c_det.get("poster_url") and not coll.poster_url:
@@ -337,6 +355,14 @@ async def get_collection_detail(
     dl_s = sum(1 for s in shows_out if s.downloaded_episodes_count > 0)
     missing_cnt = max(0, total_parts - total_s)
 
+    detail_tbl = None
+    if getattr(coll, "titles_cache", None):
+        try:
+            import json
+            detail_tbl = json.loads(coll.titles_cache)
+        except Exception:
+            pass
+
     return MovieCollectionDetailOut(
         id=coll.id,
         tmdb_collection_id=coll.tmdb_collection_id,
@@ -354,6 +380,7 @@ async def get_collection_detail(
         missing_count=missing_cnt,
         shows=shows_out,
         franchise_parts=franchise_parts,
+        titles_by_lang=detail_tbl,
     )
 
 
@@ -376,19 +403,37 @@ async def refresh_collection(
 
     settings = get_or_create_settings(db)
     overview_lang = getattr(settings, "metadata_overview_language", "ru") or "ru"
+    coll_title_lang = getattr(settings, "metadata_collection_title_language", "ru") or "ru"
+    coll_title_lang = (coll_title_lang or "ru").strip().lower()
 
     client = RadarrClient(overview_language=overview_lang)
     try:
-        data = await client.get_collection_details(coll.tmdb_collection_id, bypass_cache=True)
+        data = await client.get_collection_details(coll.tmdb_collection_id, lang=coll_title_lang, bypass_cache=True)
     except Exception as e:
         raise HTTPException(502, f"Не удалось получить свежие данные саги из TMDb: {e}")
 
     parts = data.get("parts", [])
     if parts:
         coll.parts_count = len(parts)
-        coll.parts_cache = json.dumps(parts)
+        coll.parts_cache = json.dumps(parts, ensure_ascii=False)
     if data.get("overview"):
         coll.overview = data.get("overview")
+
+    tbl = data.get("titles_by_lang") or {}
+    if tbl:
+        coll.titles_cache = json.dumps(tbl, ensure_ascii=False)
+
+    pref_title = None
+    if coll_title_lang in ("ru", "rus"):
+        pref_title = tbl.get("ru") or (data.get("name") if any('\u0400' <= ch <= '\u04ff' for ch in (data.get("name") or "")) else None) or data.get("name")
+    elif coll_title_lang in ("en", "eng"):
+        pref_title = tbl.get("en") or data.get("name")
+    else:
+        pref_title = tbl.get(coll_title_lang) or data.get("name")
+
+    if pref_title and pref_title.strip():
+        coll.title = pref_title.strip()
+
     if data.get("poster_url"):
         coll.poster_source_url = data.get("poster_url")
         from app.services.cover_service import download_and_store_collection_cover
@@ -403,6 +448,77 @@ async def refresh_collection(
     db.add(coll)
     db.commit()
     db.refresh(coll)
+
+    return await get_collection_detail(collection_id=coll.id, db=db, current_user=current_user)
+
+
+@router.post("/{collection_id}/switch-title-language", response_model=MovieCollectionDetailOut)
+async def switch_collection_title_language(
+    collection_id: int,
+    payload: SwitchCollectionTitleLanguageRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("manage_library")),
+):
+    """Переключить название саги на выбранный язык (RU / EN / др.) или задать кастомное название."""
+    coll = db.get(MovieCollection, collection_id)
+    if not coll:
+        raise HTTPException(404, "Коллекция не найдена")
+
+    import json
+    tbl: dict[str, str] = {}
+    if getattr(coll, "titles_cache", None):
+        try:
+            tbl = json.loads(coll.titles_cache)
+        except Exception:
+            pass
+
+    # Если в кеше еще нет переводов, пробуем получить из TMDb
+    if not tbl and coll.tmdb_collection_id:
+        try:
+            from app.services.metadata import RadarrClient
+            client = RadarrClient()
+            c_det = await client.get_collection_details(coll.tmdb_collection_id)
+            if c_det and c_det.get("titles_by_lang"):
+                tbl = c_det["titles_by_lang"]
+                coll.titles_cache = json.dumps(tbl, ensure_ascii=False)
+                db.add(coll)
+                db.commit()
+        except Exception as e:
+            logger.debug("Failed on-demand fetch of collection titles for %s: %s", coll.id, e)
+
+    target_lang = (payload.target_language or "").strip().lower()
+    new_title = None
+
+    if payload.title and payload.title.strip():
+        new_title = payload.title.strip()
+    elif target_lang in ("ru", "rus"):
+        new_title = tbl.get("ru")
+    elif target_lang in ("en", "eng"):
+        new_title = tbl.get("en")
+    elif target_lang:
+        new_title = tbl.get(target_lang)
+
+    # Если язык запрошен, но не найден в локальном словаре, делаем целевой запрос в TMDb
+    if not new_title and target_lang and coll.tmdb_collection_id:
+        try:
+            from app.services.metadata import RadarrClient
+            client = RadarrClient()
+            c_det = await client.get_collection_details(coll.tmdb_collection_id, lang=target_lang, bypass_cache=True)
+            if c_det:
+                new_title = c_det.get("name")
+                if c_det.get("titles_by_lang"):
+                    tbl.update(c_det["titles_by_lang"])
+                    coll.titles_cache = json.dumps(tbl, ensure_ascii=False)
+        except Exception as e:
+            logger.debug("Failed direct language fetch for collection %s: %s", coll.id, e)
+
+    if new_title and new_title.strip():
+        coll.title = new_title.strip()
+        db.add(coll)
+        db.commit()
+        db.refresh(coll)
+    else:
+        raise HTTPException(400, f"Не удалось определить название саги для языка '{target_lang or payload.title}'")
 
     return await get_collection_detail(collection_id=coll.id, db=db, current_user=current_user)
 

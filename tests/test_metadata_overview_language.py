@@ -353,9 +353,9 @@ class TestCollectionDetailsOverviewLanguage(unittest.TestCase):
             self.assertEqual(res["parts"][0]["overview"], "Одиннадцатилетний мальчик-сирота...")
 
             # Verify that TMDb was queried with language=ru-RU
-            mock_client.get.assert_called_once()
-            call_kwargs = mock_client.get.call_args[1]
-            self.assertEqual(call_kwargs.get("params", {}).get("language"), "ru-RU")
+            self.assertTrue(mock_client.get.called)
+            first_call = mock_client.get.call_args_list[0]
+            self.assertEqual(first_call[1].get("params", {}).get("language"), "ru-RU")
 
     def test_collection_details_requests_english_language(self):
         from app.services.metadata import TMDBClient
@@ -389,9 +389,9 @@ class TestCollectionDetailsOverviewLanguage(unittest.TestCase):
         with patch("app.services.metadata.httpx", mock_httpx):
             res = asyncio.run(client.get_collection_details(1001))
             self.assertEqual(res["name"], "Harry Potter Collection")
-            mock_client.get.assert_called_once()
-            call_kwargs = mock_client.get.call_args[1]
-            self.assertEqual(call_kwargs.get("params", {}).get("language"), "en-US")
+            self.assertTrue(mock_client.get.called)
+            first_call = mock_client.get.call_args_list[0]
+            self.assertEqual(first_call[1].get("params", {}).get("language"), "en-US")
 
     def test_collection_details_fallback_to_english_when_russian_missing(self):
         from app.services.metadata import TMDBClient
@@ -528,9 +528,9 @@ class TestCollectionDetailsOverviewLanguage(unittest.TestCase):
         with patch("app.services.metadata.httpx", mock_httpx):
             res = asyncio.run(client.get_collection_details(4004))
             self.assertEqual(res["name"], "Сага Радарр")
-            mock_client.get.assert_called_once()
-            call_kwargs = mock_client.get.call_args[1]
-            self.assertEqual(call_kwargs.get("params", {}).get("language"), "ru-RU")
+            self.assertTrue(mock_client.get.called)
+            first_call = mock_client.get.call_args_list[0]
+            self.assertEqual(first_call[1].get("params", {}).get("language"), "ru-RU")
 
 
 if __name__ == "__main__":
