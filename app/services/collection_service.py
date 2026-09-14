@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from typing import Optional, TYPE_CHECKING
 
+from app.services.cover_service import delete_collection_cover
+
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
@@ -17,7 +19,6 @@ def cleanup_empty_collections(db: Session, collection_id: Optional[int] = None) 
     deleted_ids: list[int] = []
     try:
         from app.models.db import MovieCollection, Show
-        from app.services.cover_service import delete_collection_cover
 
         if collection_id is not None:
             coll = db.get(MovieCollection, collection_id)
