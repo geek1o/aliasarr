@@ -109,7 +109,7 @@ Expanded hero cards featuring full synopses, genres, premiere dates, and next ep
 
 ### 3. Movie Collections & Franchises (TMDb Movie Sagas)
 A dedicated experience for cinema enthusiasts: automatic grouping of movies into official sagas and franchises (*«Avatar»*, *«Dune»*, *«Star Wars»*, *«Marvel Cinematic Universe»*, etc.).
-The saga card organizes titles chronologically by premiere date, complete with a **1-click «Import Missing Movies»** action.
+The saga card organizes titles chronologically by premiere date, complete with a **1-click «Add Missing Movies»** action.
 
 <div align="center">
   <img src="docs/screenshots/06_collections_franchises.jpg" alt="Movie Collections and Franchises" width="100%">

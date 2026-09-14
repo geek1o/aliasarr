@@ -262,7 +262,7 @@ const TRANSLATIONS = {
     "collection.empty_desc": "Киноколлекции и франшизы будут появляться здесь автоматически при добавлении фильмов саги или синхронизации метаданных.",
     "collection.in_library": "В библиотеке",
     "collection.missing": "Не хватает",
-    "collection.btn_import_missing": "Импортировать недостающие фильмы",
+    "collection.btn_import_missing": "Добавить недостающие фильмы",
     "collection.importing": "Импорт саги...",
     "collection.btn_add_to_library": "Добавить в библиотеку",
     "collection.status_in_lib": "В библиотеке",
@@ -1704,7 +1704,7 @@ const TRANSLATIONS = {
     "collection.empty_desc": "Movie collections and sagas will appear here automatically when adding movies from a franchise.",
     "collection.in_library": "In Library",
     "collection.missing": "Missing",
-    "collection.btn_import_missing": "Import Missing Movies",
+    "collection.btn_import_missing": "Add Missing Movies",
     "collection.importing": "Importing saga...",
     "collection.btn_add_to_library": "Add to Library",
     "collection.status_in_lib": "In Library",
@@ -6793,7 +6793,10 @@ function renderCollectionCard(coll) {
     </div>`;
 }
 
+let CURRENT_COLLECTION_ID = null;
+
 async function openCollectionModal(collectionId) {
+  CURRENT_COLLECTION_ID = collectionId;
   const content = document.getElementById("collection-modal-content");
   if (!content) return;
   content.innerHTML = renderRaysLoaderHtml(
@@ -6924,7 +6927,16 @@ async function openCollectionModal(collectionId) {
     `;
     if (window.lucide) lucide.createIcons();
   } catch (e) {
-    content.innerHTML = `<p style="color:var(--danger)">${CURRENT_LANG === 'en' ? 'Error loading collection:' : 'Ошибка загрузки коллекции:'} ${escapeHtml(e.message)}</p>`;
+    if (e.message && (e.message.includes("404") || e.message.includes("not found"))) {
+      closeModal("collection-modal");
+      CURRENT_COLLECTION_ID = null;
+      CACHED_COLLECTIONS = null;
+      if (typeof CURRENT_TAB !== "undefined" && CURRENT_TAB === "collections") {
+        loadCollections(true).then(() => renderCollectionsView());
+      }
+    } else {
+      content.innerHTML = `<p style="color:var(--danger)">${CURRENT_LANG === 'en' ? 'Error loading collection:' : 'Ошибка загрузки коллекции:'} ${escapeHtml(e.message)}</p>`;
+    }
   }
 }
 
@@ -8049,6 +8061,10 @@ async function applyBulkDeleteShows() {
       }
     }
     toast(CURRENT_LANG === "en" ? `Deleted ${successCount} show(s)` : `Удалено ${successCount} тайтлов`);
+    CACHED_COLLECTIONS = null;
+    if (typeof CURRENT_TAB !== "undefined" && CURRENT_TAB === "collections") {
+      loadCollections(true).then(() => renderCollectionsView());
+    }
     renderLibrary();
   } catch (e) {
     toast("Ошибка: " + e.message, true);
@@ -10428,6 +10444,18 @@ async function executeContentDeletion() {
           : (CURRENT_LANG === "en" ? "Card deleted" : "Карточка успешно удалена")
         );
         PENDING_DELETE_SHOW_ID = null;
+        CACHED_COLLECTIONS = null;
+        if (typeof CURRENT_TAB !== "undefined" && CURRENT_TAB === "collections") {
+          loadCollections(true).then(() => renderCollectionsView());
+        }
+        const collModal = document.getElementById("collection-modal");
+        if (collModal && collModal.classList.contains("active") && CURRENT_COLLECTION_ID) {
+          try {
+            await openCollectionModal(CURRENT_COLLECTION_ID);
+          } catch (err) {
+            closeModal("collection-modal");
+          }
+        }
         await loadShows();
       } catch (e) {
         toast((CURRENT_LANG === "en" ? "Error: " : "Ошибка: ") + e.message, true);

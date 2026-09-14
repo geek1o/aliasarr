@@ -337,8 +337,8 @@ ENDPOINT_CATALOG: dict[tuple[str, str], tuple[str, str, str, str]] = {
         'Serves the cached local backdrop artwork for the movie collection.',
     ),
     ('/api/v1/collections/{collection_id}/import-missing', 'POST'): (
-        'Импортировать недостающие фильмы саги',
-        'Import missing collection movies',
+        'Добавить недостающие фильмы саги',
+        'Add missing collection movies',
         'Автоматически создает карточки в медиатеке для недостающих частей саги.',
         'Automatically creates library entries for missing movies in the collection.',
     ),

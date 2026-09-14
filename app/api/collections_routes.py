@@ -75,6 +75,9 @@ def list_collections(
     current_user: User = Depends(require_permission("view_library")),
 ):
     """Список всех киноколлекций и франшиз с агрегированной статистикой."""
+    from app.services.collection_service import cleanup_empty_collections
+    cleanup_empty_collections(db)
+
     collections = db.query(MovieCollection).order_by(func.lower(MovieCollection.title)).all()
     if not collections:
         return []
@@ -231,6 +234,11 @@ async def get_collection_detail(
         db.commit()
 
     shows = db.query(Show).filter(Show.collection_id == coll.id).order_by(Show.collection_order, Show.year).all()
+    if not shows:
+        from app.services.collection_service import cleanup_empty_collections
+        cleanup_empty_collections(db, coll.id)
+        raise HTTPException(404, "Movie collection not found")
+
     shows_out = _attach_computed_fields(db, shows)
 
     shows_by_tmdb_id = {}

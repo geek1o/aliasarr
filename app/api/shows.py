@@ -630,8 +630,14 @@ async def delete_show(
     except Exception:
         pass
 
+    coll_id = getattr(show, "collection_id", None)
+
     db.delete(show)
     db.commit()
+
+    if coll_id:
+        from app.services.collection_service import cleanup_empty_collections
+        cleanup_empty_collections(db, coll_id)
 
     from app.services.auto_search import clear_rejected_cache_for_show
     clear_rejected_cache_for_show(show_id)
@@ -717,8 +723,14 @@ async def delete_content(
         except Exception:
             pass
 
+        coll_id = getattr(show, "collection_id", None)
+
         db.delete(show)
         db.commit()
+
+        if coll_id:
+            from app.services.collection_service import cleanup_empty_collections
+            cleanup_empty_collections(db, coll_id)
 
         from app.services.auto_search import clear_rejected_cache_for_show
         clear_rejected_cache_for_show(show_id)
@@ -950,6 +962,7 @@ async def update_show(
                         db.delete(a)
         if "year" in dumped:
             dumped["year"] = new_year
+    old_coll_id = getattr(show, "collection_id", None)
     for field, value in dumped.items():
         setattr(show, field, value)
     if "ova_mode" in dumped or "content_type" in dumped:
@@ -958,6 +971,11 @@ async def update_show(
     db.add(show)
     db.commit()
     db.refresh(show)
+
+    if old_coll_id and "collection_id" in dumped and dumped["collection_id"] != old_coll_id:
+        from app.services.collection_service import cleanup_empty_collections
+        cleanup_empty_collections(db, old_coll_id)
+
     return _attach_computed_fields(db, [show])[0]
 
 
