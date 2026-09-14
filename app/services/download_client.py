@@ -422,6 +422,7 @@ class QBittorrentClient(BaseDownloadClient):
                             eta=int(eta) if eta is not None else None,
                             seeding_time=int(t.get("seeding_time", 0) or t.get("time_active", 0) or 0),
                             ratio=float(t.get("ratio", 0.0) or 0.0),
+                            error_string=str(t.get("tracker_msg") or t.get("msg") or t.get("tracker_message") or t.get("last_tracker_msg") or "") or None,
                         )
                     )
                 return result
@@ -449,6 +450,7 @@ class QBittorrentClient(BaseDownloadClient):
                         download_speed=dlspeed, upload_speed=upspeed, eta=eta,
                         seeding_time=int(getattr(t, "seeding_time", 0) or getattr(t, "time_active", 0) or 0),
                         ratio=float(getattr(t, "ratio", 0.0) or 0.0),
+                        error_string=str(getattr(t, "tracker_msg", "") or getattr(t, "msg", "") or getattr(t, "tracker_message", "") or "") or None,
                     )
                 )
             return result
@@ -503,6 +505,7 @@ class QBittorrentClient(BaseDownloadClient):
                     seeding_time=int(t.get("seeding_time", 0) or t.get("time_active", 0) or 0),
                     ratio=float(t.get("ratio", 0.0) or 0.0),
                     files=file_infos,
+                    error_string=str(t.get("tracker_msg") or t.get("msg") or t.get("tracker_message") or t.get("last_tracker_msg") or "") or None,
                 )
         except Exception as exc:
             logger.warning("Ошибка get_torrent в qBittorrent (%s): %s", torrent_hash, exc)
@@ -870,6 +873,8 @@ class TransmissionClient(BaseDownloadClient):
                         seeding_time=int(getattr(t, "seconds_seeding", 0) or getattr(t, "secondsSeeding", 0) or 0),
                         ratio=float(getattr(t, "ratio", 0.0) or getattr(t, "upload_ratio", 0.0) or 0.0),
                         left_until_done=int(left_until_done) if left_until_done is not None else None,
+                        error=int(getattr(t, "error", 0) or 0) if getattr(t, "error", None) is not None else None,
+                        error_string=str(getattr(t, "error_string", "") or getattr(t, "errorString", "") or "") or None,
                     )
                 )
             return result
@@ -881,7 +886,7 @@ class TransmissionClient(BaseDownloadClient):
             fields = [
                 "id", "hashString", "name", "percentDone", "leftUntilDone", "sizeWhenDone",
                 "isFinished", "status", "downloadDir", "totalSize", "rateDownload", "rateUpload",
-                "eta", "secondsSeeding", "uploadRatio", "files", "fileStats"
+                "eta", "secondsSeeding", "uploadRatio", "error", "errorString", "files", "fileStats"
             ]
             res = await self._rpc_call("torrent-get", {"fields": fields, "ids": [torrent_hash]})
             torrents = res.get("torrents", [])
@@ -946,6 +951,8 @@ class TransmissionClient(BaseDownloadClient):
                 ratio=float(t.get("uploadRatio", 0.0) or 0.0),
                 files=file_infos,
                 left_until_done=int(left_until_done) if left_until_done is not None else None,
+                error=int(t.get("error", 0) or 0) if t.get("error") is not None else None,
+                error_string=str(t.get("errorString", "") or "") or None,
             )
         except Exception as exc:
             logger.warning("Ошибка get_torrent в Transmission: %s", exc)
@@ -1006,6 +1013,8 @@ class TransmissionClient(BaseDownloadClient):
                 ratio=float(getattr(t, "ratio", 0.0) or 0.0),
                 files=file_infos,
                 left_until_done=int(left_until_done) if left_until_done is not None else None,
+                error=int(getattr(t, "error", 0) or 0) if getattr(t, "error", None) is not None else None,
+                error_string=str(getattr(t, "error_string", "") or getattr(t, "errorString", "") or "") or None,
             )
         except Exception:
             return None
@@ -1096,7 +1105,10 @@ class TransmissionClient(BaseDownloadClient):
 
     async def resume_torrent(self, torrent_hash: str) -> None:
         try:
-            await self._rpc_call("torrent-start", {"ids": [torrent_hash]})
+            try:
+                await self._rpc_call("torrent-start-now", {"ids": [torrent_hash]})
+            except Exception:
+                await self._rpc_call("torrent-start", {"ids": [torrent_hash]})
         except Exception as exc:
             logger.warning("Ошибка resume_torrent в Transmission: %s", exc)
 

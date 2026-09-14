@@ -73,6 +73,45 @@ _COMPLETE_THRESHOLD = 1.0
 _NOTIFIED_PENDING_SPECIALS: set[str] = set()
 _RECONCILED_TORRENTS: set[str] = set()
 _PENDING_MANUAL_IMPORT_TORRENTS: set[str] = set()
+_UNREGISTERED_TORRENTS_SEEN: dict[str, int] = {}
+_HEALED_TORRENTS_ATTEMPTS: dict[str, int] = {}
+
+
+def is_unregistered_torrent_error(error_str: Optional[str]) -> bool:
+    """Проверяет, сообщает ли ошибка клиента/трекера о закрытом или незарегистрированном торренте."""
+    if not error_str:
+        return False
+    err_lower = str(error_str).lower()
+    patterns = (
+        "unregistered torrent",
+        "torrent not registered",
+        "торрент не зарегистрирован",
+        "раздача не зарегистрирована",
+        "not registered",
+        "torrent not found",
+        "no such torrent",
+        "unregistered",
+    )
+    return any(p in err_lower for p in patterns)
+
+
+def clear_unregistered_and_healed_torrents() -> None:
+    """Сбрасывает кэши ошибок и лечения (используется в тестах)."""
+    _UNREGISTERED_TORRENTS_SEEN.clear()
+    _HEALED_TORRENTS_ATTEMPTS.clear()
+
+
+async def _trigger_auto_search_for_show(s_id: int, u_ids: set[int]):
+    """Фоновый запуск поиска серий для указанного тайтла."""
+    try:
+        from app.database import SessionLocal
+        from app.services.auto_search import search_and_grab_show
+        with SessionLocal() as s_session:
+            r_show = s_session.get(Show, s_id)
+            if r_show:
+                await search_and_grab_show(s_session, r_show, episode_ids=u_ids if u_ids else None, wanted_only=True)
+    except Exception as retry_err:
+        logger.debug("DownloadsMonitor: Ошибка повторного автопоиска: %s", retry_err)
 
 
 def mark_torrent_pending_manual_import(torrent_hash: str) -> None:
@@ -445,6 +484,42 @@ async def _check_seeding_torrents(db: Session, active_clients: list[DownloadClie
                             logger.debug("DownloadsMonitor: Не удалось удалить завершенный торрент %s: %s", t.hash, rem_err)
                     continue
 
+                # Проверяем ошибку unregistered torrent от трекера
+                err_str = getattr(t, "error_string", None)
+                if is_unregistered_torrent_error(err_str):
+                    seen_count = _UNREGISTERED_TORRENTS_SEEN.get(th_lower, 0) + 1
+                    _UNREGISTERED_TORRENTS_SEEN[th_lower] = seen_count
+                    if seen_count >= 2:
+                        try:
+                            await client.remove_torrent(t.hash, delete_files=True)
+                            unmark_torrent_pending_manual_import(th_lower)
+                            _UNREGISTERED_TORRENTS_SEEN.pop(th_lower, None)
+                            logger.info(
+                                "DownloadsMonitor: Раздача «%s» удалена из клиента: трекер вернул ошибку «%s» (раздача удалена или обновлена на трекере).",
+                                getattr(t, "name", t.hash), err_str,
+                            )
+                            show = db.get(Show, dh.show_id) if (dh and getattr(dh, "show_id", None)) else None
+                            log_release_event(
+                                stage="download",
+                                level="warning",
+                                show_title=getattr(show, "title", None) if show else None,
+                                show_id=dh.show_id if dh else None,
+                                release_title=getattr(t, "name", t.hash),
+                                indexer=getattr(indexer, "name", "Indexer") if indexer else "Tracker",
+                                message=(
+                                    f"Сидирование раздачи «{getattr(t, 'name', t.hash)}» остановлено и временные файлы удалены: "
+                                    f"трекер вернул ошибку «{err_str}» (раздача удалена или обновлена на трекере). "
+                                    "Файлы в медиатеке в полной сохранности."
+                                ),
+                                details={"torrent_hash": t.hash, "error": err_str},
+                                db=db,
+                            )
+                        except Exception as unreg_rem_err:
+                            logger.debug("DownloadsMonitor: Не удалось удалить unregistered торрент %s: %s", t.hash, unreg_rem_err)
+                        continue
+                elif th_lower in _UNREGISTERED_TORRENTS_SEEN:
+                    _UNREGISTERED_TORRENTS_SEEN.pop(th_lower, None)
+
                 # Проверяем лимиты для сидируемой раздачи
                 ratio_limit = getattr(indexer, "seed_ratio_limit", None)
                 if ratio_limit is None and getattr(dc_row, "seed_ratio_limit", None):
@@ -497,6 +572,25 @@ async def _check_seeding_torrents(db: Session, active_clients: list[DownloadClie
                         )
                     except Exception as rem_err:
                         logger.debug("DownloadsMonitor: Не удалось удалить завершенный сидируемый торрент %s: %s", t.hash, rem_err)
+                elif state_str in ("pausedup", "stopped", "paused", "0"):
+                    # Раздача на паузе, но лимиты сидирования еще не исчерпаны:
+                    # автоматически лечим зависшие раздачи, сбрасывая лимиты и запуская сидирование
+                    heal_attempts = _HEALED_TORRENTS_ATTEMPTS.get(th_lower, 0)
+                    if heal_attempts < 3:
+                        _HEALED_TORRENTS_ATTEMPTS[th_lower] = heal_attempts + 1
+                        try:
+                            time_mins = int(time_hours_limit * 60) if time_hours_limit else None
+                            await client.set_seeding_limits(t.hash, seed_ratio_limit=ratio_limit, seed_time_limit_minutes=time_mins)
+                            await client.resume_torrent(t.hash)
+                            logger.info(
+                                "DownloadsMonitor: Раздача «%s» находилась на паузе без достижения лимитов. "
+                                "Лимиты обновлены (ratio: %s, время: %sч), сидирование возобновлено (попытка %d/3).",
+                                getattr(t, "name", t.hash), ratio_limit, time_hours_limit, heal_attempts + 1,
+                            )
+                        except Exception as heal_err:
+                            logger.debug("DownloadsMonitor: Ошибка автовозобновления сидирования %s: %s", t.hash, heal_err)
+                elif state_str in ("seeding", "uploading", "5", "6"):
+                    _HEALED_TORRENTS_ATTEMPTS.pop(th_lower, None)
         except Exception as exc:
             logger.debug("DownloadsMonitor: Ошибка в _check_seeding_torrents для %s: %s", dc_row.name, exc)
 
@@ -807,20 +901,8 @@ async def check_downloads(db: Session) -> list[dict]:
                                 details={"torrent_hash": torrent_hash, "reason": "Раздача не содержит ни одной нужной серии для тайтла"},
                                 db=db,
                             )
-                            # Запускаем автопоиск серий этого шоу в фоне
-                            async def _trigger_auto_search(s_id: int, u_ids: set[int]):
-                                try:
-                                    from app.database import SessionLocal
-                                    from app.services.auto_search import search_and_grab_show
-                                    with SessionLocal() as s_session:
-                                        r_show = s_session.get(Show, s_id)
-                                        if r_show:
-                                            await search_and_grab_show(s_session, r_show, episode_ids=u_ids if u_ids else None, wanted_only=True)
-                                except Exception as retry_err:
-                                    logger.debug("DownloadsMonitor: Ошибка повторного автопоиска: %s", retry_err)
-
                             uncovered_ids = {u.id for u in uncovered if getattr(u, "id", None)}
-                            asyncio.create_task(_trigger_auto_search(show_obj.id, uncovered_ids))
+                            asyncio.create_task(_trigger_auto_search_for_show(show_obj.id, uncovered_ids))
 
                     if progress_changed:
                         db.commit()
@@ -867,6 +949,70 @@ async def check_downloads(db: Session) -> list[dict]:
             is_done = has_finished_bytes
 
         if not is_done:
+            err_str = getattr(t, "error_string", None)
+            if is_unregistered_torrent_error(err_str):
+                seen_count = _UNREGISTERED_TORRENTS_SEEN.get(torrent_hash, 0) + 1
+                _UNREGISTERED_TORRENTS_SEEN[torrent_hash] = seen_count
+                if seen_count >= 2:
+                    logger.warning(
+                        "DownloadsMonitor: Загрузка «%s» (%s) отменена: трекер вернул ошибку «%s». "
+                        "Раздача удалена, хэш заблокирован, серии возвращены в поиск.",
+                        getattr(t, "name", torrent_hash), torrent_hash, err_str,
+                    )
+                    _UNREGISTERED_TORRENTS_SEEN.pop(torrent_hash, None)
+                    try:
+                        client = get_client(dc_row)
+                        await client.remove_torrent(t.hash, delete_files=True)
+                    except Exception as rem_err:
+                        logger.debug("DownloadsMonitor: Ошибка удаления недокачанного unregistered торрента %s: %s", t.hash, rem_err)
+
+                    try:
+                        from app.services.blocklist_service import add_to_blocklist
+                        add_to_blocklist(
+                            db=db,
+                            release_title=getattr(t, "name", t.hash),
+                            reason=f"Раздача не зарегистрирована на трекере ({err_str})",
+                            show=show_obj,
+                            show_id=show_obj.id if show_obj else None,
+                            torrent_hash=t.hash,
+                        )
+                    except Exception as bl_err:
+                        logger.debug("DownloadsMonitor: Ошибка добавления в черный список %s: %s", t.hash, bl_err)
+
+                    today = dt.date.today()
+                    affected_ep_ids = set()
+                    for ep in eps:
+                        air_d = getattr(ep, "air_date", None)
+                        if isinstance(air_d, dt.datetime):
+                            air_d = air_d.date()
+                        ep.status = EpisodeStatus.UNAIRED if (air_d and air_d > today) else EpisodeStatus.WANTED
+                        ep.download_progress = 0.0
+                        ep.torrent_hash = None
+                        ep.download_client_id = None
+                        db.add(ep)
+                        if getattr(ep, "id", None):
+                            affected_ep_ids.add(ep.id)
+                    db.commit()
+
+                    log_release_event(
+                        stage="download",
+                        level="warning",
+                        show_title=getattr(show_obj, "title", None) if show_obj else None,
+                        show_id=show_obj.id if show_obj else None,
+                        release_title=getattr(t, "name", t.hash),
+                        indexer="DownloadsMonitor",
+                        message=(
+                            f"Загрузка «{getattr(t, 'name', t.hash)}» остановлена: трекер вернул ошибку «{err_str}» "
+                            "(раздача удалена или обновлена на трекере). Серии возвращены в поиск, запущен автопоиск актуальной раздачи."
+                        ),
+                        details={"torrent_hash": t.hash, "error": err_str},
+                        db=db,
+                    )
+
+                    if show_obj and affected_ep_ids:
+                        asyncio.create_task(_trigger_auto_search_for_show(show_obj.id, affected_ep_ids))
+            elif torrent_hash in _UNREGISTERED_TORRENTS_SEEN:
+                _UNREGISTERED_TORRENTS_SEEN.pop(torrent_hash, None)
             continue
 
         show = db.get(Show, eps[0].show_id)

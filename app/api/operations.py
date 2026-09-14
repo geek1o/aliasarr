@@ -1385,10 +1385,47 @@ async def resume_queue_item(
     current_user: User = Depends(require_permission("manage_activity")),
 ):
     """Возобновляет загрузку в download client."""
+    th_lower = torrent_hash.lower()
+    dh = (
+        db.query(DownloadHistory)
+        .filter(func.lower(DownloadHistory.torrent_hash) == th_lower)
+        .order_by(DownloadHistory.id.desc())
+        .first()
+    )
+    indexer_row: Optional[Indexer] = None
+    if dh and dh.indexer_id:
+        indexer_row = db.get(Indexer, dh.indexer_id)
+    if not indexer_row:
+        tr = (
+            db.query(TrackedRelease)
+            .filter(func.lower(TrackedRelease.infohash) == th_lower)
+            .order_by(TrackedRelease.id.desc())
+            .first()
+        )
+        if tr and tr.indexer_id:
+            indexer_row = db.get(Indexer, tr.indexer_id)
+
     resumed_in = []
     for dc in db.query(DownloadClient).filter(DownloadClient.enabled == True).all():  # noqa: E712
         try:
             client = get_client(dc)
+
+            # Сбрасываем лимиты на актуальные перед стартом, чтобы снять устаревший ratio 0.0
+            ratio_lim = getattr(indexer_row, "seed_ratio_limit", None) if indexer_row else None
+            if ratio_lim is None:
+                ratio_lim = getattr(dc, "seed_ratio_limit", None)
+
+            time_mins = None
+            if indexer_row and getattr(indexer_row, "seed_time_limit_hours", None):
+                time_mins = int(indexer_row.seed_time_limit_hours * 60)
+            elif getattr(dc, "seed_time_limit", None):
+                time_mins = int(dc.seed_time_limit)
+
+            try:
+                await client.set_seeding_limits(torrent_hash, seed_ratio_limit=ratio_lim, seed_time_limit_minutes=time_mins)
+            except Exception as lim_err:
+                logger.debug("Не удалось сбросить лимиты сидирования при возобновлении %s: %s", torrent_hash, lim_err)
+
             await client.resume_torrent(torrent_hash)
             resumed_in.append(dc.name)
         except Exception:
