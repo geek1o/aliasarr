@@ -501,9 +501,10 @@ const TRANSLATIONS = {
     "poster_opt.show_tags": "Показать теги",
     "poster_opt.show_tags_hint": "Показать теги под постером",
 
-    // Card Style
-    "card_style.btn_title": "Стиль карточек",
-    "card_style.modal_title": "Стиль оформления карточек",
+    // Card Style & Style Settings
+    "card_style.btn_title": "Настройка стиля",
+    "card_style.modal_title": "Настройка стиля",
+    "card_style.section_title": "Стиль оформления карточек",
     "card_style.modal_subtitle": "Выберите визуальный режим отображения постеров и статусов в библиотеке",
     "card_style.recommended": "Флагман",
     "card_style.neoglass_title": "Neo-Glass (Парящие бейджи)",
@@ -512,6 +513,18 @@ const TRANSLATIONS = {
     "card_style.cinematic_desc": "Постер с мягким кинематографичным затемнением снизу, интегрированным статусом и минималистичной строкой метаданных.",
     "card_style.classic_title": "Классический (Стандартный)",
     "card_style.classic_desc": "Традиционный вид со сплошной цветной полосой прогресса серий под постером.",
+
+    // Search Progress Style
+    "search_style.section_title": "Дизайн прогресса поиска",
+    "search_style.section_subtitle": "Выберите вариант отображения статуса и этапов поиска в карточке тайтла",
+    "search_style.micropill_title": "Neo-Glass Micro-Pill",
+    "search_style.micropill_desc": "Компактная стеклянная микрокапсула с живым пульсирующим маячком и лаконичным текстом этапа.",
+    "search_style.laserstrip_title": "Laser Progress Strip",
+    "search_style.laserstrip_desc": "Ультратонкий лазерный статус-лайн с бегущим градиентным лучом без тяжелых рамок.",
+    "search_style.smartbutton_title": "Smart Button & Header",
+    "search_style.smartbutton_desc": "Интеграция прогресса прямо в кнопку запуска поиска. Максимальная компактность модального окна.",
+    "search_style.vanguard_title": "Vanguard Tag Capsule",
+    "search_style.vanguard_desc": "Hi-Tech капсула с акцентным чипом состояния LIVE и счетчиком этапов поиска.",
 
     // Collections Card Options & Styles
     "collections_poster_opt.title": "Опции карточек коллекций",
@@ -1949,9 +1962,10 @@ const TRANSLATIONS = {
     "poster_opt.show_tags": "Show tags",
     "poster_opt.show_tags_hint": "Show tags under poster",
 
-    // Card Style
-    "card_style.btn_title": "Card Style",
-    "card_style.modal_title": "Card Display Style",
+    // Card Style & Style Settings
+    "card_style.btn_title": "Style Settings",
+    "card_style.modal_title": "Style Settings",
+    "card_style.section_title": "Card Display Style",
     "card_style.modal_subtitle": "Choose visual display mode for posters and statuses in your library",
     "card_style.recommended": "Flagship",
     "card_style.neoglass_title": "Neo-Glass (Floating Badges)",
@@ -1960,6 +1974,18 @@ const TRANSLATIONS = {
     "card_style.cinematic_desc": "Poster with soft cinematic vignette at the bottom, integrated status overlay, and minimalist metadata line.",
     "card_style.classic_title": "Classic (Standard)",
     "card_style.classic_desc": "Traditional view with solid colored episode progress bar underneath the poster.",
+
+    // Search Progress Style
+    "search_style.section_title": "Search Progress Design",
+    "search_style.section_subtitle": "Choose display mode for search status and stages in title modal",
+    "search_style.micropill_title": "Neo-Glass Micro-Pill",
+    "search_style.micropill_desc": "Compact frosted glass micro-pill with a live pulsing beacon and concise stage text.",
+    "search_style.laserstrip_title": "Laser Progress Strip",
+    "search_style.laserstrip_desc": "Ultra-thin laser status line with running beam and no bulky frames.",
+    "search_style.smartbutton_title": "Smart Button & Header",
+    "search_style.smartbutton_desc": "Progress integrated directly into the search trigger button with header status chip.",
+    "search_style.vanguard_title": "Vanguard Tag Capsule",
+    "search_style.vanguard_desc": "Hi-Tech capsule with live status badge chip and stage step counter.",
 
     // Collections Card Options & Styles
     "collections_poster_opt.title": "Collection Card Options",
@@ -6278,13 +6304,21 @@ function updateLibraryFilterButtons() {
 }
 
 let CURRENT_CARD_STYLE = localStorage.getItem("aliasarr_card_style") || "neoglass";
+let CURRENT_SEARCH_PROGRESS_STYLE = localStorage.getItem("aliasarr_search_progress_style") || "micropill";
 
 function openCardStyleModal() {
-  const options = document.querySelectorAll(".card-style-option");
-  options.forEach(opt => {
+  const cardOptions = document.querySelectorAll("#card-style-modal .card-styles-grid:not(.search-styles-grid) .card-style-option");
+  cardOptions.forEach(opt => {
     const isThis = opt.id === `card-style-opt-${CURRENT_CARD_STYLE}`;
     opt.classList.toggle("active", isThis);
   });
+
+  const searchOptions = document.querySelectorAll("#card-style-modal .search-styles-grid .card-style-option");
+  searchOptions.forEach(opt => {
+    const isThis = opt.id === `search-style-opt-${CURRENT_SEARCH_PROGRESS_STYLE}`;
+    opt.classList.toggle("active", isThis);
+  });
+
   openModal("card-style-modal");
   if (window.lucide) lucide.createIcons();
 }
@@ -6294,7 +6328,7 @@ function setCardStyle(style) {
   CURRENT_CARD_STYLE = style;
   localStorage.setItem("aliasarr_card_style", style);
   
-  const options = document.querySelectorAll(".card-style-option");
+  const options = document.querySelectorAll("#card-style-modal .card-styles-grid:not(.search-styles-grid) .card-style-option");
   options.forEach(opt => {
     const isThis = opt.id === `card-style-opt-${CURRENT_CARD_STYLE}`;
     opt.classList.toggle("active", isThis);
@@ -6309,6 +6343,20 @@ function setCardStyle(style) {
   if (typeof renderLibrary === "function") {
     renderLibrary();
   }
+}
+
+function setSearchProgressStyle(style) {
+  if (!["micropill", "laserstrip", "smartbutton", "vanguard"].includes(style)) return;
+  CURRENT_SEARCH_PROGRESS_STYLE = style;
+  try { localStorage.setItem("aliasarr_search_progress_style", style); } catch (e) {}
+
+  const searchOptions = document.querySelectorAll("#card-style-modal .search-styles-grid .card-style-option");
+  searchOptions.forEach(opt => {
+    const isThis = opt.id === `search-style-opt-${CURRENT_SEARCH_PROGRESS_STYLE}`;
+    opt.classList.toggle("active", isThis);
+  });
+
+  refreshCurrentModalSearchStatus();
 }
 
 let POSTER_OPTIONS = {
@@ -8867,6 +8915,7 @@ async function refreshShowModal() {
                 <span>${show.monitored ? (CURRENT_LANG === 'en' ? 'Monitored' : 'Отслеживается') : (CURRENT_LANG === 'en' ? 'Unmonitored' : 'Не отслеживается')}</span>
               </span>
               ${renderShowLinksBadge(show)}
+              ${renderShowHeaderSearchBadge(show)}
             </div>
 
             <p class="show-hero-overview">${escapeHtml(show.overview || t("show.no_overview"))}</p>
@@ -8982,7 +9031,7 @@ async function refreshShowModal() {
         </div>` : ""}
       </div>
 
-      <div id="modal-search-status-row" class="search-status-row ${show.is_searching ? "is-searching" : ""}">
+      <div id="modal-search-status-row" class="search-status-row ${show.is_searching ? "is-searching" : ""}" style="${CURRENT_SEARCH_PROGRESS_STYLE === 'smartbutton' ? 'display:none;' : ''}">
         ${renderSearchStatus(show)}
       </div>
 
@@ -9009,7 +9058,7 @@ async function refreshShowModal() {
           <i data-lucide="calendar-search" class="ico-sm"></i> <span>${t("show.monitor_unaired")}</span>
         </button>` : ""}` : ""}
         ${canSearch ? `
-        <button class="btn btn-primary btn-small" onclick="forceSearchShow(this, ${show.id})"><i data-lucide="refresh-cw" class="ico-sm"></i> <span>${t("show.force_search")}</span></button>
+        <button class="btn btn-primary btn-small" id="btn-modal-force-search" onclick="forceSearchShow(this, ${show.id})"><i data-lucide="refresh-cw" class="ico-sm"></i> <span>${t("show.force_search")}</span></button>
         <button class="btn btn-secondary btn-small" onclick="searchReleasesForShow(this, ${show.id})"><i data-lucide="search" class="ico-sm"></i> <span>${t("show.search_manual")}</span></button>` : ""}
         ${canManageLib ? `
         <button class="btn btn-danger btn-small" onclick="deleteShow(${show.id})"><i data-lucide="trash-2" class="ico-sm"></i> <span>${t("show.delete_video")}</span></button>` : ""}
@@ -9067,59 +9116,164 @@ const SEARCH_STATUS_STAGES = [
     id: "aliases",
     icon: `<svg class="search-stage-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
     textRu: "Сбор алиасов и сезонов",
+    shortRu: "Сбор алиасов...",
     textEn: "Preparing aliases & seasons",
+    shortEn: "Preparing aliases...",
   },
   {
     id: "trackers",
     icon: `<svg class="search-stage-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/></svg>`,
-    textRu: "Опрос трекеров и индексаторов",
+    textRu: "Опрос трекеров и индексов",
+    shortRu: "Опрос трекеров...",
     textEn: "Querying indexers & trackers",
+    shortEn: "Querying trackers...",
   },
   {
     id: "matching",
     icon: `<svg class="search-stage-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
-    textRu: "Парсинг и сопоставление раздач",
+    textRu: "Парсинг и сопоставление",
+    shortRu: "Парсинг раздач...",
     textEn: "Parsing & matching releases",
+    shortEn: "Parsing releases...",
   },
   {
     id: "scoring",
     icon: `<svg class="search-stage-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="1" x2="7" y1="14" y2="14"/><line x1="9" x2="15" y1="8" y2="8"/><line x1="17" x2="23" y1="16" y2="16"/></svg>`,
     textRu: "Оценка качества и скоринг",
+    shortRu: "Скоринг качества...",
     textEn: "Evaluating quality & score",
+    shortEn: "Scoring quality...",
   },
 ];
 
 let _SEARCH_STATUS_TIMER = null;
 let _SEARCH_STATUS_STAGE_INDEX = 0;
 
+function renderShowHeaderSearchBadge(show) {
+  if (CURRENT_SEARCH_PROGRESS_STYLE !== "smartbutton") return "";
+  if (!show || !show.last_search_at) return "";
+  const when = formatDateTZ(show.last_search_at);
+  const resultText = show.last_search_result || (CURRENT_LANG === "en" ? "No releases found" : "Релизы не найдены");
+  const isGrabbed = /захвачен|grabbed|скачан/i.test(resultText);
+  const isError = /ошибк|error|fail/i.test(resultText);
+  const statusCls = isGrabbed ? "status-grabbed" : (isError ? "status-error" : "status-none");
+  const iconSvg = isGrabbed 
+    ? `<svg class="ico-xs text-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;"><path d="M20 6 9 17l-5-5"/></svg>`
+    : (isError 
+       ? `<svg class="ico-xs text-danger" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`
+       : `<svg class="ico-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`);
+
+  return `<span id="show-header-search-badge" class="meta-badge-glass search-header-status-badge ${statusCls}" title="${escapeHtml(resultText)} (${when})">
+    ${iconSvg} <span>${escapeHtml(resultText)}</span>
+  </span>`;
+}
+
+function refreshModalHeroSearchBadge(show) {
+  const headerBadgesRow = document.querySelector(".show-hero-badges-row");
+  if (!headerBadgesRow || !show) return;
+  const existingBadge = document.getElementById("show-header-search-badge");
+  if (CURRENT_SEARCH_PROGRESS_STYLE === "smartbutton") {
+    const newBadgeHtml = renderShowHeaderSearchBadge(show);
+    if (existingBadge) {
+      if (newBadgeHtml) {
+        existingBadge.outerHTML = newBadgeHtml;
+      } else {
+        existingBadge.remove();
+      }
+    } else if (newBadgeHtml) {
+      headerBadgesRow.insertAdjacentHTML("beforeend", newBadgeHtml);
+    }
+  } else if (existingBadge) {
+    existingBadge.remove();
+  }
+  if (window.lucide && lucide.createIcons) lucide.createIcons();
+}
+
+function refreshCurrentModalSearchStatus() {
+  const statusRow = document.getElementById("modal-search-status-row") || document.querySelector(".search-status-row");
+  if (!statusRow || !CURRENT_SHOW_ID) return;
+  const show = (Array.isArray(CACHED_SHOWS) && CACHED_SHOWS.find(x => x.id === CURRENT_SHOW_ID)) || null;
+  if (!show) return;
+
+  if (CURRENT_SEARCH_PROGRESS_STYLE === "smartbutton") {
+    statusRow.style.display = "none";
+  } else {
+    statusRow.style.display = "";
+  }
+
+  statusRow.className = `search-status-row ${show.is_searching ? "is-searching" : ""}`;
+  if (show.is_searching) {
+    startSearchStatusRotator(statusRow);
+  } else {
+    stopSearchStatusRotator();
+    statusRow.innerHTML = renderSearchStatus(show);
+  }
+  refreshModalHeroSearchBadge(show);
+}
+
 function startSearchStatusRotator(targetEl) {
   stopSearchStatusRotator();
   _SEARCH_STATUS_STAGE_INDEX = 0;
-  if (!targetEl) return;
 
   const updateBadge = () => {
     const stage = SEARCH_STATUS_STAGES[_SEARCH_STATUS_STAGE_INDEX % SEARCH_STATUS_STAGES.length];
     const stageText = CURRENT_LANG === "en" ? stage.textEn : stage.textRu;
-    const dotsHtml = `<span class="search-status-dots"><span>.</span><span>.</span><span>.</span></span>`;
-    const pillsHtml = SEARCH_STATUS_STAGES.map((s, idx) => {
-      const cls = idx === _SEARCH_STATUS_STAGE_INDEX ? "active" : (idx < _SEARCH_STATUS_STAGE_INDEX ? "done" : "");
-      return `<span class="search-step-pill ${cls}"></span>`;
-    }).join("");
+    const stageShort = CURRENT_LANG === "en" ? stage.shortEn : stage.shortRu;
+    const style = CURRENT_SEARCH_PROGRESS_STYLE || "micropill";
 
-    targetEl.innerHTML = `
-      <span class="search-status-badge is-searching" title="${CURRENT_LANG === 'en' ? 'Active automatic search in progress' : 'Выполняется поиск и сопоставление раздач'}">
-        <div class="search-stage-shimmer"></div>
-        <span class="search-stage-icon-wrap">${stage.icon}</span>
-        <span class="search-stage-text">${escapeHtml(stageText)}${dotsHtml}</span>
-        <span class="search-step-pills">${pillsHtml}</span>
-      </span>`;
+    // Update force search button in smartbutton mode
+    const forceBtn = document.getElementById("btn-modal-force-search") || document.querySelector(".show-actions-row button[onclick*='forceSearchShow']");
+    if (forceBtn) {
+      if (style === "smartbutton") {
+        forceBtn.classList.add("btn-searching-active");
+        forceBtn.disabled = true;
+        forceBtn.innerHTML = `<span class="btn-spinner-ring"></span> <span>${escapeHtml(stageShort)}</span>`;
+      }
+    }
+
+    if (targetEl) {
+      if (style === "smartbutton") {
+        targetEl.style.display = "none";
+        targetEl.innerHTML = "";
+      } else {
+        targetEl.style.display = "";
+        if (style === "laserstrip") {
+          targetEl.innerHTML = `
+            <div class="search-laser-container is-searching" title="${CURRENT_LANG === 'en' ? 'Active search in progress' : 'Выполняется автоматический поиск'}">
+              <div class="search-laser-header">
+                <span class="search-laser-icon-wrap">${stage.icon}</span>
+                <span class="search-laser-text">${escapeHtml(stageText)}</span>
+              </div>
+              <div class="search-laser-track">
+                <div class="search-laser-beam"></div>
+              </div>
+            </div>`;
+        } else if (style === "vanguard") {
+          targetEl.innerHTML = `
+            <span class="search-status-badge search-style-vanguard is-searching" title="${CURRENT_LANG === 'en' ? 'Active search in progress' : 'Выполняется автоматический поиск'}">
+              <span class="vanguard-tag vanguard-tag-live">LIVE</span>
+              <span class="search-stage-text">${escapeHtml(stageText)}</span>
+              <span class="vanguard-step-counter">${(_SEARCH_STATUS_STAGE_INDEX % SEARCH_STATUS_STAGES.length) + 1}/4</span>
+            </span>`;
+        } else {
+          // micropill
+          targetEl.innerHTML = `
+            <span class="search-status-badge search-style-micropill is-searching" title="${CURRENT_LANG === 'en' ? 'Active search in progress' : 'Выполняется автоматический поиск'}">
+              <span class="search-beacon-dot"></span>
+              <span class="search-stage-text">${escapeHtml(stageText)}</span>
+            </span>`;
+        }
+      }
+    }
   };
 
   updateBadge();
   _SEARCH_STATUS_TIMER = setInterval(() => {
     _SEARCH_STATUS_STAGE_INDEX = (_SEARCH_STATUS_STAGE_INDEX + 1) % SEARCH_STATUS_STAGES.length;
     const row = document.getElementById("modal-search-status-row") || document.querySelector(".search-status-row");
-    if (row && row.classList.contains("is-searching")) {
+    const isSearching = (row && row.classList.contains("is-searching")) ||
+      (Array.isArray(CACHED_SHOWS) && CURRENT_SHOW_ID && CACHED_SHOWS.find(x => x.id === CURRENT_SHOW_ID)?.is_searching);
+    if (isSearching) {
       updateBadge();
     } else {
       stopSearchStatusRotator();
@@ -9132,12 +9286,26 @@ function stopSearchStatusRotator() {
     clearInterval(_SEARCH_STATUS_TIMER);
     _SEARCH_STATUS_TIMER = null;
   }
+  const forceBtn = document.getElementById("btn-modal-force-search") || document.querySelector(".show-actions-row button[onclick*='forceSearchShow']");
+  if (forceBtn && forceBtn.classList.contains("btn-searching-active")) {
+    forceBtn.classList.remove("btn-searching-active");
+    forceBtn.disabled = false;
+    forceBtn.innerHTML = `<i data-lucide="refresh-cw" class="ico-sm"></i> <span>${t("show.force_search")}</span>`;
+    if (window.lucide && lucide.createIcons) lucide.createIcons();
+  }
 }
 
 function setModalSearchingState(showId, isSearching) {
   const targetId = showId || CURRENT_SHOW_ID;
   if (!targetId) return;
   const row = document.getElementById("modal-search-status-row") || document.querySelector(".search-status-row");
+  const show = (Array.isArray(CACHED_SHOWS) && CACHED_SHOWS.find(x => x.id === targetId)) || { id: targetId, last_search_at: new Date().toISOString() };
+  if (Array.isArray(CACHED_SHOWS)) {
+    const s = CACHED_SHOWS.find(x => x.id === targetId);
+    if (s) s.is_searching = isSearching;
+  }
+  show.is_searching = isSearching;
+
   if (row) {
     if (isSearching) {
       row.classList.add("is-searching");
@@ -9145,32 +9313,84 @@ function setModalSearchingState(showId, isSearching) {
     } else {
       stopSearchStatusRotator();
       row.classList.remove("is-searching");
-      const show = (Array.isArray(CACHED_SHOWS) && CACHED_SHOWS.find(x => x.id === targetId)) || { last_search_at: new Date().toISOString() };
       row.innerHTML = renderSearchStatus(show);
+      if (CURRENT_SEARCH_PROGRESS_STYLE === "smartbutton") {
+        row.style.display = "none";
+      } else {
+        row.style.display = "";
+      }
     }
   }
-  if (Array.isArray(CACHED_SHOWS)) {
-    const s = CACHED_SHOWS.find(x => x.id === targetId);
-    if (s) s.is_searching = isSearching;
-  }
+
+  refreshModalHeroSearchBadge(show);
 }
 
 function renderSearchStatus(show) {
-  if (show && show.is_searching) {
-    const stage = SEARCH_STATUS_STAGES[0];
+  const isSearching = Boolean(show && show.is_searching);
+  const style = CURRENT_SEARCH_PROGRESS_STYLE || "micropill";
+
+  if (style === "smartbutton") {
+    if (!isSearching) {
+      return "";
+    }
+    return `<span class="search-status-smartbtn-placeholder" style="display:none;"></span>`;
+  }
+
+  if (isSearching) {
+    const stage = SEARCH_STATUS_STAGES[_SEARCH_STATUS_STAGE_INDEX % SEARCH_STATUS_STAGES.length] || SEARCH_STATUS_STAGES[0];
     const stageText = CURRENT_LANG === "en" ? stage.textEn : stage.textRu;
-    const dotsHtml = `<span class="search-status-dots"><span>.</span><span>.</span><span>.</span></span>`;
-    const pillsHtml = SEARCH_STATUS_STAGES.map((s, idx) => `<span class="search-step-pill ${idx === 0 ? 'active' : ''}"></span>`).join("");
-    return `<span class="search-status-badge is-searching" title="${CURRENT_LANG === 'en' ? 'Active automatic search in progress' : 'Выполняется поиск и сопоставление раздач'}">
-      <div class="search-stage-shimmer"></div>
-      <span class="search-stage-icon-wrap">${stage.icon}</span>
-      <span class="search-stage-text">${escapeHtml(stageText)}${dotsHtml}</span>
-      <span class="search-step-pills">${pillsHtml}</span>
-    </span>`;
+
+    if (style === "laserstrip") {
+      return `
+        <div class="search-laser-container is-searching" title="${CURRENT_LANG === 'en' ? 'Active search in progress' : 'Выполняется автоматический поиск'}">
+          <div class="search-laser-header">
+            <span class="search-laser-icon-wrap">${stage.icon}</span>
+            <span class="search-laser-text">${escapeHtml(stageText)}</span>
+          </div>
+          <div class="search-laser-track">
+            <div class="search-laser-beam"></div>
+          </div>
+        </div>`;
+    }
+
+    if (style === "vanguard") {
+      return `
+        <span class="search-status-badge search-style-vanguard is-searching" title="${CURRENT_LANG === 'en' ? 'Active search in progress' : 'Выполняется автоматический поиск'}">
+          <span class="vanguard-tag vanguard-tag-live">LIVE</span>
+          <span class="search-stage-text">${escapeHtml(stageText)}</span>
+          <span class="vanguard-step-counter">${(_SEARCH_STATUS_STAGE_INDEX % SEARCH_STATUS_STAGES.length) + 1}/4</span>
+        </span>`;
+    }
+
+    // Default: micropill
+    return `
+      <span class="search-status-badge search-style-micropill is-searching" title="${CURRENT_LANG === 'en' ? 'Active search in progress' : 'Выполняется автоматический поиск'}">
+        <span class="search-beacon-dot"></span>
+        <span class="search-stage-text">${escapeHtml(stageText)}</span>
+      </span>`;
   }
+
+  // Not searching
   if (!show || !show.last_search_at) {
-    return `<span class="search-status-badge status-none" title="${CURRENT_LANG === 'en' ? 'No search performed yet' : 'Поиск еще не выполнялся'}"><svg class="ico-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;"><line x1="5" y1="12" x2="19" y2="12"/></svg> <span>—</span></span>`;
+    if (style === "laserstrip") {
+      return `
+        <div class="search-laser-container status-none" title="${CURRENT_LANG === 'en' ? 'No search performed yet' : 'Поиск еще не выполнялся'}">
+          <div class="search-laser-header">
+            <svg class="ico-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span class="search-status-text">${CURRENT_LANG === 'en' ? 'No search performed yet' : 'Поиск еще не выполнялся'}</span>
+          </div>
+        </div>`;
+    }
+    if (style === "vanguard") {
+      return `
+        <span class="search-status-badge search-style-vanguard status-none" title="${CURRENT_LANG === 'en' ? 'No search performed yet' : 'Поиск еще не выполнялся'}">
+          <span class="vanguard-tag vanguard-tag-idle">IDLE</span>
+          <span class="search-status-text">${CURRENT_LANG === 'en' ? 'No search performed yet' : 'Поиск еще не выполнялся'}</span>
+        </span>`;
+    }
+    return `<span class="search-status-badge search-style-micropill status-none" title="${CURRENT_LANG === 'en' ? 'No search performed yet' : 'Поиск еще не выполнялся'}"><svg class="ico-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;"><line x1="5" y1="12" x2="19" y2="12"/></svg> <span>${CURRENT_LANG === 'en' ? 'No search performed yet' : 'Поиск еще не выполнялся'}</span></span>`;
   }
+
   const when = formatDateTZ(show.last_search_at);
   const resultText = show.last_search_result || (CURRENT_LANG === "en" ? "No releases found" : "Релизы не найдены");
   const isGrabbed = /захвачен|grabbed|скачан/i.test(resultText);
@@ -9187,13 +9407,41 @@ function renderSearchStatus(show) {
     iconSvg = `<svg class="ico-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
   }
 
-  return `<span class="search-status-badge ${statusCls}" title="${escapeHtml(resultText)} (${when})">
-    ${iconSvg}
-    <span class="search-status-body">
-      <span class="search-status-text">${escapeHtml(resultText)}</span>
-      <span class="search-status-date">(${when})</span>
-    </span>
-  </span>`;
+  if (style === "laserstrip") {
+    return `
+      <div class="search-laser-container ${statusCls}" title="${escapeHtml(resultText)} (${when})">
+        <div class="search-laser-header">
+          ${iconSvg}
+          <span class="search-status-body">
+            <span class="search-status-text">${escapeHtml(resultText)}</span>
+            <span class="search-status-date">(${when})</span>
+          </span>
+        </div>
+      </div>`;
+  }
+
+  if (style === "vanguard") {
+    const tagLabel = isGrabbed ? "GRABBED" : (isError ? "ERROR" : "DONE");
+    const tagCls = isGrabbed ? "vanguard-tag-grabbed" : (isError ? "vanguard-tag-error" : "vanguard-tag-done");
+    return `
+      <span class="search-status-badge search-style-vanguard ${statusCls}" title="${escapeHtml(resultText)} (${when})">
+        <span class="vanguard-tag ${tagCls}">${tagLabel}</span>
+        <span class="search-status-body">
+          <span class="search-status-text">${escapeHtml(resultText)}</span>
+          <span class="search-status-date">(${when})</span>
+        </span>
+      </span>`;
+  }
+
+  // Default: micropill
+  return `
+    <span class="search-status-badge search-style-micropill ${statusCls}" title="${escapeHtml(resultText)} (${when})">
+      ${iconSvg}
+      <span class="search-status-body">
+        <span class="search-status-text">${escapeHtml(resultText)}</span>
+        <span class="search-status-date">(${when})</span>
+      </span>
+    </span>`;
 }
 
 function formatAliasScopeBadge(a) {

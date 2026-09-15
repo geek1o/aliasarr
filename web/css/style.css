@@ -6698,35 +6698,33 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
 .login-box .form-col { text-align: left; margin-top: 10px; }
 .login-box .btn { width: 100%; margin-top: 4px; }
 
-/* ---------- SEARCH STATUS (Show Card & General) ---------- */
+/* ---------- SEARCH STATUS BADGE & PROGRESS DESIGN VARIANTS ---------- */
 .search-status-row {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-muted);
-  margin: 6px 0 10px 0;
-  min-height: 30px;
+  align-items: center;
+  margin-bottom: 12px;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
   min-width: 0;
+  transition: all 0.25s ease;
 }
-.search-status-row.is-searching { color: var(--teal); }
+.search-status-row.is-searching { color: var(--teal, #00F0FF); }
 .spin-icon { display: inline-block; animation: spin 1s linear infinite; }
 
+/* Base Badge */
 .search-status-badge {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 6px 12px;
-  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  min-height: 26px;
   height: auto;
   box-sizing: border-box;
   border-radius: 8px;
   font-size: 12px;
   font-weight: 500;
-  line-height: 1.5;
+  line-height: 1.4;
   background: var(--panel-alt, rgba(255, 255, 255, 0.06));
   border: 1px solid var(--border);
   color: var(--text-muted);
@@ -6734,194 +6732,429 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   white-space: normal;
   word-break: break-word;
   overflow-wrap: anywhere;
-  width: 100%;
   max-width: 100%;
-  min-width: 0;
-}
-
-.search-status-badge.status-none {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-}
-
-.search-status-badge.status-grabbed {
-  background: rgba(34, 197, 94, 0.09);
-  border: 1px solid rgba(34, 197, 94, 0.35);
-  color: #4ade80;
-  box-shadow: 0 0 10px rgba(34, 197, 94, 0.12);
-}
-
-.search-status-badge.status-error {
-  background: rgba(239, 68, 68, 0.09);
-  border: 1px solid rgba(239, 68, 68, 0.35);
-  color: #f87171;
-  box-shadow: 0 0 10px rgba(239, 68, 68, 0.12);
 }
 
 .search-status-badge svg,
-.search-status-badge .ico-xs,
-.search-status-badge .search-status-icon-wrap {
+.search-status-badge .ico-xs {
   flex-shrink: 0;
-  margin-top: 2px;
 }
 
 .search-status-body {
-  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
   min-width: 0;
-  line-height: 1.5;
-  word-break: break-word;
-  overflow-wrap: anywhere;
 }
 
 .search-status-badge .search-status-date {
   font-size: 11px;
   opacity: 0.75;
-  margin-left: 6px;
   white-space: nowrap;
-  display: inline;
   font-variant-numeric: tabular-nums;
 }
 
-.search-status-badge.is-searching {
-  display: inline-flex;
-  align-items: center;
-  position: relative;
-  overflow: hidden;
-  background: rgba(13, 22, 36, 0.85);
-  border: 1px solid rgba(0, 240, 255, 0.35);
-  color: var(--text, #f0f6fc);
-  box-shadow: 0 0 14px rgba(0, 240, 255, 0.18), inset 0 0 8px rgba(0, 240, 255, 0.04);
-  backdrop-filter: var(--glass-blur, blur(10px));
-  animation: search-badge-pulse 2.2s ease-in-out infinite alternate;
-  border-radius: 6px;
-  padding: 0 10px;
-  height: 30px;
-  min-height: 30px;
-  width: auto;
-  white-space: nowrap;
-}
-
-@keyframes search-badge-pulse {
-  0% {
-    border-color: rgba(0, 240, 255, 0.28);
-    box-shadow: 0 0 10px rgba(0, 240, 255, 0.12), inset 0 0 6px rgba(0, 240, 255, 0.03);
-  }
-  100% {
-    border-color: rgba(0, 240, 255, 0.52);
-    box-shadow: 0 0 18px rgba(0, 240, 255, 0.26), inset 0 0 10px rgba(0, 240, 255, 0.08);
-  }
-}
-
-.search-stage-shimmer {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  border-radius: 0 0 6px 6px;
-  background: linear-gradient(90deg, transparent 0%, rgba(0, 240, 255, 0.95) 50%, rgba(139, 92, 246, 0.95) 80%, transparent 100%);
-  background-size: 200% 100%;
-  animation: search-shimmer-sweep 1.8s ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes search-shimmer-sweep {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
-.search-stage-icon-wrap {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 15px;
-  height: 15px;
-  flex-shrink: 0;
-  color: var(--teal, #00F0FF);
-}
-
-.search-stage-icon {
-  width: 14px;
-  height: 14px;
-  stroke: var(--teal, #00F0FF);
-}
-
-.search-stage-text {
-  display: inline-flex;
-  align-items: center;
-  white-space: nowrap;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text, #f0f6fc);
-}
-
 .search-status-text {
-  display: inline;
-  white-space: normal;
-  word-break: break-word;
-  overflow-wrap: anywhere;
   font-size: 12px;
   font-weight: 500;
-  line-height: 1.5;
   color: var(--text, #f0f6fc);
 }
-.search-status-badge.status-grabbed .search-status-text {
+
+/* 1. VARIANT 1: Neo-Glass Micro-Pill */
+.search-style-micropill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 10px;
+  min-height: 24px;
+  height: 24px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 500;
+  background: var(--panel-alt, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  backdrop-filter: var(--glass-blur, blur(8px));
+  transition: all 0.2s ease;
+  width: auto;
+}
+
+.search-style-micropill.is-searching {
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.32);
+  color: var(--text, #f0f6fc);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.15);
+}
+
+.search-beacon-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--teal, #00F0FF);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.search-beacon-dot::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid var(--teal, #00F0FF);
+  animation: beacon-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes beacon-ping {
+  0% { transform: scale(0.8); opacity: 0.9; }
+  75%, 100% { transform: scale(2.2); opacity: 0; }
+}
+
+.search-status-dot-static {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.search-status-dot-static.status-grabbed {
+  background: #4ade80;
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.5);
+}
+
+.search-status-dot-static.status-error {
+  background: #f87171;
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.5);
+}
+
+.search-style-micropill.status-grabbed {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.3);
   color: #4ade80;
 }
-.search-status-badge.status-error .search-status-text {
+
+.search-style-micropill.status-error {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.3);
   color: #f87171;
 }
 
-.search-status-dots {
-  display: inline-flex;
-  gap: 1.5px;
-  margin-left: 1px;
+.search-style-micropill.status-none {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--border);
+  color: var(--text-muted);
 }
 
-.search-status-dots span {
-  animation: search-dot-blink 1.4s infinite;
-  opacity: 0;
-  display: inline-block;
-  color: var(--teal, #00F0FF);
-}
-.search-status-dots span:nth-child(1) { animation-delay: 0s; }
-.search-status-dots span:nth-child(2) { animation-delay: 0.25s; }
-.search-status-dots span:nth-child(3) { animation-delay: 0.5s; }
-
-@keyframes search-dot-blink {
-  0%, 20% { opacity: 0; transform: translateY(0); }
-  45% { opacity: 1; transform: translateY(-0.5px); }
-  75%, 100% { opacity: 0; transform: translateY(0); }
+/* 2. VARIANT 2: Laser Progress Strip */
+.search-laser-container {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+  padding: 2px 0;
 }
 
-.search-step-pills {
+.search-laser-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.search-laser-container.is-searching .search-laser-header {
+  color: var(--text, #f0f6fc);
+}
+
+.search-laser-icon-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  margin-left: 6px;
-  padding-left: 7px;
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  color: var(--teal, #00F0FF);
+  flex-shrink: 0;
 }
 
-.search-step-pill {
-  width: 4px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.2);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+.search-laser-track {
+  width: 100%;
+  height: 1.5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 1px;
+  overflow: hidden;
+  position: relative;
+  margin-top: 1px;
 }
 
-.search-step-pill.active {
-  width: 10px;
-  height: 4px;
-  border-radius: 2px;
+.search-laser-beam {
+  position: absolute;
+  height: 100%;
+  width: 35%;
+  background: linear-gradient(90deg, transparent 0%, var(--teal, #00F0FF) 50%, var(--accent, #8b5cf6) 80%, transparent 100%);
+  animation: laser-sweep 1.5s ease-in-out infinite;
+}
+
+@keyframes laser-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
+.search-laser-container.status-grabbed .search-status-text { color: #4ade80; }
+.search-laser-container.status-error .search-status-text { color: #f87171; }
+
+/* 3. VARIANT 3: Smart Button & Header Badge */
+.btn-searching-active {
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.18), rgba(139, 92, 246, 0.18)) !important;
+  border-color: var(--teal, #00F0FF) !important;
+  color: var(--text, #f0f6fc) !important;
+  pointer-events: none;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.25) !important;
+}
+
+.btn-spinner-ring {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(0, 240, 255, 0.3);
+  border-top-color: var(--teal, #00F0FF);
+  border-radius: 50%;
+  animation: spin-clockwise 0.8s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+@keyframes spin-clockwise {
+  to { transform: rotate(360deg); }
+}
+
+.search-header-status-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 500;
+}
+
+.search-header-status-badge.status-grabbed {
+  border-color: rgba(34, 197, 94, 0.35);
+  color: #4ade80;
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.search-header-status-badge.status-error {
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+/* 4. VARIANT 4: Vanguard Tag Capsule */
+.search-style-vanguard {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 8px 3px 4px;
+  min-height: 24px;
+  height: 24px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  background: rgba(13, 22, 36, 0.7);
+  border: 1px solid var(--border);
+  color: var(--text, #f0f6fc);
+  backdrop-filter: var(--glass-blur, blur(8px));
+  width: auto;
+}
+
+.search-style-vanguard.is-searching {
+  border-color: rgba(0, 240, 255, 0.3);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.12);
+}
+
+.vanguard-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  line-height: 1.4;
+  text-transform: uppercase;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.vanguard-tag-live {
+  background: rgba(0, 240, 255, 0.18);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  color: var(--teal, #00F0FF);
+  animation: vanguard-live-pulse 1.8s infinite alternate;
+}
+
+@keyframes vanguard-live-pulse {
+  0% { box-shadow: 0 0 4px rgba(0, 240, 255, 0.2); }
+  100% { box-shadow: 0 0 10px rgba(0, 240, 255, 0.6); }
+}
+
+.vanguard-tag-grabbed {
+  background: rgba(34, 197, 94, 0.18);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #4ade80;
+}
+
+.vanguard-tag-error {
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+
+.vanguard-tag-idle {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-muted);
+}
+
+.vanguard-tag-done {
+  background: rgba(0, 240, 255, 0.12);
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  color: var(--teal, #00F0FF);
+}
+
+.vanguard-step-counter {
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--teal, #00F0FF);
+  background: rgba(0, 240, 255, 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 2px;
+}
+
+/* Modal Search Style Option Previews */
+.card-style-preview-search {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  padding: 8px 12px;
+  box-sizing: border-box;
+}
+
+.preview-search-box {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-micropill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  font-size: 10.5px;
+  color: var(--text, #f0f6fc);
+}
+
+.preview-beacon-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
   background: var(--teal, #00F0FF);
-  box-shadow: 0 0 6px rgba(0, 240, 255, 0.7);
+  box-shadow: 0 0 6px var(--teal, #00F0FF);
 }
 
-.search-step-pill.done {
-  background: rgba(0, 240, 255, 0.45);
+.preview-laserstrip {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.preview-laser-text {
+  font-size: 10px;
+  color: var(--text, #f0f6fc);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.preview-laser-line {
+  width: 100%;
+  height: 1.5px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 1px;
+  position: relative;
+  overflow: hidden;
+}
+
+.preview-laser-beam {
+  position: absolute;
+  height: 100%;
+  width: 40%;
+  background: linear-gradient(90deg, transparent 0%, var(--teal, #00F0FF) 50%, transparent 100%);
+  animation: laser-sweep 1.5s ease-in-out infinite;
+}
+
+.preview-smartbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 5px;
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(139, 92, 246, 0.2));
+  border: 1px solid var(--teal, #00F0FF);
+  font-size: 10.5px;
+  color: var(--text, #f0f6fc);
+}
+
+.preview-smartbtn-spinner {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid rgba(0, 240, 255, 0.3);
+  border-top-color: var(--teal, #00F0FF);
+  border-radius: 50%;
+  animation: spin-clockwise 0.8s linear infinite;
+}
+
+.preview-vanguard {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px 2px 3px;
+  border-radius: 5px;
+  background: rgba(13, 22, 36, 0.8);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  font-size: 10.5px;
+  color: var(--text, #f0f6fc);
+}
+
+.preview-vanguard-tag {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: rgba(0, 240, 255, 0.2);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  color: var(--teal, #00F0FF);
+}
+
+.preview-vanguard-step {
+  font-size: 9px;
+  font-family: monospace;
+  color: var(--teal, #00F0FF);
+  background: rgba(0, 240, 255, 0.1);
+  padding: 0 3px;
+  border-radius: 2px;
 }
 
 /* ---------- INTERACTIVE SEARCH LOADER (Rays Star) ---------- */

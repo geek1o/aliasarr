@@ -484,9 +484,9 @@
                 <button onclick="setLibraryView('overview')" data-i18n="library.view_overview">Обзор</button>
               </div>
             </div>
-            <button class="btn btn-secondary card-style-btn" id="card-style-btn" onclick="openCardStyleModal()" title="Стиль карточек" data-i18n-title="card_style.btn_title">
-              <i data-lucide="layout-template" class="ico-xs text-teal"></i>
-              <span class="card-style-btn-label" data-i18n="card_style.btn_title">Стиль карточек</span>
+            <button class="btn btn-secondary card-style-btn" id="card-style-btn" onclick="openCardStyleModal()" title="Настройка стиля" data-i18n-title="card_style.btn_title">
+              <i data-lucide="palette" class="ico-xs text-teal"></i>
+              <span class="card-style-btn-label" data-i18n="card_style.btn_title">Настройка стиля</span>
             </button>
             <button class="btn btn-secondary btn-icon-only" id="poster-options-btn" onclick="openPosterOptionsModal()" title="Опции постера" data-i18n-title="poster_opt.btn_title">
               <i data-lucide="sliders-horizontal"></i>
@@ -4445,17 +4445,19 @@
   </div>
 </div>
 
-<!-- Модалка выбора стиля оформления карточек -->
+<!-- Модалка выбора стиля оформления карточек и прогресса поиска -->
 <div id="card-style-modal" class="modal-overlay">
-  <div class="modal modal-medium" style="max-width: 720px;">
+  <div class="modal modal-medium" style="max-width: 780px;">
     <button class="modal-close" onclick="closeModal('card-style-modal')"><i data-lucide="x"></i></button>
-    <div class="settings-card-header" style="margin-bottom: 20px;">
+    
+    <!-- Секция 1: Стиль оформления карточек -->
+    <div class="settings-card-header" style="margin-bottom: 14px;">
       <div class="settings-card-header-left">
         <div class="settings-card-icon-badge">
           <i data-lucide="layout-template"></i>
         </div>
         <div class="settings-card-title-wrap">
-          <h3 data-i18n="card_style.modal_title">Стиль оформления карточек</h3>
+          <h3 data-i18n="card_style.section_title">Стиль оформления карточек</h3>
           <p class="subtitle" data-i18n="card_style.modal_subtitle">Выберите визуальный режим отображения постеров и статусов в библиотеке</p>
         </div>
       </div>
@@ -4522,6 +4524,99 @@
             <span data-i18n="card_style.classic_title">Классический (Стандартный)</span>
           </div>
           <p class="card-style-desc" data-i18n="card_style.classic_desc">Традиционный вид со сплошной цветной полосой прогресса серий под постером.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Секция 2: Дизайн прогресса поиска -->
+    <div class="settings-card-header" style="margin-top: 24px; margin-bottom: 14px; border-top: 1px solid var(--border); padding-top: 20px;">
+      <div class="settings-card-header-left">
+        <div class="settings-card-icon-badge">
+          <i data-lucide="loader-2"></i>
+        </div>
+        <div class="settings-card-title-wrap">
+          <h3 data-i18n="search_style.section_title">Дизайн прогресса поиска</h3>
+          <p class="subtitle" data-i18n="search_style.section_subtitle">Выберите вариант отображения статуса и этапов поиска в карточке тайтла</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-styles-grid search-styles-grid">
+      <!-- 1. Neo-Glass Micro-Pill -->
+      <div class="card-style-option" id="search-style-opt-micropill" onclick="setSearchProgressStyle('micropill')">
+        <div class="card-style-badge-recommended" data-i18n="card_style.recommended">Флагман</div>
+        <div class="card-style-preview card-style-preview-search">
+          <div class="preview-search-box">
+            <div class="preview-micropill is-searching">
+              <span class="preview-beacon-dot"></span>
+              <span class="preview-text">Парсинг раздач...</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-style-meta">
+          <div class="card-style-name">
+            <span class="card-style-radio"></span>
+            <span data-i18n="search_style.micropill_title">Neo-Glass Micro-Pill</span>
+          </div>
+          <p class="card-style-desc" data-i18n="search_style.micropill_desc">Компактная стеклянная микрокапсула с живым пульсирующим маячком и лаконичным текстом этапа.</p>
+        </div>
+      </div>
+
+      <!-- 2. Laser Progress Strip -->
+      <div class="card-style-option" id="search-style-opt-laserstrip" onclick="setSearchProgressStyle('laserstrip')">
+        <div class="card-style-preview card-style-preview-search">
+          <div class="preview-search-box">
+            <div class="preview-laserstrip">
+              <div class="preview-laser-text"><i data-lucide="refresh-cw" class="ico-xxs text-teal"></i> Опрос трекеров...</div>
+              <div class="preview-laser-line"><div class="preview-laser-beam"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="card-style-meta">
+          <div class="card-style-name">
+            <span class="card-style-radio"></span>
+            <span data-i18n="search_style.laserstrip_title">Laser Progress Strip</span>
+          </div>
+          <p class="card-style-desc" data-i18n="search_style.laserstrip_desc">Ультратонкий лазерный статус-лайн с бегущим градиентным лучом без тяжелых рамок.</p>
+        </div>
+      </div>
+
+      <!-- 3. Smart Button & Header -->
+      <div class="card-style-option" id="search-style-opt-smartbutton" onclick="setSearchProgressStyle('smartbutton')">
+        <div class="card-style-preview card-style-preview-search">
+          <div class="preview-search-box">
+            <div class="preview-smartbtn">
+              <span class="preview-smartbtn-spinner"></span>
+              <span>Парсинг...</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-style-meta">
+          <div class="card-style-name">
+            <span class="card-style-radio"></span>
+            <span data-i18n="search_style.smartbutton_title">Smart Button & Header</span>
+          </div>
+          <p class="card-style-desc" data-i18n="search_style.smartbutton_desc">Интеграция прогресса прямо в кнопку запуска поиска. Максимальная компактность модального окна.</p>
+        </div>
+      </div>
+
+      <!-- 4. Vanguard Tag Capsule -->
+      <div class="card-style-option" id="search-style-opt-vanguard" onclick="setSearchProgressStyle('vanguard')">
+        <div class="card-style-preview card-style-preview-search">
+          <div class="preview-search-box">
+            <div class="preview-vanguard">
+              <span class="preview-vanguard-tag">LIVE</span>
+              <span class="preview-text">Скоринг</span>
+              <span class="preview-vanguard-step">4/4</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-style-meta">
+          <div class="card-style-name">
+            <span class="card-style-radio"></span>
+            <span data-i18n="search_style.vanguard_title">Vanguard Tag Capsule</span>
+          </div>
+          <p class="card-style-desc" data-i18n="search_style.vanguard_desc">Hi-Tech капсула с акцентным чипом состояния LIVE и счетчиком этапов поиска.</p>
         </div>
       </div>
     </div>
