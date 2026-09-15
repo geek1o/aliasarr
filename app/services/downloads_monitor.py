@@ -867,7 +867,19 @@ async def check_downloads(db: Session) -> list[dict]:
                         progress_changed = True
 
                     if not matched_eps:
-                        # В раздаче вообще нет ни одной нужной серии для тайтла
+                        # Если раздача ещё загружает метаданные торрента (magnet) или список файлов пока не содержит видеофайлов,
+                        # откладываем сверку и не блокируем раздачу преждевременно
+                        has_any_video = any(
+                            os.path.splitext(getattr(f, "name", "").lower())[1] in {".mkv", ".mp4", ".avi", ".ts", ".m2ts", ".mov", ".webm"}
+                            for f in full_t.files
+                        )
+                        state_str = str(getattr(t, "state", "")).lower()
+                        if not has_any_video and any(kw in state_str for kw in ("meta", "check", "alloc", "downloading", "queued", "paused")):
+                            logger.debug("DownloadsMonitor: Раздача %s ещё загружает метаданные/файлы, откладываем сверку", torrent_hash)
+                            _RECONCILED_TORRENTS.discard(torrent_hash)
+                            continue
+
+                        # В раздаче действительно нет ни одной нужной серии/видеофайла для тайтла
                         try:
                             blocklist_service.add_to_blocklist(
                                 db,

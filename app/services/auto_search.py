@@ -2134,8 +2134,21 @@ async def _do_search_and_grab(
         # чтобы удалить старый дубликат из торрент-клиента и не качать дважды
         old_hashes_to_cleanup = {
             ep.torrent_hash for ep in covered
-            if ep.torrent_hash and ep.status == EpisodeStatus.DOWNLOADING
+            if ep.torrent_hash
         }
+        if show.content_type == "movie":
+            from app.models.db import TrackedRelease, DownloadHistory
+            prev_tr = db.query(TrackedRelease.infohash).filter(TrackedRelease.show_id == show.id).all()
+            for (p_h,) in prev_tr:
+                if p_h:
+                    old_hashes_to_cleanup.add(p_h)
+            prev_dh = db.query(DownloadHistory.torrent_hash).filter(
+                DownloadHistory.show_id == show.id,
+                DownloadHistory.torrent_hash.isnot(None),
+            ).all()
+            for (p_h,) in prev_dh:
+                if p_h:
+                    old_hashes_to_cleanup.add(p_h)
 
         should_pause = (show.content_type != "movie")
         try:
@@ -2252,12 +2265,12 @@ async def _do_search_and_grab(
 
             # Удаляем старые дублирующие раздачи из торрент-клиента
             for old_hash in old_hashes_to_cleanup:
-                if old_hash != torrent_hash:
+                if old_hash and str(old_hash).lower() != str(torrent_hash).lower():
                     try:
                         await dl_client.remove_torrent(old_hash, delete_files=True)
-                        logger.info("Удалена старая дублирующая раздача %s из загрузчика", old_hash)
+                        logger.info("Удалена старая дублирующая раздача %s из загрузчика для тайтла %s", old_hash, show.id)
                     except Exception as exc:
-                        logger.warning("Не удалось удалить старую раздачу %s: %s", old_hash, exc)
+                        logger.debug("Не удалось удалить старую раздачу %s: %s", old_hash, exc)
 
             for ep in covered:
                 ep.status = EpisodeStatus.DOWNLOADING
@@ -2268,6 +2281,8 @@ async def _do_search_and_grab(
                 remaining.pop((ep.season_number, ep.episode_number), None)
                 grabbed_seasons.add(ep.season_number)
                 db.add(ep)
+            if show.content_type == "movie":
+                remaining.clear()
             try:
                 db.commit()
             except Exception as commit_exc:

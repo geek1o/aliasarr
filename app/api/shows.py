@@ -555,22 +555,23 @@ def get_show(show_id: int, db: Session = Depends(get_db), current_user: User = D
                         ep.status = target_default_status
                     needs_commit = True
             else:
-                # Файла нет: очищаем качество и MediaInfo, если они случайно остались
-                if getattr(ep, "downloaded_quality", None) is not None or getattr(ep, "file_size_bytes", None) is not None or getattr(ep, "video_codec", None) is not None:
-                    ep.downloaded_quality = None
-                    ep.file_size_bytes = None
-                    ep.video_codec = None
-                    ep.audio_codec = None
-                    ep.audio_channels = None
-                    ep.dynamic_range = None
-                    ep.release_group = None
-                    needs_commit = True
-                if ep.status == EpisodeStatus.DOWNLOADED:
-                    ep.status = target_default_status
-                    ep.download_progress = 0.0
-                    needs_commit = True
-                elif ep.status == EpisodeStatus.DOWNLOADING:
-                    if not getattr(ep, "torrent_hash", None):
+                # Файла нет: если серия не скачивается активно в данный момент, очищаем качество и MediaInfo
+                is_active_download = ep.status == EpisodeStatus.DOWNLOADING and bool(getattr(ep, "torrent_hash", None))
+                if not is_active_download:
+                    if getattr(ep, "downloaded_quality", None) is not None or getattr(ep, "file_size_bytes", None) is not None or getattr(ep, "video_codec", None) is not None:
+                        ep.downloaded_quality = None
+                        ep.file_size_bytes = None
+                        ep.video_codec = None
+                        ep.audio_codec = None
+                        ep.audio_channels = None
+                        ep.dynamic_range = None
+                        ep.release_group = None
+                        needs_commit = True
+                    if ep.status == EpisodeStatus.DOWNLOADED:
+                        ep.status = target_default_status
+                        ep.download_progress = 0.0
+                        needs_commit = True
+                    elif ep.status == EpisodeStatus.DOWNLOADING:
                         ep.status = target_default_status
                         ep.download_progress = 0.0
                         needs_commit = True
@@ -1684,6 +1685,9 @@ def sync_show_disk(
 
     if not video_files:
         for ep in episodes:
+            is_active_download = ep.status == EpisodeStatus.DOWNLOADING and bool(getattr(ep, "torrent_hash", None))
+            if is_active_download:
+                continue
             air_d = getattr(ep, "air_date", None)
             if isinstance(air_d, dt.datetime):
                 air_d = air_d.date()

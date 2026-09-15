@@ -206,14 +206,32 @@ async def export_release_logs(
             lines.append(f"Error gathering client diagnostics: {exc}")
 
     import re
-    safe_name = ""
-    if show_obj and isinstance(getattr(show_obj, "title", None), str):
-        safe_name = "_" + re.sub(r"[^\w\-_.]", "_", show_obj.title)[:40]
+    import urllib.parse
+    import unicodedata
 
-    filename = f"aliasarr_release_logs{safe_name}_{dt.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.txt"
+    safe_ascii = ""
+    raw_title = ""
+    if show_obj and isinstance(getattr(show_obj, "title", None), str) and show_obj.title.strip():
+        raw_title = show_obj.title.strip()
+        norm = unicodedata.normalize("NFKD", raw_title).encode("ascii", "ignore").decode("ascii")
+        clean = re.sub(r"[^a-zA-Z0-9_\-.]", "_", norm).strip("_")
+        if clean:
+            safe_ascii = "_" + clean[:40]
+        else:
+            safe_ascii = f"_show_{show_obj.id}"
+
+    time_suffix = dt.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    fallback_filename = f"aliasarr_release_logs{safe_ascii}_{time_suffix}.txt"
+    if raw_title:
+        utf8_filename = f"aliasarr_release_logs_{raw_title}_{time_suffix}.txt"
+        quoted_filename = urllib.parse.quote(utf8_filename)
+        content_disp = f'attachment; filename="{fallback_filename}"; filename*=UTF-8\'\'{quoted_filename}'
+    else:
+        content_disp = f'attachment; filename="{fallback_filename}"'
+
     content = "\n".join(lines)
     return Response(
         content=content,
         media_type="text/plain; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        headers={"Content-Disposition": content_disp}
     )
