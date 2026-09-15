@@ -2,7 +2,7 @@ name: Docker Publish
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "sqlite-upgrade" ]
     tags: [ "v*.*.*" ]
   workflow_dispatch:
 
@@ -45,6 +45,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=ref,event=branch
             type=ref,event=tag
             type=sha
 
