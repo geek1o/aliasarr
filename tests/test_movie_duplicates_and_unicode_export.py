@@ -102,7 +102,6 @@ class TestMovieDuplicatesAndUnicodeExport(unittest.IsolatedAsyncioTestCase):
 
         response = await export_release_logs(
             show_id=1,
-            include_diagnostics=False,
             db=mock_db,
             current_user=MagicMock(),
         )
