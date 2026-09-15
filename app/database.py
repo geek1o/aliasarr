@@ -29,6 +29,8 @@ DATABASE_URL = _get_default_database_url()
 is_sqlite = DATABASE_URL.startswith("sqlite")
 
 if is_sqlite:
+    import sqlite3
+    logger.info("[DB] Initialized SQLite runtime engine v%s (WAL mode, Cache 64MB, MMAP 256MB)", getattr(sqlite3, "sqlite_version", "unknown"))
     # Для SQLite используем пул с повторным использованием соединений и оптимизированные PRAGMA:
     # 64MB RAM кэш, 256MB mmap, synchronous=NORMAL и busy_timeout=60с
     connect_args = {"check_same_thread": False, "timeout": 60}
