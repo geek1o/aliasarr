@@ -1132,11 +1132,14 @@ class TransmissionClient(BaseDownloadClient):
         args: dict[str, Any] = {"ids": [torrent_hash]}
         if seed_ratio_limit is not None and seed_ratio_limit > 0:
             args["seedRatioLimit"] = float(seed_ratio_limit)
-            args["seedRatioMode"] = 1  # 1 = use torrent-specific limit
-        elif seed_ratio_limit == 0:
-            args["seedRatioMode"] = 0  # 0 = global limit
+            args["seedRatioMode"] = 1  # 1 = use torrent-specific ratio limit
         else:
-            args["seedRatioMode"] = 2  # 2 = unlimited
+            args["seedRatioMode"] = 2  # 2 = unlimited ratio (ignore global ratio limit)
+
+        # Всегда отключаем ограничение простоя на уровне торрента (seedIdleMode = 2),
+        # чтобы глобальный таймер простоя Transmission (например, 1 минута) не ставил раздачи на паузу.
+        # Учет общего времени сидирования ведет сам монитор Aliasarr.
+        args["seedIdleMode"] = 2
 
         try:
             await self._rpc_call("torrent-set", args)

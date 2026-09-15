@@ -158,10 +158,10 @@ class TestHardlinksAndSeeding(unittest.TestCase):
             self.assertEqual(args["seedRatioLimit"], 2.0)
             self.assertEqual(args["seedRatioMode"], 1)
             self.assertNotIn("seedIdleLimit", args)
-            self.assertNotIn("seedIdleMode", args)
+            self.assertEqual(args["seedIdleMode"], 2)
 
     def test_transmission_set_seeding_limits_unlimited(self):
-        """Проверяет отправку seedRatioMode=2 (unlimited) в Transmission при отсутствии лимита ratio."""
+        """Проверяет отправку seedRatioMode=2 (unlimited) и seedIdleMode=2 в Transmission при отсутствии лимита ratio."""
         client = TransmissionClient("127.0.0.1", 9091, "admin", "admin")
 
         with patch.object(client, "_rpc_call", new_callable=AsyncMock) as mock_rpc:
@@ -172,6 +172,7 @@ class TestHardlinksAndSeeding(unittest.TestCase):
             self.assertEqual(method, "torrent-set")
             self.assertEqual(args["ids"], ["hash456"])
             self.assertEqual(args["seedRatioMode"], 2)
+            self.assertEqual(args["seedIdleMode"], 2)
 
     def test_check_seeding_torrents_keeps_unlimited_torrents_alive(self):
         """Проверяет, что торрент с бесконечным сидированием (лимиты None) не удаляется даже при ratio > 1.0."""

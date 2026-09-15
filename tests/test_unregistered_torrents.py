@@ -207,6 +207,19 @@ class TestUnregisteredTorrentsAndHealing(unittest.TestCase):
             set_call = [c for c in calls if c[0][0] == "torrent-set"][0]
             self.assertEqual(set_call[0][1]["seedRatioLimit"], 1.5)
             self.assertEqual(set_call[0][1]["seedRatioMode"], 1)
+            self.assertNotIn("seedIdleLimit", set_call[0][1])
+            self.assertEqual(set_call[0][1]["seedIdleMode"], 2)
+
+    def test_transmission_set_seeding_limits_unlimited_overrides_global(self):
+        """Проверяет, что при отсутствии ограничений выставляются seedRatioMode=2 и seedIdleMode=2 (unlimited)."""
+        client = TransmissionClient("127.0.0.1", 9091, "admin", "admin")
+        with patch.object(client, "_rpc_call", new_callable=AsyncMock) as mock_rpc:
+            asyncio.run(client.set_seeding_limits("hash_unlimited", seed_ratio_limit=None, seed_time_limit_minutes=None))
+            mock_rpc.assert_called_once_with("torrent-set", {
+                "ids": ["hash_unlimited"],
+                "seedRatioMode": 2,
+                "seedIdleMode": 2,
+            })
 
     def test_transmission_resume_torrent_uses_start_now(self):
         """Проверяет прямой вызов TransmissionClient.resume_torrent с torrent-start-now."""
