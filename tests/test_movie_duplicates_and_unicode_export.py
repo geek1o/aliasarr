@@ -97,8 +97,12 @@ class TestMovieDuplicatesAndUnicodeExport(unittest.IsolatedAsyncioTestCase):
 
         mock_db = MagicMock()
         mock_db.get.return_value = mock_show
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
+        mock_query = MagicMock()
+        mock_query.filter.return_value.first.return_value = mock_show
+        mock_query.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
+        mock_query.order_by.return_value.limit.return_value.all.return_value = []
+        mock_query.filter.return_value.order_by.return_value.all.return_value = []
+        mock_db.query.return_value = mock_query
 
         response = await export_release_logs(
             show_id=1,

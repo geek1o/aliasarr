@@ -115,7 +115,9 @@ async def export_release_logs(
         q = q.filter(ReleaseLog.show_id == real_show_id)
         from app.models.db import Show
         try:
-            show_obj = db.query(Show).filter(Show.id == real_show_id).first()
+            show_obj = db.get(Show, real_show_id) if hasattr(db, "get") else None
+            if show_obj is None:
+                show_obj = db.query(Show).filter(Show.id == real_show_id).first()
         except Exception:
             show_obj = None
 
