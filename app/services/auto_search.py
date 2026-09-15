@@ -1028,9 +1028,14 @@ async def search_and_grab_show(
             if reason == "no_enabled_indexers":
                 show.last_search_result = "Нет включённых индексаторов"
             elif reason == "no_wanted_episodes":
-                show.last_search_result = "Нет серий в статусе «разыскивается»"
+                show.last_search_result = "Фильм уже скачан" if getattr(show, "content_type", "") == "movie" else "Нет серий в статусе «разыскивается»"
             elif grabbed_count:
-                show.last_search_result = f"Захвачено релизов: {grabbed_count}"
+                if getattr(show, "content_type", "") == "movie":
+                    show.last_search_result = "Захвачен фильм"
+                elif grabbed_count == 1:
+                    show.last_search_result = "Захвачен 1 релиз"
+                else:
+                    show.last_search_result = f"Захвачено релизов: {grabbed_count}"
             else:
                 criteria = result.get("criteria")
                 if criteria:

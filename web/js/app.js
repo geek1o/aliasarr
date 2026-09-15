@@ -12694,6 +12694,10 @@ async function forceSearchShow(button, showId) {
       if (result.message) {
         toast(result.message);
       } else if (count > 0) {
+        const showObj = (Array.isArray(CACHED_SHOWS) && CACHED_SHOWS.find(x => x.id === sId)) || (typeof CURRENT_SHOW_DATA !== "undefined" && CURRENT_SHOW_DATA && CURRENT_SHOW_DATA.id === sId ? CURRENT_SHOW_DATA : null);
+        const isMovie = showObj?.content_type === "movie";
+        const isRu = CURRENT_LANG !== "en";
+
         const relTitles = [...new Set(
           result.grabbed
             .map(g => (typeof g === "string" ? g : (g.release || g.title || "")))
@@ -12701,9 +12705,21 @@ async function forceSearchShow(button, showId) {
         )];
         if (relTitles.length > 0) {
           const relText = relTitles.length <= 2 ? relTitles.join(", ") : `${relTitles.slice(0, 2).join(", ")} (+${relTitles.length - 2})`;
-          toast(CURRENT_LANG === "en" ? `Grabbed ${count} ep(s): ${relText}` : `Захвачено ${count} серий: ${relText}`);
+          if (isMovie) {
+            toast(isRu ? `Захвачен фильм: ${relText}` : `Grabbed movie: ${relText}`);
+          } else if (count === 1) {
+            toast(isRu ? `Захвачена 1 серия: ${relText}` : `Grabbed 1 episode: ${relText}`);
+          } else {
+            toast(isRu ? `Захвачено ${count} серий: ${relText}` : `Grabbed ${count} episodes: ${relText}`);
+          }
         } else {
-          toast(CURRENT_LANG === "en" ? `Grabbed ${count} episode(s)` : `Захвачено серий: ${count}`);
+          if (isMovie) {
+            toast(isRu ? "Захвачен фильм" : "Grabbed movie");
+          } else if (count === 1) {
+            toast(isRu ? "Захвачена 1 серия" : "Grabbed 1 episode");
+          } else {
+            toast(isRu ? `Захвачено серий: ${count}` : `Grabbed ${count} episodes`);
+          }
         }
       } else {
         toast(result.status || t("common.none"));
@@ -13669,15 +13685,25 @@ async function finishWizard(button) {
                 .filter(Boolean)
             )];
             const epCount = res.grabbed.length;
+            const isMovie = contentType === "movie";
+            const isRu = CURRENT_LANG !== "en";
             if (relTitles.length > 0) {
               const relText = relTitles.length <= 2 ? relTitles.join(", ") : `${relTitles.slice(0, 2).join(", ")} (+${relTitles.length - 2})`;
-              if (epCount > 1) {
-                toast(CURRENT_LANG === "en" ? `Grabbed release (${epCount} eps): ${relText}` : `Захвачен релиз (${epCount} серий): ${relText}`);
+              if (isMovie) {
+                toast(isRu ? `Захвачен фильм: ${relText}` : `Grabbed movie: ${relText}`);
+              } else if (epCount > 1) {
+                toast(isRu ? `Захвачен релиз (${epCount} серий): ${relText}` : `Grabbed release (${epCount} eps): ${relText}`);
               } else {
-                toast((CURRENT_LANG === "en" ? "Grabbed release: " : "Захвачен релиз: ") + relText);
+                toast(isRu ? `Захвачена 1 серия: ${relText}` : `Grabbed 1 episode: ${relText}`);
               }
             } else {
-              toast(CURRENT_LANG === "en" ? `Grabbed ${epCount} episode(s)` : `Захвачено серий: ${epCount}`);
+              if (isMovie) {
+                toast(isRu ? "Захвачен фильм" : "Grabbed movie");
+              } else if (epCount > 1) {
+                toast(isRu ? `Захвачено серий: ${epCount}` : `Grabbed ${epCount} episodes`);
+              } else {
+                toast(isRu ? "Захвачена 1 серия" : "Grabbed 1 episode");
+              }
             }
           } else if (res && res.status) {
             toast(res.status);

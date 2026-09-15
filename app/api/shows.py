@@ -1547,15 +1547,24 @@ async def search_selected_episodes(
         except Exception:
             pass
         grabbed_ids = {g["episode_id"] for g in result.get("grabbed", [])}
+        is_movie = getattr(show, "content_type", "series") == "movie"
+        if is_movie:
+            message = "Захвачен фильм" if grabbed_ids else "Подходящих релизов для фильма не найдено"
+        else:
+            if grabbed_ids:
+                if len(grabbed_ids) == 1 and len(payload.episode_ids) == 1:
+                    message = "Захвачена 1 серия"
+                else:
+                    message = f"Захвачено серий: {len(grabbed_ids)} из {len(payload.episode_ids)}"
+            else:
+                message = "Подходящих релизов для выбранных серий не найдено"
+
         return {
             "show_id": show_id,
             "grabbed": result.get("grabbed", []),
             "requested": len(payload.episode_ids),
             "success": bool(grabbed_ids),
-            "message": (
-                f"Захвачено серий: {len(grabbed_ids)} из {len(payload.episode_ids)}"
-                if grabbed_ids else "Подходящих релизов для выбранных серий не найдено"
-            ),
+            "message": message,
         }
     except Exception as exc:
         try:
