@@ -459,6 +459,7 @@ const TRANSLATIONS = {
     "library.filter_anime": "Аниме",
     "library.filter_monitored": "Мониторится",
     "library.filter_unmonitored": "Не мониторится",
+    "library.filter_missing": "Не скачано",
     "library.filter_downloading": "Скачиваются",
     "library.view_posters": "Постеры",
     "library.view_table": "Таблица",
@@ -1920,6 +1921,7 @@ const TRANSLATIONS = {
     "library.filter_anime": "Anime",
     "library.filter_monitored": "Monitored",
     "library.filter_unmonitored": "Unmonitored",
+    "library.filter_missing": "Missing",
     "library.filter_downloading": "Downloading",
     "library.view_posters": "Posters",
     "library.view_table": "Table",
@@ -6262,7 +6264,7 @@ async function loadHealthCheck() {
 let LIBRARY_VIEW_MODE = localStorage.getItem("aliasarr_library_view") || "posters";
 const VIEW_MODE_LABELS = { posters: "library.view_posters", table: "library.view_table", overview: "library.view_overview" };
 const CATEGORY_FILTER_LABELS = { all: "library.filter_all", movie: "library.filter_movies", series: "library.filter_series", anime: "library.filter_anime" };
-const MONITOR_FILTER_LABELS = { all: "library.filter_all", monitored: "library.filter_monitored", unmonitored: "library.filter_unmonitored", downloading: "library.filter_downloading" };
+const MONITOR_FILTER_LABELS = { all: "library.filter_all", monitored: "library.filter_monitored", unmonitored: "library.filter_unmonitored", missing: "library.filter_missing", downloading: "library.filter_downloading" };
 
 let LIBRARY_CATEGORY_FILTER = localStorage.getItem("aliasarr_library_cat") || "all";
 let LIBRARY_MONITOR_FILTER = localStorage.getItem("aliasarr_library_mon") || "all";
@@ -6772,6 +6774,13 @@ function renderLibrary() {
     shows = shows.filter(s => s.monitored === true);
   } else if (LIBRARY_MONITOR_FILTER === "unmonitored") {
     shows = shows.filter(s => !s.monitored);
+  } else if (LIBRARY_MONITOR_FILTER === "missing") {
+    shows = shows.filter(s => {
+      const isMovie = s.content_type === "movie";
+      const total = isMovie ? 1 : (s.episodes_count || 1);
+      const downloaded = isMovie ? ((s.downloaded_episodes_count || 0) > 0 ? 1 : 0) : (s.downloaded_episodes_count || 0);
+      return downloaded < total;
+    });
   } else if (LIBRARY_MONITOR_FILTER === "downloading") {
     shows = shows.filter(s => {
       const st = getShowStatusInfo(s);
@@ -8039,6 +8048,20 @@ function getCurrentlyFilteredShows() {
     shows = shows.filter(s => s.monitored === true);
   } else if (LIBRARY_MONITOR_FILTER === "unmonitored") {
     shows = shows.filter(s => !s.monitored);
+  } else if (LIBRARY_MONITOR_FILTER === "missing") {
+    shows = shows.filter(s => {
+      const isMovie = s.content_type === "movie";
+      const total = isMovie ? 1 : (s.episodes_count || 1);
+      const downloaded = isMovie ? ((s.downloaded_episodes_count || 0) > 0 ? 1 : 0) : (s.downloaded_episodes_count || 0);
+      return downloaded < total;
+    });
+  } else if (LIBRARY_MONITOR_FILTER === "downloading") {
+    shows = shows.filter(s => {
+      const st = getShowStatusInfo(s);
+      return (s.downloading_episodes_count > 0) ||
+             (st.statusClass === "status-downloading") ||
+             (st.activeTask && (st.statusClass === "status-importing" || st.activeTask.name?.includes("download") || st.activeTask.type === "download"));
+    });
   }
   if (query) {
     shows = shows.filter(s =>
