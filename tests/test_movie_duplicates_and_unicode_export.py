@@ -84,39 +84,33 @@ class TestMovieDuplicatesAndUnicodeExport(unittest.IsolatedAsyncioTestCase):
         self.assertIn("HASH_TRACKED_2", old_hashes_to_cleanup)
         self.assertIn("HASH_HIST_1", old_hashes_to_cleanup)
 
-    async def test_export_release_logs_cyrillic_with_db(self):
-        """Проверяет реальный вызов export_release_logs с SQLAlchemy в памяти."""
-        if not HAS_DB:
-            self.skipTest("SQLAlchemy not available in host runner")
-
-        engine = create_engine("sqlite:///:memory:")
-        Base.metadata.create_all(engine)
-        Session = sessionmaker(bind=engine)
-        db = Session()
+    async def test_export_release_logs_cyrillic_response(self):
+        """Проверяет генерацию Response в export_release_logs для тайтла с русским названием."""
         try:
-            show = Show(
-                title="Оппенгеймер",
-                original_title="Oppenheimer",
-                content_type="movie",
-                category="movies",
-                monitored=True,
-            )
-            db.add(show)
-            db.commit()
+            from app.api.release_logs_routes import export_release_logs
+        except ImportError:
+            self.skipTest("FastAPI not available")
 
-            response = await export_release_logs(
-                show_id=show.id,
-                include_diagnostics=False,
-                db=db,
-                current_user=MagicMock(),
-            )
+        mock_show = MagicMock()
+        mock_show.id = 1
+        mock_show.title = "Оппенгеймер"
 
-            self.assertEqual(response.status_code, 200)
-            content_disp = response.headers.get("content-disposition", "")
-            self.assertTrue(content_disp.startswith("attachment;"))
-            encoded_header = content_disp.encode("latin-1")
-            self.assertIsInstance(encoded_header, bytes)
-            self.assertIn("filename*=", content_disp)
-        finally:
-            db.close()
-            Base.metadata.drop_all(engine)
+        mock_db = MagicMock()
+        mock_db.get.return_value = mock_show
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
+
+        response = await export_release_logs(
+            show_id=1,
+            include_diagnostics=False,
+            db=mock_db,
+            current_user=MagicMock(),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        content_disp = response.headers.get("content-disposition", "")
+        self.assertTrue(content_disp.startswith("attachment;"))
+        encoded_header = content_disp.encode("latin-1")
+        self.assertIsInstance(encoded_header, bytes)
+        self.assertIn("filename*=", content_disp)
+        self.assertIn("filename=", content_disp)

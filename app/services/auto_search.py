@@ -2136,8 +2136,7 @@ async def _do_search_and_grab(
             ep.torrent_hash for ep in covered
             if ep.torrent_hash
         }
-        if show.content_type == "movie":
-            from app.models.db import TrackedRelease, DownloadHistory
+        if show.content_type == "movie" and TrackedRelease is not None and DownloadHistory is not None:
             prev_tr = db.query(TrackedRelease.infohash).filter(TrackedRelease.show_id == show.id).all()
             for (p_h,) in prev_tr:
                 if p_h:
