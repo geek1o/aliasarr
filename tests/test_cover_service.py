@@ -27,6 +27,7 @@ from app.services.cover_service import (
     download_and_store_collection_cover,
     download_and_store_collection_backdrop,
     backfill_existing_covers,
+    attach_version_to_cover_url,
 )
 
 try:
@@ -75,7 +76,7 @@ class TestCoverServiceFilesystem(unittest.TestCase):
     def test_save_and_etag_show_poster(self):
         sample_bytes = b"\xff\xd8\xff\xe0sample_jpeg_content"
         url = asyncio.run(save_show_poster(10, sample_bytes))
-        self.assertEqual(url, "/api/v1/shows/10/poster")
+        self.assertTrue(url.startswith("/api/v1/shows/10/poster?v="))
 
         target_file = get_show_poster_path(10)
         self.assertTrue(os.path.isfile(target_file))
@@ -92,7 +93,7 @@ class TestCoverServiceFilesystem(unittest.TestCase):
     def test_save_and_delete_collection_poster(self):
         sample_bytes = b"collection_sample_bytes"
         url = asyncio.run(save_collection_poster(20, sample_bytes))
-        self.assertEqual(url, "/api/v1/collections/20/poster")
+        self.assertTrue(url.startswith("/api/v1/collections/20/poster?v="))
 
         target_file = get_collection_poster_path(20)
         self.assertTrue(os.path.isfile(target_file))
@@ -118,7 +119,7 @@ class TestCoverServiceFilesystem(unittest.TestCase):
         b64_str = f"data:image/jpeg;base64,{base64.b64encode(raw).decode('ascii')}"
 
         res = asyncio.run(download_and_store_show_cover(55, b64_str))
-        self.assertEqual(res, "/api/v1/shows/55/poster")
+        self.assertTrue(res.startswith("/api/v1/shows/55/poster?v="))
         self.assertTrue(os.path.isfile(get_show_poster_path(55)))
         with open(get_show_poster_path(55), "rb") as f:
             self.assertEqual(f.read(), raw)
@@ -137,7 +138,7 @@ class TestCoverServiceFilesystem(unittest.TestCase):
 
         with patch.dict("sys.modules", {"httpx": mock_httpx}):
             res = asyncio.run(download_and_store_show_cover(88, "https://cdn.example.com/poster.jpg"))
-            self.assertEqual(res, "/api/v1/shows/88/poster")
+            self.assertTrue(res.startswith("/api/v1/shows/88/poster?v="))
             self.assertTrue(os.path.isfile(get_show_poster_path(88)))
 
     def test_download_and_store_collection_cover_http(self):
@@ -154,13 +155,13 @@ class TestCoverServiceFilesystem(unittest.TestCase):
 
         with patch.dict("sys.modules", {"httpx": mock_httpx}):
             res = asyncio.run(download_and_store_collection_cover(99, "https://image.tmdb.org/t/p/original/coll.jpg"))
-            self.assertEqual(res, "/api/v1/collections/99/poster")
+            self.assertTrue(res.startswith("/api/v1/collections/99/poster?v="))
             self.assertTrue(os.path.isfile(get_collection_poster_path(99)))
 
     def test_save_and_download_collection_backdrop(self):
         backdrop_bytes = b"sample_collection_backdrop"
         url = asyncio.run(save_collection_backdrop(30, backdrop_bytes))
-        self.assertEqual(url, "/api/v1/collections/30/backdrop")
+        self.assertTrue(url.startswith("/api/v1/collections/30/backdrop?v="))
         target_file = get_collection_backdrop_path(30)
         self.assertTrue(os.path.isfile(target_file))
 
@@ -178,8 +179,22 @@ class TestCoverServiceFilesystem(unittest.TestCase):
 
         with patch.dict("sys.modules", {"httpx": mock_httpx}):
             res = asyncio.run(download_and_store_collection_backdrop(31, "https://image.tmdb.org/t/p/original/bd.jpg"))
-            self.assertEqual(res, "/api/v1/collections/31/backdrop")
+            self.assertTrue(res.startswith("/api/v1/collections/31/backdrop?v="))
             self.assertTrue(os.path.isfile(get_collection_backdrop_path(31)))
+
+    def test_attach_version_to_cover_url(self):
+        import datetime as dt
+        # 1. External URL unchanged
+        self.assertEqual(attach_version_to_cover_url("https://image.tmdb.org/p.jpg"), "https://image.tmdb.org/p.jpg")
+
+        # 2. URL with existing query param unchanged
+        self.assertEqual(attach_version_to_cover_url("/api/v1/shows/5/poster?v=999"), "/api/v1/shows/5/poster?v=999")
+
+        # 3. Local URL with timestamp object
+        t = dt.datetime(2026, 9, 15, 12, 0, 0)
+        expected_ts = int(t.timestamp())
+        self.assertEqual(attach_version_to_cover_url("/api/v1/shows/5/poster", t), f"/api/v1/shows/5/poster?v={expected_ts}")
+        self.assertEqual(attach_version_to_cover_url("/api/v1/collections/3/backdrop", t), f"/api/v1/collections/3/backdrop?v={expected_ts}")
 
 
 @unittest.skipUnless(HAS_DEPS, "Requires sqlalchemy, fastapi, and pydantic")
@@ -280,7 +295,8 @@ class TestCoverServiceEndpointsAndDb(unittest.TestCase):
 
         resp = asyncio.run(get_show_poster(s.id, req_mock))
         self.assertEqual(resp.media_type, "image/jpeg")
-        self.assertIn("Cache-Control", resp.headers)
+        self.assertEqual(resp.headers.get("Cache-Control"), "no-cache, must-revalidate")
+        self.assertNotIn("immutable", resp.headers.get("Cache-Control", ""))
         etag = resp.headers.get("ETag")
         self.assertIsNotNone(etag)
 
@@ -289,6 +305,8 @@ class TestCoverServiceEndpointsAndDb(unittest.TestCase):
         req_mock_cached.headers = {"if-none-match": etag}
         resp304 = asyncio.run(get_show_poster(s.id, req_mock_cached))
         self.assertEqual(resp304.status_code, 304)
+        self.assertEqual(resp304.headers.get("Cache-Control"), "no-cache, must-revalidate")
+        self.assertNotIn("immutable", resp304.headers.get("Cache-Control", ""))
 
     def test_upload_show_cover_endpoint(self):
         from app.api.shows import upload_show_cover
@@ -303,10 +321,10 @@ class TestCoverServiceEndpointsAndDb(unittest.TestCase):
 
         resp = asyncio.run(upload_show_cover(s.id, file=upload_obj, db=self.db, current_user=self.user))
         self.assertTrue(resp["success"])
-        self.assertEqual(resp["poster_url"], f"/api/v1/shows/{s.id}/poster")
+        self.assertTrue(resp["poster_url"].startswith(f"/api/v1/shows/{s.id}/poster?v="))
 
         self.db.refresh(s)
-        self.assertEqual(s.poster_url, f"/api/v1/shows/{s.id}/poster")
+        self.assertTrue(s.poster_url.startswith(f"/api/v1/shows/{s.id}/poster?v="))
         self.assertTrue(os.path.isfile(get_show_poster_path(s.id)))
         with open(get_show_poster_path(s.id), "rb") as f:
             self.assertEqual(f.read(), file_bytes)
@@ -328,6 +346,8 @@ class TestCoverServiceEndpointsAndDb(unittest.TestCase):
         asyncio.run(save_collection_poster(coll.id, b"coll_image_content"))
         resp = asyncio.run(get_collection_poster(coll.id, req_mock))
         self.assertEqual(resp.media_type, "image/jpeg")
+        self.assertEqual(resp.headers.get("Cache-Control"), "no-cache, must-revalidate")
+        self.assertNotIn("immutable", resp.headers.get("Cache-Control", ""))
         etag = resp.headers.get("ETag")
         self.assertIsNotNone(etag)
 
@@ -335,6 +355,8 @@ class TestCoverServiceEndpointsAndDb(unittest.TestCase):
         req_cached.headers = {"if-none-match": etag}
         resp304 = asyncio.run(get_collection_poster(coll.id, req_cached))
         self.assertEqual(resp304.status_code, 304)
+        self.assertEqual(resp304.headers.get("Cache-Control"), "no-cache, must-revalidate")
+        self.assertNotIn("immutable", resp304.headers.get("Cache-Control", ""))
 
     def test_get_collection_backdrop_endpoint(self):
         from app.api.collections_routes import get_collection_backdrop
@@ -353,6 +375,8 @@ class TestCoverServiceEndpointsAndDb(unittest.TestCase):
         asyncio.run(save_collection_backdrop(coll.id, b"coll_backdrop_content"))
         resp = asyncio.run(get_collection_backdrop(coll.id, req_mock))
         self.assertEqual(resp.media_type, "image/jpeg")
+        self.assertEqual(resp.headers.get("Cache-Control"), "no-cache, must-revalidate")
+        self.assertNotIn("immutable", resp.headers.get("Cache-Control", ""))
         etag = resp.headers.get("ETag")
         self.assertIsNotNone(etag)
 
@@ -360,6 +384,8 @@ class TestCoverServiceEndpointsAndDb(unittest.TestCase):
         req_cached.headers = {"if-none-match": etag}
         resp304 = asyncio.run(get_collection_backdrop(coll.id, req_cached))
         self.assertEqual(resp304.status_code, 304)
+        self.assertEqual(resp304.headers.get("Cache-Control"), "no-cache, must-revalidate")
+        self.assertNotIn("immutable", resp304.headers.get("Cache-Control", ""))
 
     def test_delete_show_deletes_cover_folder(self):
         from app.schemas import DeleteContentPayload

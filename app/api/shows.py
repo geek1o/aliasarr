@@ -178,6 +178,15 @@ def _attach_computed_fields(db: Session, shows: list[Show]) -> list[ShowOut]:
         item.next_airing = next_airing.get(show.id) or show.premiere_date
         item.collection_title = show.collection.title if getattr(show, "collection", None) else None
         item.collection_backdrop_url = show.collection.backdrop_url if (getattr(show, "collection", None) and show.collection.backdrop_url) else None
+
+        from app.services.cover_service import attach_version_to_cover_url
+        ts_obj = getattr(show, "last_metadata_refresh_at", None) or getattr(show, "created_at", None)
+        item.poster_url = attach_version_to_cover_url(item.poster_url, ts_obj)
+        if item.collection_backdrop_url:
+            c_obj = getattr(show, "collection", None)
+            c_ts = getattr(c_obj, "last_metadata_refresh_at", None) or getattr(c_obj, "created_at", None) if c_obj else None
+            item.collection_backdrop_url = attach_version_to_cover_url(item.collection_backdrop_url, c_ts)
+
         out.append(item)
     return out
 
@@ -3267,9 +3276,9 @@ async def get_show_poster(
     etag = get_cover_etag(poster_path)
     if_none_match = request.headers.get("if-none-match")
     if etag and if_none_match and if_none_match.strip() == etag:
-        return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "public, max-age=2592000, immutable"})
+        return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "no-cache, must-revalidate"})
 
-    headers = {"Cache-Control": "public, max-age=2592000, immutable"}
+    headers = {"Cache-Control": "no-cache, must-revalidate"}
     if etag:
         headers["ETag"] = etag
 
@@ -3286,7 +3295,7 @@ async def upload_show_cover(
     """
     Прямая загрузка обложки пользователем:
     сохраняет файл на диск в /config/MediaCover/shows/{show_id}/poster.jpg,
-    выполняя оптимизацию размера, и обновляет poster_url.
+    выполняя оптимизацию размера, и обновляет poster_url с версионированием.
     """
     from app.services.cover_service import save_show_poster
 
@@ -3299,6 +3308,7 @@ async def upload_show_cover(
         raise HTTPException(400, "Файл пуст")
 
     local_url = await save_show_poster(show.id, contents)
+    show.last_metadata_refresh_at = dt.datetime.utcnow()
     show.poster_url = local_url
     db.commit()
     db.refresh(show)

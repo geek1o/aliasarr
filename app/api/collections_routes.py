@@ -130,14 +130,16 @@ def list_collections(
             except Exception:
                 pass
 
+        from app.services.cover_service import attach_version_to_cover_url
+        c_ts = getattr(c, "last_metadata_refresh_at", None) or getattr(c, "created_at", None)
         out.append(
             MovieCollectionOut(
                 id=c.id,
                 tmdb_collection_id=c.tmdb_collection_id,
                 title=c.title,
                 overview=c.overview,
-                poster_url=c.poster_url,
-                backdrop_url=c.backdrop_url,
+                poster_url=attach_version_to_cover_url(c.poster_url, c_ts),
+                backdrop_url=attach_version_to_cover_url(c.backdrop_url, c_ts),
                 monitored=c.monitored,
                 quality_profile_id=c.quality_profile_id,
                 root_folder=c.root_folder,
@@ -363,13 +365,16 @@ async def get_collection_detail(
         except Exception:
             pass
 
+    from app.services.cover_service import attach_version_to_cover_url
+    c_ts = getattr(coll, "last_metadata_refresh_at", None) or getattr(coll, "created_at", None)
+
     return MovieCollectionDetailOut(
         id=coll.id,
         tmdb_collection_id=coll.tmdb_collection_id,
         title=coll.title,
         overview=coll.overview,
-        poster_url=coll.poster_url,
-        backdrop_url=coll.backdrop_url,
+        poster_url=attach_version_to_cover_url(coll.poster_url, c_ts),
+        backdrop_url=attach_version_to_cover_url(coll.backdrop_url, c_ts),
         monitored=bool(coll.monitored) if coll.monitored is not None else True,
         quality_profile_id=coll.quality_profile_id,
         root_folder=coll.root_folder,
@@ -640,9 +645,9 @@ async def get_collection_poster(
     etag = get_cover_etag(poster_path)
     if_none_match = request.headers.get("if-none-match")
     if etag and if_none_match and if_none_match.strip() == etag:
-        return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "public, max-age=2592000, immutable"})
+        return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "no-cache, must-revalidate"})
 
-    headers = {"Cache-Control": "public, max-age=2592000, immutable"}
+    headers = {"Cache-Control": "no-cache, must-revalidate"}
     if etag:
         headers["ETag"] = etag
 
@@ -683,9 +688,9 @@ async def get_collection_backdrop(
     etag = get_cover_etag(backdrop_path)
     if_none_match = request.headers.get("if-none-match")
     if etag and if_none_match and if_none_match.strip() == etag:
-        return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "public, max-age=2592000, immutable"})
+        return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "no-cache, must-revalidate"})
 
-    headers = {"Cache-Control": "public, max-age=2592000, immutable"}
+    headers = {"Cache-Control": "no-cache, must-revalidate"}
     if etag:
         headers["ETag"] = etag
 

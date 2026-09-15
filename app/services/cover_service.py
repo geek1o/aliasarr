@@ -3,7 +3,7 @@ import io
 import shutil
 import base64
 import logging
-from typing import Optional
+from typing import Optional, Any
 
 logger = logging.getLogger(__name__)
 
@@ -92,10 +92,55 @@ def optimize_image(
         return image_bytes
 
 
+def attach_version_to_cover_url(url: Optional[str], timestamp_obj: Optional[Any] = None) -> Optional[str]:
+    """
+    Добавляет параметр ?v={timestamp} к локальному URL обложки или фона.
+    Если параметр версии уже присутствует или URL внешний, возвращает исходный URL.
+    При отсутствии переданного timestamp_obj пытается взять время модификации mtime файла с диска.
+    """
+    if not url or not isinstance(url, str):
+        return url
+    trimmed = url.strip()
+    if "?" in trimmed:
+        return trimmed
+
+    # Проверяем, локальный ли это URL постера или бэкдропа
+    mtime = None
+    if timestamp_obj:
+        try:
+            mtime = int(timestamp_obj.timestamp())
+        except Exception:
+            mtime = None
+
+    if mtime is None:
+        try:
+            if trimmed.startswith("/api/v1/shows/") and trimmed.endswith("/poster"):
+                sid = int(trimmed.split("/")[4])
+                p_path = get_show_poster_path(sid)
+                if os.path.isfile(p_path):
+                    mtime = int(os.path.getmtime(p_path))
+            elif trimmed.startswith("/api/v1/collections/") and trimmed.endswith("/poster"):
+                cid = int(trimmed.split("/")[4])
+                p_path = get_collection_poster_path(cid)
+                if os.path.isfile(p_path):
+                    mtime = int(os.path.getmtime(p_path))
+            elif trimmed.startswith("/api/v1/collections/") and trimmed.endswith("/backdrop"):
+                cid = int(trimmed.split("/")[4])
+                b_path = get_collection_backdrop_path(cid)
+                if os.path.isfile(b_path):
+                    mtime = int(os.path.getmtime(b_path))
+        except Exception:
+            mtime = None
+
+    if mtime is not None:
+        return f"{trimmed}?v={mtime}"
+    return trimmed
+
+
 async def save_show_poster(show_id: int, image_bytes: bytes) -> str:
     """
     Оптимизирует и сохраняет постер тайтла на диск в /config/MediaCover/shows/{show_id}/poster.jpg.
-    Возвращает локальный URL эндпоинта /api/v1/shows/{show_id}/poster.
+    Возвращает локальный URL эндпоинта /api/v1/shows/{show_id}/poster с версией ?v={mtime}.
     """
     opt_bytes = optimize_image(image_bytes)
     poster_dir = get_show_poster_dir(show_id)
@@ -103,13 +148,17 @@ async def save_show_poster(show_id: int, image_bytes: bytes) -> str:
     poster_path = get_show_poster_path(show_id)
     with open(poster_path, "wb") as f:
         f.write(opt_bytes)
-    return f"/api/v1/shows/{show_id}/poster"
+    try:
+        mtime = int(os.path.getmtime(poster_path))
+        return f"/api/v1/shows/{show_id}/poster?v={mtime}"
+    except Exception:
+        return f"/api/v1/shows/{show_id}/poster"
 
 
 async def save_collection_poster(collection_id: int, image_bytes: bytes) -> str:
     """
     Оптимизирует и сохраняет постер коллекции на диск в /config/MediaCover/collections/{collection_id}/poster.jpg.
-    Возвращает локальный URL эндпоинта /api/v1/collections/{collection_id}/poster.
+    Возвращает локальный URL эндпоинта /api/v1/collections/{collection_id}/poster с версией ?v={mtime}.
     """
     opt_bytes = optimize_image(image_bytes)
     poster_dir = get_collection_poster_dir(collection_id)
@@ -117,13 +166,17 @@ async def save_collection_poster(collection_id: int, image_bytes: bytes) -> str:
     poster_path = get_collection_poster_path(collection_id)
     with open(poster_path, "wb") as f:
         f.write(opt_bytes)
-    return f"/api/v1/collections/{collection_id}/poster"
+    try:
+        mtime = int(os.path.getmtime(poster_path))
+        return f"/api/v1/collections/{collection_id}/poster?v={mtime}"
+    except Exception:
+        return f"/api/v1/collections/{collection_id}/poster"
 
 
 async def download_and_store_show_cover(show_id: int, remote_url_or_data: str) -> Optional[str]:
     """
     Скачивает постер по внешнему URL (CDN) или декодирует Base64 DataURL,
-    сохраняет оптимизированный файл на диск и возвращает локальный URL.
+    сохраняет оптимизированный файл на диск и возвращает локальный URL с параметром версии ?v={mtime}.
     """
     if not remote_url_or_data or not str(remote_url_or_data).strip():
         return None
@@ -131,8 +184,14 @@ async def download_and_store_show_cover(show_id: int, remote_url_or_data: str) -
     raw_val = str(remote_url_or_data).strip()
 
     # 1. Если это уже локальный эндпоинт и файл существует на диске
-    if raw_val.startswith(f"/api/v1/shows/{show_id}/poster") or raw_val.startswith(f"/api/v1/shows/{show_id}/poster?"):
-        if os.path.isfile(get_show_poster_path(show_id)):
+    if raw_val.startswith(f"/api/v1/shows/{show_id}/poster"):
+        poster_path = get_show_poster_path(show_id)
+        if os.path.isfile(poster_path):
+            if "?" not in raw_val:
+                try:
+                    return f"/api/v1/shows/{show_id}/poster?v={int(os.path.getmtime(poster_path))}"
+                except Exception:
+                    pass
             return raw_val
 
     # 2. Если это DataURL Base64 (ручная загрузка пользователем)
@@ -164,7 +223,7 @@ async def download_and_store_show_cover(show_id: int, remote_url_or_data: str) -
 async def download_and_store_collection_cover(collection_id: int, remote_url_or_data: str) -> Optional[str]:
     """
     Скачивает постер коллекции по внешнему URL (TMDb) или декодирует Base64,
-    сохраняет файл на диск и возвращает локальный URL.
+    сохраняет файл на диск и возвращает локальный URL с параметром версии ?v={mtime}.
     """
     if not remote_url_or_data or not str(remote_url_or_data).strip():
         return None
@@ -172,7 +231,13 @@ async def download_and_store_collection_cover(collection_id: int, remote_url_or_
     raw_val = str(remote_url_or_data).strip()
 
     if raw_val.startswith(f"/api/v1/collections/{collection_id}/poster"):
-        if os.path.isfile(get_collection_poster_path(collection_id)):
+        c_path = get_collection_poster_path(collection_id)
+        if os.path.isfile(c_path):
+            if "?" not in raw_val:
+                try:
+                    return f"/api/v1/collections/{collection_id}/poster?v={int(os.path.getmtime(c_path))}"
+                except Exception:
+                    pass
             return raw_val
 
     if raw_val.startswith("data:image/"):
@@ -202,7 +267,7 @@ async def save_collection_backdrop(collection_id: int, image_bytes: bytes) -> st
     """
     Оптимизирует и сохраняет фоновое изображение (backdrop) коллекции на диск в
     /config/MediaCover/collections/{collection_id}/backdrop.jpg.
-    Возвращает локальный URL эндпоинта /api/v1/collections/{collection_id}/backdrop.
+    Возвращает локальный URL эндпоинта /api/v1/collections/{collection_id}/backdrop с версией ?v={mtime}.
     """
     opt_bytes = optimize_image(image_bytes, max_width=1280, max_height=720, quality=80)
     poster_dir = get_collection_poster_dir(collection_id)
@@ -210,13 +275,17 @@ async def save_collection_backdrop(collection_id: int, image_bytes: bytes) -> st
     backdrop_path = get_collection_backdrop_path(collection_id)
     with open(backdrop_path, "wb") as f:
         f.write(opt_bytes)
-    return f"/api/v1/collections/{collection_id}/backdrop"
+    try:
+        mtime = int(os.path.getmtime(backdrop_path))
+        return f"/api/v1/collections/{collection_id}/backdrop?v={mtime}"
+    except Exception:
+        return f"/api/v1/collections/{collection_id}/backdrop"
 
 
 async def download_and_store_collection_backdrop(collection_id: int, remote_url_or_data: str) -> Optional[str]:
     """
     Скачивает фон коллекции по внешнему URL (TMDb) или декодирует Base64,
-    сохраняет файл на диск и возвращает локальный URL.
+    сохраняет файл на диск и возвращает локальный URL с параметром версии ?v={mtime}.
     """
     if not remote_url_or_data or not str(remote_url_or_data).strip():
         return None
@@ -224,7 +293,13 @@ async def download_and_store_collection_backdrop(collection_id: int, remote_url_
     raw_val = str(remote_url_or_data).strip()
 
     if raw_val.startswith(f"/api/v1/collections/{collection_id}/backdrop"):
-        if os.path.isfile(get_collection_backdrop_path(collection_id)):
+        b_path = get_collection_backdrop_path(collection_id)
+        if os.path.isfile(b_path):
+            if "?" not in raw_val:
+                try:
+                    return f"/api/v1/collections/{collection_id}/backdrop?v={int(os.path.getmtime(b_path))}"
+                except Exception:
+                    pass
             return raw_val
 
     if raw_val.startswith("data:image/"):
