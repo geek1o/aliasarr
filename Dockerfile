@@ -23,8 +23,14 @@ RUN mkdir -p /tmp/sqlite && cd /tmp/sqlite && \
     ./configure --prefix=/usr --enable-all --disable-static && \
     make -j$(nproc) && \
     make install && \
+    for dir in $(find /usr/lib /lib /usr/local/lib -name "libsqlite3.so*" 2>/dev/null | xargs -n1 dirname 2>/dev/null | sort -u); do \
+        if [ "$dir" != "/usr/lib" ] && [ -d "$dir" ]; then \
+            cp -df /usr/lib/libsqlite3.so* "$dir/" 2>/dev/null || true; \
+        fi \
+    done && \
     ldconfig && \
-    cd / && rm -rf /tmp/sqlite
+    cd / && rm -rf /tmp/sqlite && \
+    python3 -c "import sqlite3; print('>>> Verified SQLite version in Python:', sqlite3.sqlite_version); assert sqlite3.sqlite_version.startswith('3.53'), f'SQLite version mismatch: {sqlite3.sqlite_version}'"
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
