@@ -267,11 +267,11 @@ class TestCoverServiceEndpointsAndDb(unittest.TestCase):
 
             self.db.refresh(s1)
             self.db.refresh(s2)
-            self.assertEqual(s1.poster_url, f"/api/v1/shows/{s1.id}/poster")
+            self.assertTrue(s1.poster_url.startswith(f"/api/v1/shows/{s1.id}/poster?v="))
             self.assertEqual(s1.poster_source_url, "https://image.tmdb.org/t/p/original/show1.jpg")
             self.assertTrue(os.path.isfile(get_show_poster_path(s1.id)))
 
-            self.assertEqual(s2.poster_url, f"/api/v1/shows/{s2.id}/poster")
+            self.assertTrue(s2.poster_url.startswith(f"/api/v1/shows/{s2.id}/poster?v="))
             self.assertTrue(os.path.isfile(get_show_poster_path(s2.id)))
 
     def test_get_show_poster_endpoint_and_caching(self):

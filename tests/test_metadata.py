@@ -248,7 +248,7 @@ class TestRadarrMetadata(unittest.TestCase):
                 res = await refresh_show_metadata(mock_db, mock_show)
                 self.assertTrue(res["updated"])
                 self.assertEqual(mock_show.overview, "Updated Frieren synopsis")
-                self.assertEqual(mock_show.poster_url, f"/api/v1/shows/{mock_show.id}/poster")
+                self.assertTrue(mock_show.poster_url.startswith(f"/api/v1/shows/{mock_show.id}/poster"))
                 self.assertEqual(mock_show.poster_source_url, "https://artworks.thetvdb.com/frieren.jpg")
                 self.assertEqual(existing_ep8.title, "Frieren the Slayer")
                 mock_db.commit.assert_called()
