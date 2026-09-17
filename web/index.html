@@ -4431,8 +4431,11 @@
     <button class="modal-close" onclick="closeModal('folder-picker-modal')" aria-label="Закрыть"><i data-lucide="x"></i></button>
     <h3 style="margin-top:0;" data-i18n="folder_picker.title">Выбор папки</h3>
     <div class="form-row" style="margin-bottom:10px;">
-      <button class="btn-icon-only" title="Наверх" data-i18n-title="folder_picker.up_title" onclick="folderPickerNavigateUp()">↑</button>
-      <span class="mono" id="folder-picker-current-path" style="flex:1; word-break:break-all;"></span>
+      <button class="btn-icon-only" id="folder-picker-up-btn" title="Наверх" data-i18n-title="folder_picker.up_title" onclick="folderPickerNavigateUp()" aria-label="Наверх"><i data-lucide="arrow-up" class="ico-sm"></i></button>
+      <input type="text" class="input mono" id="folder-picker-current-path" style="flex:1;" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"
+             placeholder="/" data-i18n-placeholder="folder_picker.path_placeholder"
+             onkeydown="if(event.key==='Enter'){event.preventDefault(); folderPickerGoToTypedPath();}">
+      <button class="btn btn-secondary btn-small" onclick="folderPickerGoToTypedPath()" data-i18n="folder_picker.btn_go">Перейти</button>
     </div>
     <div id="folder-picker-list" class="folder-picker-list"></div>
     <div class="form-row" style="margin-top:14px;">
