@@ -54,13 +54,18 @@ from app.services.audit_service import log_audit
 from app.services.parser import ParsedRelease, ReleaseKind, parse_episode
 from app.services.postprocess import (
     _SAMPLE_RE,
+    COMPANION_EXTENSIONS,
+    DELETABLE_COMPANION_EXTENSIONS,
     VIDEO_EXTENSIONS,
     apply_media_permissions,
     copy_file_with_progress,
     extract_companion_tag,
     find_release_files,
     find_video_files,
+    episode_number_in_name,
     get_show_default_path,
+    is_companion_file_name,
+    iter_companion_files,
     match_companion_files_for_episode,
     move_file_with_progress,
     natural_sort_key,
@@ -802,17 +807,12 @@ async def delete_content(
                         deleted_files += 1
                         season_folders_to_check.add(os.path.dirname(fpath))
 
-                        # Удаляем сопутствующие файлы субтитров/аудио
-                        fstem = os.path.splitext(fpath)[0]
-                        parent_dir = os.path.dirname(fpath)
-                        if os.path.isdir(parent_dir):
-                            for sibling in os.listdir(parent_dir):
-                                s_full = os.path.join(parent_dir, sibling)
-                                if os.path.isfile(s_full) and s_full.startswith(fstem) and s_full != fpath:
-                                    try:
-                                        os.remove(s_full)
-                                    except Exception:
-                                        pass
+                        # Удаляем сопутствующие файлы субтитров/аудио/обложек
+                        for companion in iter_companion_files(fpath, DELETABLE_COMPANION_EXTENSIONS):
+                            try:
+                                os.remove(companion)
+                            except Exception:
+                                pass
                     except Exception:
                         pass
 
@@ -829,16 +829,28 @@ async def delete_content(
 
             db.add(ep)
 
-        # Удаляем пустые папки сезонов
+        # Удаляем опустевшие папки сезонов.
+        # Папка сезона — это родитель удалённого файла, а он не обязан быть
+        # вложенной папкой: при импорте в корень тайтла или в корень медиатеки
+        # сюда попадала бы сама корневая папка, и rmtree сносил бы её целиком.
         if payload.delete_files:
+            show_root = os.path.abspath(show.path) if show.path else None
             for s_dir in season_folders_to_check:
-                if s_dir and os.path.isdir(s_dir):
-                    try:
-                        remaining_files = [f for f in os.listdir(s_dir) if not f.startswith(".")]
-                        if not remaining_files:
-                            shutil.rmtree(s_dir, ignore_errors=True)
-                    except Exception:
-                        pass
+                if not s_dir or not os.path.isdir(s_dir):
+                    continue
+                s_dir_abs = os.path.abspath(s_dir)
+                if show_root and s_dir_abs == show_root:
+                    continue
+                try:
+                    require_library_descendant(s_dir_abs, settings)
+                except UnsafeMediaPathError:
+                    continue
+                try:
+                    remaining_files = [f for f in os.listdir(s_dir_abs) if not f.startswith(".")]
+                    if not remaining_files:
+                        shutil.rmtree(s_dir_abs, ignore_errors=True)
+                except Exception:
+                    pass
 
         db.commit()
 
@@ -885,17 +897,12 @@ async def delete_content(
                         os.remove(fpath)
                         deleted_files += 1
 
-                        # Удаляем сопутствующие файлы субтитров/аудио
-                        fstem = os.path.splitext(fpath)[0]
-                        parent_dir = os.path.dirname(fpath)
-                        if os.path.isdir(parent_dir):
-                            for sibling in os.listdir(parent_dir):
-                                s_full = os.path.join(parent_dir, sibling)
-                                if os.path.isfile(s_full) and s_full.startswith(fstem) and s_full != fpath:
-                                    try:
-                                        os.remove(s_full)
-                                    except Exception:
-                                        pass
+                        # Удаляем сопутствующие файлы субтитров/аудио/обложек
+                        for companion in iter_companion_files(fpath, DELETABLE_COMPANION_EXTENSIONS):
+                            try:
+                                os.remove(companion)
+                            except Exception:
+                                pass
                     except Exception:
                         pass
 
@@ -3991,30 +3998,21 @@ def execute_rename_show(
             old_stem = os.path.splitext(os.path.basename(old_full_path))[0]
             new_stem = os.path.splitext(os.path.basename(new_full_path))[0]
 
-            COMPANION_EXTS = {
-                ".srt", ".ass", ".ssa", ".sub", ".idx", ".vtt",
-                ".mka", ".ac3", ".dts", ".eac3", ".aac", ".flac", ".mp3", ".wav",
-                ".nfo", ".txt"
-            }
+            COMPANION_EXTS = COMPANION_EXTENSIONS
 
             moved_companions = set()
 
-            # 1. Файлы в той же директории, начинающиеся с old_stem
-            if os.path.exists(old_dir):
-                for f_name in os.listdir(old_dir):
-                    src_companion = os.path.join(old_dir, f_name)
-                    if not os.path.isfile(src_companion) or src_companion == old_full_path:
-                        continue
-                    ext_c = os.path.splitext(f_name)[1].lower()
-                    if f_name.startswith(old_stem) and ext_c in COMPANION_EXTS:
-                        suffix = f_name[len(old_stem):]
-                        dst_companion = os.path.join(dest_dir, f"{new_stem}{suffix}")
-                        try:
-                            shutil.move(src_companion, dst_companion)
-                            apply_media_permissions(dst_companion, is_dir=False)
-                            moved_companions.add(src_companion)
-                        except Exception as c_err:
-                            errors.append(f"Ошибка переноса {f_name}: {c_err}")
+            # 1. Спутники в той же директории (имя видеофайла + разделитель + суффикс)
+            for src_companion in iter_companion_files(old_full_path, COMPANION_EXTS):
+                f_name = os.path.basename(src_companion)
+                suffix = f_name[len(old_stem):]
+                dst_companion = os.path.join(dest_dir, f"{new_stem}{suffix}")
+                try:
+                    shutil.move(src_companion, dst_companion)
+                    apply_media_permissions(dst_companion, is_dir=False)
+                    moved_companions.add(src_companion)
+                except Exception as c_err:
+                    errors.append(f"Ошибка переноса {f_name}: {c_err}")
 
             # 2. Файлы в подпапках (Subs, Subtitles, Audio, Audios, Sound, Tracks) или по номеру серии
             potential_dirs = []
@@ -4044,7 +4042,7 @@ def execute_rename_show(
                     if parsed_c and parsed_c.episodes and any(e in ep_nums for e in parsed_c.episodes):
                         if parsed_c.season is None or parsed_c.season == ep.season_number:
                             is_match = True
-                    elif any(f"{n:02d}" in f_name or f"e{n:02d}" in f_name.lower() or f"- {n}" in f_name for n in ep_nums if n is not None):
+                    elif episode_number_in_name(f_name, ep_nums):
                         is_match = True
 
                     if is_match:
