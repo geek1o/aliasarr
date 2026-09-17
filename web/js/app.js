@@ -375,6 +375,20 @@ const TRANSLATIONS = {
     "common.port": "Порт",
     "common.username": "Логин",
     "common.password": "Пароль",
+    "change_folder.btn": "Сменить папку",
+    "change_folder.btn_tooltip": "Выбрать другую папку для тайтла — с переносом файлов или без него",
+    "change_folder.title": "Папка тайтла",
+    "change_folder.current_label": "Текущая папка",
+    "change_folder.new_label": "Новая папка",
+    "change_folder.path_placeholder": "/media/series/Название",
+    "change_folder.picker_hint": "В окне обзора можно подняться выше, ввести путь вручную или создать новую папку.",
+    "change_folder.mode_label": "Что сделать с файлами",
+    "change_folder.mode_move": "Перенести файлы",
+    "change_folder.mode_move_desc": "Содержимое текущей папки переедет в новую, пути серий обновятся, пустая старая папка будет удалена.",
+    "change_folder.mode_relink": "Только изменить путь",
+    "change_folder.mode_relink_desc": "Файлы уже лежат в новой папке. Aliasarr обновит пути в базе и не тронет диск.",
+    "change_folder.btn_apply": "Сменить папку",
+    "change_folder.toast_done": "Папка тайтла изменена",
     "common.error": "Ошибка",
     "common.loading": "Загрузка…",
     "common.none": "Нет",
@@ -1865,6 +1879,20 @@ const TRANSLATIONS = {
     "common.port": "Port",
     "common.username": "Username",
     "common.password": "Password",
+    "change_folder.btn": "Change Folder",
+    "change_folder.btn_tooltip": "Pick another folder for this title, with or without moving the files",
+    "change_folder.title": "Title Folder",
+    "change_folder.current_label": "Current folder",
+    "change_folder.new_label": "New folder",
+    "change_folder.path_placeholder": "/media/series/Title",
+    "change_folder.picker_hint": "In the browser you can go up, type a path by hand or create a new folder.",
+    "change_folder.mode_label": "What to do with the files",
+    "change_folder.mode_move": "Move the files",
+    "change_folder.mode_move_desc": "The current folder contents move to the new one, episode paths are updated and the emptied old folder is removed.",
+    "change_folder.mode_relink": "Only change the path",
+    "change_folder.mode_relink_desc": "The files are already in the new folder. Aliasarr updates the paths in the database and leaves the disk alone.",
+    "change_folder.btn_apply": "Change Folder",
+    "change_folder.toast_done": "Title folder changed",
     "common.error": "Error",
     "common.loading": "Loading…",
     "common.none": "None",
@@ -9122,6 +9150,9 @@ async function refreshShowModal() {
         <button type="button" class="btn btn-secondary btn-small" onclick="openPreviewRenameModal(${show.id})" title="${t("show.btn_preview_rename")}">
           <i data-lucide="folder-sync" class="ico-sm"></i> <span>${t("show.btn_preview_rename")}</span>
         </button>
+        <button type="button" class="btn btn-secondary btn-small" onclick="openChangeShowFolderModal(${show.id})" title="${t("change_folder.btn_tooltip")}">
+          <i data-lucide="folder-symlink" class="ico-sm"></i> <span>${t("change_folder.btn")}</span>
+        </button>
         <button type="button" class="btn btn-secondary btn-small" onclick="openManualImportModal(${show.id})" title="${t("show.manual_import")}">
           <i data-lucide="hard-drive-download" class="ico-sm"></i> <span>${t("show.manual_import")}</span>
         </button>
@@ -9129,6 +9160,10 @@ async function refreshShowModal() {
           <i data-lucide="shield-check" class="ico-sm"></i> <span>${CURRENT_LANG === 'en' ? 'Permissions' : 'Права доступа'}</span>
         </button>
         ` : ""}
+        ${!show.path ? `
+        <button type="button" class="btn btn-secondary btn-small" onclick="openChangeShowFolderModal(${show.id})" title="${t("change_folder.btn_tooltip")}">
+          <i data-lucide="folder-symlink" class="ico-sm"></i> <span>${t("change_folder.btn")}</span>
+        </button>` : ""}
         ${(Boolean(CACHED_APP_SETTINGS?.enable_remap_button ?? (localStorage.getItem("aliasarr_enable_remap_button") === "true"))) ? `
         <button type="button" class="btn btn-secondary btn-small" onclick="openShowRemapModal(${show.id})" title="${t("show.remap_tooltip")}">
           <i data-lucide="link-2" class="ico-sm"></i> <span>${t("show.btn_remap")}</span>
@@ -21543,9 +21578,145 @@ async function folderPickerCreateDir() {
 function folderPickerConfirm() {
   if (FOLDER_PICKER_TARGET_ID) {
     const target = document.getElementById(FOLDER_PICKER_TARGET_ID);
-    if (target) target.value = FOLDER_PICKER_CURRENT_PATH;
+    if (target) {
+      target.value = FOLDER_PICKER_CURRENT_PATH;
+      // Присвоение value не порождает событий, а формы вокруг поля (например,
+      // предпросмотр смены папки) обновляются именно по ним.
+      target.dispatchEvent(new Event("input", { bubbles: true }));
+      target.dispatchEvent(new Event("change", { bubbles: true }));
+    }
   }
   closeModal("folder-picker-modal");
+}
+
+// ---------- СМЕНА ПАПКИ ТАЙТЛА ----------
+let CHANGE_FOLDER_SHOW_ID = null;
+let CHANGE_FOLDER_PREVIEW_TIMER = null;
+let CHANGE_FOLDER_PREVIEW_SEQ = 0;
+
+function changeFolderSelectedMode() {
+  const checked = document.querySelector('input[name="change-folder-mode"]:checked');
+  return checked ? checked.value : "move";
+}
+
+async function openChangeShowFolderModal(showId) {
+  CHANGE_FOLDER_SHOW_ID = showId;
+
+  let show = null;
+  try {
+    show = await api(`/api/v1/shows/${showId}`);
+  } catch (e) {
+    toast((CURRENT_LANG === "en" ? "Error: " : "Ошибка: ") + formatToastMessage(e.message), true);
+    return;
+  }
+
+  const currentEl = document.getElementById("change-folder-current");
+  const input = document.getElementById("change-folder-path-input");
+  const previewEl = document.getElementById("change-folder-preview");
+  const moveRadio = document.querySelector('input[name="change-folder-mode"][value="move"]');
+
+  if (currentEl) currentEl.textContent = show.path || (CURRENT_LANG === "en" ? "not set" : "не задана");
+  if (input) input.value = show.path || "";
+  if (moveRadio) moveRadio.checked = true;
+  if (previewEl) previewEl.innerHTML = "";
+
+  openModal("change-folder-modal");
+  if (input) input.focus();
+}
+
+function scheduleChangeFolderPreview() {
+  clearTimeout(CHANGE_FOLDER_PREVIEW_TIMER);
+  CHANGE_FOLDER_PREVIEW_TIMER = setTimeout(loadChangeFolderPreview, 350);
+}
+
+async function loadChangeFolderPreview() {
+  const previewEl = document.getElementById("change-folder-preview");
+  const input = document.getElementById("change-folder-path-input");
+  if (!previewEl || !input || !CHANGE_FOLDER_SHOW_ID) return;
+
+  const path = (input.value || "").trim();
+  if (!path) { previewEl.innerHTML = ""; return; }
+
+  // Ответы приходят вразнобой при быстром наборе — показываем только последний.
+  const seq = ++CHANGE_FOLDER_PREVIEW_SEQ;
+  try {
+    const data = await api(`/api/v1/shows/${CHANGE_FOLDER_SHOW_ID}/change-folder/preview?path=${encodeURIComponent(path)}`);
+    if (seq !== CHANGE_FOLDER_PREVIEW_SEQ) return;
+    previewEl.innerHTML = renderChangeFolderPreview(data);
+  } catch (e) {
+    if (seq !== CHANGE_FOLDER_PREVIEW_SEQ) return;
+    previewEl.innerHTML = `<span style="color:var(--danger)">${escapeHtml(formatToastMessage(e.message))}</span>`;
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+function renderChangeFolderPreview(data) {
+  const isEn = CURRENT_LANG === "en";
+  const mode = changeFolderSelectedMode();
+  const lines = [];
+
+  if (mode === "move" && data.old_path_exists) {
+    lines.push(isEn
+      ? `Will move ${data.files_to_move} file(s), ${formatBytes(data.bytes_to_move)}.`
+      : `Будет перенесено файлов: ${data.files_to_move}, объём: ${formatBytes(data.bytes_to_move)}.`);
+  } else if (mode === "relink") {
+    lines.push(isEn
+      ? `Files stay where they are; ${data.episodes_linked} episode path(s) will be re-pointed.`
+      : `Файлы останутся на месте, будет перепривязано путей серий: ${data.episodes_linked}.`);
+  }
+
+  if (!data.target_exists) {
+    lines.push(isEn ? "The target folder will be created." : "Новая папка будет создана.");
+  }
+
+  const warnings = (data.warnings || []).map(w =>
+    `<div style="color:var(--warning, var(--text-muted)); display:flex; gap:6px; align-items:flex-start;">
+       <i data-lucide="alert-triangle" class="ico-xs" style="margin-top:2px;"></i><span>${escapeHtml(w)}</span>
+     </div>`).join("");
+
+  return lines.map(l => `<div>${escapeHtml(l)}</div>`).join("") + warnings;
+}
+
+async function applyChangeShowFolder() {
+  const input = document.getElementById("change-folder-path-input");
+  const btn = document.getElementById("change-folder-apply-btn");
+  if (!input || !CHANGE_FOLDER_SHOW_ID) return;
+
+  const path = (input.value || "").trim();
+  if (!path) {
+    toast(CURRENT_LANG === "en" ? "Specify the new folder" : "Укажите новую папку", true);
+    return;
+  }
+
+  const moveFiles = changeFolderSelectedMode() === "move";
+  const confirmed = await confirmModal(
+    moveFiles
+      ? (CURRENT_LANG === "en"
+          ? `Move the title files to «${path}»?`
+          : `Перенести файлы тайтла в «${path}»?`)
+      : (CURRENT_LANG === "en"
+          ? `Re-point the title to «${path}» without touching files on disk?`
+          : `Перепривязать тайтл к «${path}» без переноса файлов?`)
+  );
+  if (!confirmed) return;
+
+  await withLoading(btn, async () => {
+    try {
+      const res = await api(`/api/v1/shows/${CHANGE_FOLDER_SHOW_ID}/change-folder`, {
+        method: "POST",
+        body: JSON.stringify({ path, move_files: moveFiles }),
+      });
+
+      toast(res.message || t("change_folder.toast_done"), !res.success);
+      (res.errors || []).forEach(err => toast(err, true));
+
+      closeModal("change-folder-modal");
+      if (typeof openShowModal === "function") await openShowModal(CHANGE_FOLDER_SHOW_ID);
+      if (typeof loadShows === "function") loadShows();
+    } catch (e) {
+      toast((CURRENT_LANG === "en" ? "Error: " : "Ошибка: ") + formatToastMessage(e.message), true);
+    }
+  });
 }
 
 // =============================================================================
