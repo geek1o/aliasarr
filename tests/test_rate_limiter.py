@@ -168,6 +168,56 @@ class TestIndexerRateLimitingIntegration(unittest.IsolatedAsyncioTestCase):
                 await client.search("Bleach")
             mock_client.get.assert_not_called()
 
+    def test_torznab_parser_keeps_nested_kinozal_title_fragments(self):
+        from app.services.indexer_service import TorznabIndexerClient
+
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <rss xmlns:torznab="http://torznab.com/schemas/2015/feed"><channel><item>
+          <title><b>Олдскул</b> S01 2025 WEB-DL 1080p</title>
+          <guid>kinozal-42</guid><link>https://example.test/42.torrent</link>
+          <torznab:attr name="seeders" value="17" />
+          <torznab:attr name="size" value="1073741824" />
+        </item></channel></rss>"""
+
+        releases = TorznabIndexerClient("https://example.test")._parse_xml(xml)
+
+        self.assertEqual(len(releases), 1)
+        self.assertEqual(releases[0].title, "Олдскул S01 2025 WEB-DL 1080p")
+        self.assertEqual(releases[0].seeders, 17)
+
+    def test_torznab_parser_uses_title_attribute_fallback(self):
+        from app.services.indexer_service import TorznabIndexerClient
+
+        xml = """<rss xmlns:torznab="http://torznab.com/schemas/2015/feed"><channel><item>
+          <title></title><guid>kinozal-43</guid>
+          <torznab:attr name="releaseTitle" value="Олдскул S01 HDTV" />
+        </item></channel></rss>"""
+
+        releases = TorznabIndexerClient("https://example.test")._parse_xml(xml)
+        self.assertEqual(releases[0].title, "Олдскул S01 HDTV")
+
+    def test_torznab_restores_query_when_kinozal_omits_release_name(self):
+        from app.services.torznab import restore_query_in_release_title
+
+        self.assertEqual(
+            restore_query_in_release_title(
+                " S1-2E1-26 - 2025-2026 WEBDL - RUSSIAN",
+                "Олдскул",
+            ),
+            "Олдскул S1-2E1-26 - 2025-2026 WEBDL - RUSSIAN",
+        )
+
+    def test_torznab_does_not_prefix_complete_release_title(self):
+        from app.services.torznab import restore_query_in_release_title
+
+        self.assertEqual(
+            restore_query_in_release_title(
+                "S.W.A.T. S08E01 1080p WEB-DL",
+                "S.W.A.T.",
+            ),
+            "S.W.A.T. S08E01 1080p WEB-DL",
+        )
+
     async def test_download_torrent_429_short_retry(self):
         from app.services.download_client import _fetch_torrent_content_if_url
 

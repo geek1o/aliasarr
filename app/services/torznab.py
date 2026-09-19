@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Optional
 from xml.etree import ElementTree
@@ -22,6 +23,53 @@ except ImportError:
 from app.services.rate_limiter import RateLimitExceededError, get_rate_limiter
 
 TORZNAB_NS = {"torznab": "http://torznab.com/schemas/2015/feed"}
+
+_TITLELESS_RELEASE_PREFIX = re.compile(
+    r"^(?:s\d|e\d|\d{1,2}x\d|season\s+\d|сезон\s+\d|"
+    r"web(?:-?dl|rip)\b|hdtv\b|bd(?:remux|rip)\b|blu-?ray\b|"
+    r"(?:720|1080|2160)p\b)",
+    re.IGNORECASE,
+)
+
+
+def xml_element_text(element) -> str:
+    """Return all text from an RSS element, including nested markup.
+
+    Some Jackett indexers emit highlighted or otherwise nested title fragments.
+    ``element.text`` then contains only the prefix (and can be empty), while the
+    season/quality suffixes live in child nodes and tails.
+    """
+    if element is None:
+        return ""
+    return "".join(element.itertext()).strip()
+
+
+def torznab_release_title(item, title_element) -> str:
+    title = xml_element_text(title_element)
+    if title:
+        return title
+    for attr in item.findall("torznab:attr", TORZNAB_NS):
+        if (attr.get("name") or "").lower() in ("title", "releasetitle"):
+            value = (attr.get("value") or "").strip()
+            if value:
+                return value
+    return ""
+
+
+def restore_query_in_release_title(title: str, query: str) -> str:
+    """Restore a title omitted by an indexer's Torznab formatter.
+
+    Some Kinozal results contain only the season/episode and quality suffix,
+    for example ``S2E1-9 - 2026 WEBRip``.  Prefix only clearly metadata-led
+    titles so ordinary releases from other indexers remain untouched.
+    """
+    clean_title = (title or "").strip()
+    clean_query = (query or "").strip()
+    if not clean_title or not clean_query:
+        return clean_title
+    if not _TITLELESS_RELEASE_PREFIX.match(clean_title):
+        return clean_title
+    return f"{clean_query} {clean_title}"
 
 
 @dataclass
@@ -72,7 +120,10 @@ class TorznabClient:
                 raise RateLimitExceededError(host, actual_backoff, f"Индексатор '{host}' вернул HTTP 429. Пауза {actual_backoff}с")
             resp.raise_for_status()
             rate_limiter.record_success(host)
-            return self._parse_response(resp.text)
+            releases = self._parse_response(resp.text)
+            for release in releases:
+                release.title = restore_query_in_release_title(release.title, query)
+            return releases
 
     def _parse_response(self, xml_text: str) -> list[TorznabRelease]:
         releases: list[TorznabRelease] = []
@@ -116,9 +167,13 @@ class TorznabClient:
             comments_text = comments_el.text if comments_el is not None else None
             page_url = comments_text or (guid_text if guid_text.startswith("http") else None)
 
+            title = torznab_release_title(item, title_el)
+            if not title:
+                continue
+
             releases.append(
                 TorznabRelease(
-                    title=title_el.text or "",
+                    title=title,
                     guid=guid_text or (link_el.text if link_el is not None else ""),
                     download_url=link_el.text if link_el is not None else None,
                     page_url=page_url,

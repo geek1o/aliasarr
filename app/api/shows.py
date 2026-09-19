@@ -32,7 +32,9 @@ from app.models.db import (
     User,
 )
 
-logger = logging.getLogger(__name__)
+# DBLogHandler is attached to the ``aliasarr`` logger tree.  ``__name__`` is
+# ``app.api.shows`` and therefore bypassed the in-app Events/Logs screens.
+logger = logging.getLogger("aliasarr.api.shows")
 from app.schemas import (
     AliasCreate,
     AliasOut,
@@ -153,13 +155,23 @@ def _attach_computed_fields(db: Session, shows: list[Show]) -> list[ShowOut]:
             func.sum(case((dl_condition, 1), else_=0)),
             func.sum(case((downloading_condition, 1), else_=0)),
             func.sum(case((upgrade_condition, 1), else_=0)),
+            func.sum(case((Episode.file_size_bytes.isnot(None), Episode.file_size_bytes), else_=0)),
+            func.max(Episode.season_number),
         )
         .filter(Episode.show_id.in_(show_ids))
         .group_by(Episode.show_id)
         .all()
     )
     stats = {
-        row[0]: (row[1] or 0, row[2] or 0, int(row[3] or 0), int(row[4] or 0), int(row[5] or 0))
+        row[0]: (
+            row[1] or 0,
+            row[2] or 0,
+            int(row[3] or 0),
+            int(row[4] or 0),
+            int(row[5] or 0),
+            int(row[6] or 0),
+            int(row[7] or 0),
+        )
         for row in stats_rows
     }
 
@@ -171,10 +183,20 @@ def _attach_computed_fields(db: Session, shows: list[Show]) -> list[ShowOut]:
     )
     next_airing = dict(next_airing_rows)
 
+    previous_airing_rows = (
+        db.query(Episode.show_id, func.max(Episode.air_date))
+        .filter(Episode.show_id.in_(show_ids), Episode.air_date.isnot(None), Episode.air_date < now)
+        .group_by(Episode.show_id)
+        .all()
+    )
+    previous_airing = dict(previous_airing_rows)
+
     out = []
     for show in shows:
         item = ShowOut.model_validate(show)
-        s_count, ep_c, dl_c, dling_c, upg_c = stats.get(show.id, (0, 0, 0, 0, 0))
+        s_count, ep_c, dl_c, dling_c, upg_c, size_on_disk, latest_season = stats.get(
+            show.id, (0, 0, 0, 0, 0, 0, 0)
+        )
         item.seasons_count = s_count
         item.episodes_count = ep_c
         item.downloaded_episodes_count = dl_c
@@ -182,6 +204,9 @@ def _attach_computed_fields(db: Session, shows: list[Show]) -> list[ShowOut]:
         item.has_upgrade_pending = bool(getattr(show, "upgrade_requested", False) or upg_c > 0)
         item.upgrade_requested = bool(getattr(show, "upgrade_requested", False))
         item.next_airing = next_airing.get(show.id) or show.premiere_date
+        item.previous_airing = previous_airing.get(show.id)
+        item.latest_season = latest_season
+        item.size_on_disk_bytes = size_on_disk
         item.collection_title = show.collection.title if getattr(show, "collection", None) else None
         item.collection_backdrop_url = show.collection.backdrop_url if (getattr(show, "collection", None) and show.collection.backdrop_url) else None
 

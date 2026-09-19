@@ -525,6 +525,11 @@ class AppSettings(Base):
     language: Mapped[str] = mapped_column(String(5), default="ru")   # ru | en
     theme: Mapped[str] = mapped_column(String(20), default="dark")   # dark | light | dracula | obsidian
     scrollbar_mode: Mapped[str] = mapped_column(String(50), default="autohide")  # autohide | styled | hidden | native
+    # Nullable so existing installations keep their browser preference until the
+    # user explicitly saves it once. Afterwards these settings survive a changed
+    # hostname/protocol and cleared browser storage.
+    design_system: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default=None)
+    glass_mode: Mapped[Optional[str]] = mapped_column(String(10), nullable=True, default=None)
 
     # Настройки выбора релиза при автопоиске
     min_seeds: Mapped[int] = mapped_column(Integer, default=0)              # 0 = без ограничения

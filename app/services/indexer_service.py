@@ -20,7 +20,12 @@ except ImportError:
 
 import datetime as dt
 from app.services.rate_limiter import RateLimitExceededError, get_rate_limiter
-from app.services.torznab import TorznabRelease
+from app.services.torznab import (
+    TorznabRelease,
+    restore_query_in_release_title,
+    torznab_release_title,
+    xml_element_text,
+)
 
 logger = logging.getLogger("aliasarr.indexer_service")
 
@@ -142,8 +147,10 @@ class TorznabIndexerClient(BaseIndexerClient):
 
         url = f"{self.base_url}/api" if not self.base_url.endswith("/api") else self.base_url
         xml_text = await _fetch_text_async(url, params=params, timeout=self.timeout, min_interval_seconds=self.rate_limit_seconds, is_probe=is_probe)
-        return self._parse_xml(xml_text)
-        return self._parse_xml(xml_text)
+        releases = self._parse_xml(xml_text)
+        for release in releases:
+            release.title = restore_query_in_release_title(release.title, query)
+        return releases
 
     def _parse_xml(self, xml_text: str) -> list[TorznabRelease]:
         releases: list[TorznabRelease] = []
@@ -208,9 +215,13 @@ class TorznabIndexerClient(BaseIndexerClient):
                 if not download_url and enclosure is not None:
                     download_url = enclosure.get("url")
 
+            title = torznab_release_title(item, title_el)
+            if not title:
+                continue
+
             releases.append(
                 TorznabRelease(
-                    title=title_el.text or "",
+                    title=title,
                     guid=guid_text or download_url or "",
                     download_url=download_url,
                     page_url=page_url,
@@ -287,7 +298,7 @@ class NewznabIndexerClient(BaseIndexerClient):
 
             releases.append(
                 TorznabRelease(
-                    title=title_el.text or "",
+                    title=xml_element_text(title_el),
                     guid=guid_text or download_url or "",
                     download_url=download_url,
                     page_url=page_url,
@@ -355,7 +366,7 @@ class NyaaIndexerClient(BaseIndexerClient):
 
             releases.append(
                 TorznabRelease(
-                    title=title_el.text or "",
+                    title=xml_element_text(title_el),
                     guid=guid_text or download_url,
                     download_url=download_url,
                     page_url=page_url,
@@ -440,7 +451,7 @@ class TorrentRssIndexerClient(BaseIndexerClient):
 
             releases.append(
                 TorznabRelease(
-                    title=title_el.text or "",
+                    title=xml_element_text(title_el),
                     guid=guid_text,
                     download_url=download_url,
                     page_url=page_url,

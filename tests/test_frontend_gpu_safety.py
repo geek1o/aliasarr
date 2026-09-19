@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 STYLE_PATH = ROOT / "web" / "css" / "style.css"
+SERVARR_STYLE_PATH = ROOT / "web" / "css" / "servarr.css"
 APP_JS_PATH = ROOT / "web" / "js" / "app.js"
 HTML_PATHS = (
     ROOT / "web" / "index.html",
@@ -69,6 +70,8 @@ class TestFrontendGpuSafety(unittest.TestCase):
         self.assertIn('setAttribute("data-glass", m)', app_js)
         self.assertIn('localStorage.setItem("aliasarr_glass", m)', app_js)
         self.assertIn('getElementById("setting-glass")', app_js)
+        self.assertIn("applyDesign(s.design_system)", app_js)
+        self.assertIn("applyGlassMode(s.glass_mode)", app_js)
 
     def test_closed_release_drawer_is_not_rendered(self):
         source = read(STYLE_PATH)
@@ -82,6 +85,31 @@ class TestFrontendGpuSafety(unittest.TestCase):
         source = read(STYLE_PATH)
         row = css_rule(source, ".glass-table-wrap .data-table tbody tr")
         self.assertRegex(row, r"transition:\s*none;")
+
+    def test_interactive_search_icon_clearance_survives_servarr_override(self):
+        source = read(SERVARR_STYLE_PATH)
+        rule = css_rule(
+            source,
+            '[data-design="servarr"] .interactive-search-query-bar .search-input-wrap input.input',
+        )
+        self.assertRegex(rule, r"padding-left:\s*38px;")
+
+    def test_library_and_manual_search_sorting_are_wired(self):
+        app_js = read(APP_JS_PATH)
+        index_html = read(HTML_PATHS[0])
+        self.assertIn('id="library-sort-switcher"', index_html)
+        self.assertIn("const LIBRARY_SORT_OPTIONS", app_js)
+        self.assertIn("function sortLibraryShows(shows)", app_js)
+        self.assertIn("function setInteractiveSearchSort(key)", app_js)
+        self.assertIn("function sortInteractiveSearchResults(results)", app_js)
+
+    def test_history_rejection_reason_can_wrap_without_crushing_title(self):
+        source = read(STYLE_PATH)
+        title_rule = css_rule(source, ".history-rejected-title")
+        reason_rule = css_rule(source, ".history-rejected-reason")
+        self.assertRegex(title_rule, r"overflow-wrap:\s*anywhere;")
+        self.assertRegex(reason_rule, r"white-space:\s*normal;")
+        self.assertNotRegex(reason_rule, r"flex-shrink:\s*0;")
 
 
 if __name__ == "__main__":

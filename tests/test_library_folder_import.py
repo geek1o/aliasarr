@@ -15,6 +15,7 @@ from pathlib import Path
 
 try:
     from sqlalchemy import create_engine
+    from sqlalchemy.exc import OperationalError
     from sqlalchemy.orm import sessionmaker
 
     from app.api import library_import_routes as lir
@@ -434,7 +435,7 @@ class TestWriteResilience(unittest.TestCase):
 
         self.db.commit = flaky_commit
         lir.COMMIT_RETRY_DELAY = 0
-        lir._commit_with_retry(self.db, "тест")
+        asyncio.run(lir._commit_with_retry(self.db, "тест"))
         self.assertEqual(calls["n"], 3)
 
     def test_commit_retry_gives_up_and_reraises(self):
@@ -446,7 +447,7 @@ class TestWriteResilience(unittest.TestCase):
         self.db.commit = always_locked
         lir.COMMIT_RETRY_DELAY = 0
         with self.assertRaises(OperationalError):
-            lir._commit_with_retry(self.db, "тест")
+            asyncio.run(lir._commit_with_retry(self.db, "тест"))
 
     def test_other_operational_errors_are_not_retried(self):
         from sqlalchemy.exc import OperationalError
@@ -460,8 +461,39 @@ class TestWriteResilience(unittest.TestCase):
         self.db.commit = broken
         lir.COMMIT_RETRY_DELAY = 0
         with self.assertRaises(OperationalError):
-            lir._commit_with_retry(self.db, "тест")
+            asyncio.run(lir._commit_with_retry(self.db, "тест"))
         self.assertEqual(calls["n"], 1, "повторять бессмысленную ошибку не нужно")
+
+    def test_commit_retry_reapplies_changes_discarded_by_rollback(self):
+        show = Show(title="Retry Me", monitored=True, path="/old")
+        self.db.add(show)
+        self.db.commit()
+        show_id = show.id
+
+        calls = {"n": 0}
+        real_commit = self.db.commit
+
+        def flaky_commit():
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise OperationalError("UPDATE shows", {}, Exception("database is locked"))
+            return real_commit()
+
+        def prepare():
+            current = self.db.get(Show, show_id)
+            current.path = "/new"
+            current.monitored = False
+            self.db.add(current)
+            return current
+
+        self.db.commit = flaky_commit
+        lir.COMMIT_RETRY_DELAY = 0
+        asyncio.run(lir._commit_with_retry(self.db, "повтор", prepare=prepare))
+
+        self.db.expire_all()
+        persisted = self.db.get(Show, show_id)
+        self.assertEqual(persisted.path, "/new")
+        self.assertFalse(persisted.monitored)
 
     def test_type_mismatch_helper(self):
         self.assertTrue(lir._is_type_mismatch("movie", "series"))

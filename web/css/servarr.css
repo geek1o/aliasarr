@@ -1236,6 +1236,12 @@
   transform: none;
   transition: none;
 }
+
+/* The generic Servarr input rule is loaded after style.css and otherwise
+   replaces the icon clearance in the interactive search field. */
+[data-design="servarr"] .interactive-search-query-bar .search-input-wrap input.input {
+  padding-left: 38px;
+}
 [data-design="servarr"] select.input { padding: 0 11px; }
 [data-design="servarr"] textarea.input {
   height: auto;

@@ -49,6 +49,8 @@ class SettingsOut(BaseModel):
     language: str   # ru | en
     theme: str      # dark | light
     scrollbar_mode: str = "autohide"  # autohide | styled | hidden | native
+    design_system: Optional[str] = None  # classic | vanguard | servarr
+    glass_mode: Optional[str] = None  # off | on
 
     min_seeds: int
     prefer_most_seeded: bool
@@ -118,6 +120,8 @@ class SettingsUpdate(BaseModel):
     language: Optional[str] = None
     theme: Optional[str] = None
     scrollbar_mode: Optional[str] = None
+    design_system: Optional[str] = None
+    glass_mode: Optional[str] = None
 
     min_seeds: Optional[int] = None
     prefer_most_seeded: Optional[bool] = None
@@ -187,6 +191,8 @@ def _to_settings_out(settings, is_owner: bool = False) -> SettingsOut:
         language=settings.language,
         theme=settings.theme,
         scrollbar_mode=getattr(settings, "scrollbar_mode", "autohide") or "autohide",
+        design_system=getattr(settings, "design_system", None),
+        glass_mode=getattr(settings, "glass_mode", None),
         min_seeds=settings.min_seeds,
         prefer_most_seeded=settings.prefer_most_seeded,
         monitor_interval_minutes=settings.monitor_interval_minutes,
@@ -321,6 +327,14 @@ def update_settings(
         if payload.scrollbar_mode not in ("autohide", "styled", "hidden", "native"):
             raise HTTPException(400, "scrollbar_mode должен быть 'autohide', 'styled', 'hidden' или 'native'")
         settings.scrollbar_mode = payload.scrollbar_mode
+    if payload.design_system is not None:
+        if payload.design_system not in ("classic", "vanguard", "servarr"):
+            raise HTTPException(400, "design_system должен быть 'classic', 'vanguard' или 'servarr'")
+        settings.design_system = payload.design_system
+    if payload.glass_mode is not None:
+        if payload.glass_mode not in ("off", "on"):
+            raise HTTPException(400, "glass_mode должен быть 'off' или 'on'")
+        settings.glass_mode = payload.glass_mode
 
     if payload.min_seeds is not None:
         if payload.min_seeds < 0:

@@ -239,6 +239,8 @@ class ShowOut(BaseModel):
     downloading_episodes_count: int = 0
     size_on_disk_bytes: int = 0
     next_airing: Optional[dt.datetime] = None
+    previous_airing: Optional[dt.datetime] = None
+    latest_season: int = 0
     aliases: list[AliasOut] = []
     season_splits: list[SeasonSplitOut] = []
 

@@ -59,3 +59,28 @@ class TestSettingsScrollbar(unittest.TestCase):
         with self.assertRaises(HTTPException) as ctx:
             update_settings(payload=payload, request=mock_request, db=self.db, current_user=self.user)
         self.assertEqual(ctx.exception.status_code, 400)
+
+    def test_design_preferences_are_persisted_server_side(self):
+        get_or_create_settings(self.db)
+        result = update_settings(
+            payload=SettingsUpdate(design_system="servarr", glass_mode="on"),
+            request=MagicMock(),
+            db=self.db,
+            current_user=self.user,
+        )
+
+        self.assertEqual(result.design_system, "servarr")
+        self.assertEqual(result.glass_mode, "on")
+        settings = get_or_create_settings(self.db)
+        self.assertEqual(settings.design_system, "servarr")
+        self.assertEqual(settings.glass_mode, "on")
+
+    def test_invalid_design_preferences_are_rejected(self):
+        get_or_create_settings(self.db)
+        for payload in (
+            SettingsUpdate(design_system="unknown"),
+            SettingsUpdate(glass_mode="blur-everything"),
+        ):
+            with self.assertRaises(HTTPException) as ctx:
+                update_settings(payload=payload, request=MagicMock(), db=self.db, current_user=self.user)
+            self.assertEqual(ctx.exception.status_code, 400)

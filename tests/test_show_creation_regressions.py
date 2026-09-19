@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import unittest
 
 try:
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
-    from app.api.shows import add_alias, create_season_split, create_show, update_alias, update_season_split
-    from app.models.db import Alias, Base, SeasonSplitPart, User
+    from app.api.shows import _attach_computed_fields, add_alias, create_season_split, create_show, update_alias, update_season_split
+    from app.models.db import Alias, Base, Episode, EpisodeStatus, SeasonSplitPart, Show, User
     from app.schemas import (
         AliasCreate,
         AliasUpdate,
@@ -52,6 +53,39 @@ class TestShowCreationRegressions(unittest.TestCase):
 
         self.assertEqual(show.title, "Regression Show")
         self.assertIsNone(show.quality_profile_id)
+
+    def test_library_computed_fields_cover_sonarr_sort_values(self):
+        now = dt.datetime.utcnow()
+        show = Show(title="Sortable Show", path="/library/sortable")
+        self.db.add(show)
+        self.db.flush()
+        self.db.add_all([
+            Episode(
+                show_id=show.id,
+                season_number=1,
+                episode_number=1,
+                air_date=now - dt.timedelta(days=7),
+                status=EpisodeStatus.DOWNLOADED,
+                file_path="/library/sortable/S01E01.mkv",
+                file_size_bytes=1_000,
+            ),
+            Episode(
+                show_id=show.id,
+                season_number=3,
+                episode_number=1,
+                air_date=now + dt.timedelta(days=7),
+                status=EpisodeStatus.WANTED,
+                file_size_bytes=None,
+            ),
+        ])
+        self.db.commit()
+
+        result = _attach_computed_fields(self.db, [show])[0]
+
+        self.assertEqual(result.latest_season, 3)
+        self.assertEqual(result.size_on_disk_bytes, 1_000)
+        self.assertEqual(result.previous_airing, now - dt.timedelta(days=7))
+        self.assertEqual(result.next_airing, now + dt.timedelta(days=7))
 
     def test_create_and_update_scoped_alias_fields(self):
         show = asyncio.run(

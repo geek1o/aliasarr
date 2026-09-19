@@ -11,15 +11,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import time
-from typing import Optional
+from typing import Callable, Optional, TypeVar
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.models.db import Show, User
 from app.services.library_import import (
     ParsedFolder,
@@ -31,7 +30,7 @@ from app.services.library_import import (
 from app.services.settings_service import get_or_create_settings
 from app.services.user_service import require_permission
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("aliasarr.api.library_import")
 
 router = APIRouter(prefix="/api/v1/library-import", tags=["library-import"])
 
@@ -48,17 +47,29 @@ def _is_locked_error(exc: BaseException) -> bool:
     return "database is locked" in str(exc).lower() or "database is busy" in str(exc).lower()
 
 
-def _commit_with_retry(db: Session, what: str) -> None:
+_Prepared = TypeVar("_Prepared")
+
+
+async def _commit_with_retry(
+    db: Session,
+    what: str,
+    prepare: Optional[Callable[[], _Prepared]] = None,
+) -> Optional[_Prepared]:
     """Фиксирует короткую транзакцию, переживая занятость SQLite.
 
     busy_timeout здесь не спасает: если сессия уже держала читающую транзакцию,
     SQLite отказывает в повышении до записи сразу, не дожидаясь таймаута. Помогает
     только откатить свой снимок и попробовать заново.
     """
+    prepared = None
     for attempt in range(1, COMMIT_RETRIES + 1):
         try:
+            # rollback() expires and discards pending ORM changes. Reapply them
+            # on every attempt instead of committing an empty transaction.
+            if prepare is not None:
+                prepared = prepare()
             db.commit()
-            return
+            return prepared
         except OperationalError as exc:
             db.rollback()
             if not _is_locked_error(exc) or attempt == COMMIT_RETRIES:
@@ -66,7 +77,21 @@ def _commit_with_retry(db: Session, what: str) -> None:
             logger.warning(
                 "База занята при операции «%s», попытка %s из %s", what, attempt, COMMIT_RETRIES
             )
-            time.sleep(COMMIT_RETRY_DELAY * attempt)
+            await asyncio.sleep(COMMIT_RETRY_DELAY * attempt)
+
+    return prepared  # pragma: no cover
+
+
+def _sync_show_disk_in_worker(sync_func, show_id: int, user_id: int):
+    """Run disk sync with a session owned by the worker thread."""
+    worker_db = SessionLocal()
+    try:
+        worker_user = worker_db.get(User, user_id)
+        if worker_user is None:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        return sync_func(show_id=show_id, db=worker_db, current_user=worker_user)
+    finally:
+        worker_db.close()
 
 
 def _release_read_lock(db: Session) -> None:
@@ -437,14 +462,24 @@ async def import_folder_item(
 
     # Путь мог быть достроен подпапкой — при импорте из существующей папки
     # карточка обязана указывать ровно на неё.
-    if _normalize_for_compare(show.path or "") != _normalize_for_compare(folder):
-        show.path = folder
-    show.monitored = payload.monitored
-    if payload.quality_profile_id is not None:
-        show.quality_profile_id = payload.quality_profile_id
-    db.add(show)
+    def _prepare_show_update() -> Show:
+        current_show = db.get(Show, show_id)
+        if current_show is None:
+            raise HTTPException(status_code=404, detail="Тайтл не найден после импорта")
+        if _normalize_for_compare(current_show.path or "") != _normalize_for_compare(folder):
+            current_show.path = folder
+        current_show.monitored = payload.monitored
+        if payload.quality_profile_id is not None:
+            current_show.quality_profile_id = payload.quality_profile_id
+        db.add(current_show)
+        return current_show
+
     try:
-        _commit_with_retry(db, f"доводка карточки «{show_title}»")
+        show = await _commit_with_retry(
+            db,
+            f"доводка карточки «{show_title}»",
+            prepare=_prepare_show_update,
+        )
     except OperationalError as exc:
         logger.error("Не удалось дописать карточку «%s» после импорта: %s", show_title, exc)
         return ImportItemOut(
@@ -469,7 +504,10 @@ async def import_folder_item(
             # и пишет в базу. На цикле событий она блокирует весь сервер, поэтому
             # уводим её в поток.
             sync_result = await asyncio.to_thread(
-                sync_show_disk, show_id=show.id, db=db, current_user=current_user
+                _sync_show_disk_in_worker,
+                sync_show_disk,
+                show.id,
+                current_user.id,
             )
             files_synced = int((sync_result or {}).get("imported_count") or 0)
         except HTTPException as exc:

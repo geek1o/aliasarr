@@ -523,6 +523,12 @@
           </div>
 
           <div class="toolbar-right toolbar-display-group">
+            <div class="view-switcher" id="library-sort-switcher">
+              <button class="btn btn-secondary view-switcher-btn" id="library-sort-switcher-btn" onclick="toggleLibrarySortMenu()" aria-haspopup="true" aria-expanded="false">
+                <span class="nav-ico" style="margin-right:4px; display:inline-flex; align-items:center;"><i data-lucide="arrow-up-down" class="ico-xs"></i></span><span id="library-sort-switcher-label">Тайтл (А–Я)</span> ▾
+              </button>
+              <div class="view-switcher-menu library-sort-menu" id="library-sort-switcher-menu"></div>
+            </div>
             <div class="view-switcher" id="view-switcher">
               <button class="btn btn-secondary view-switcher-btn" id="view-switcher-btn" onclick="toggleViewMenu()">
                 <span class="nav-ico" style="margin-right:4px; display:inline-flex; align-items:center;"><i data-lucide="layout-grid" class="ico-xs"></i></span><span data-i18n="library.view_label">Просмотр:</span> <span id="view-switcher-label" data-i18n="library.view_posters">Постеры</span> ▾

@@ -6541,6 +6541,28 @@ const VIEW_MODE_LABELS = { posters: "library.view_posters", table: "library.view
 const CATEGORY_FILTER_LABELS = { all: "library.filter_all", movie: "library.filter_movies", series: "library.filter_series", anime: "library.filter_anime" };
 const MONITOR_FILTER_LABELS = { all: "library.filter_all", monitored: "library.filter_monitored", unmonitored: "library.filter_unmonitored", missing: "library.filter_missing", downloading: "library.filter_downloading" };
 
+const LIBRARY_SORT_OPTIONS = [
+  { key: "status", ru: "Статус мониторинга", en: "Monitored Status" },
+  { key: "title", ru: "Тайтл", en: "Title" },
+  { key: "network", ru: "Сеть / Студия", en: "Network / Studio" },
+  { key: "country", ru: "Страна", en: "Original Country" },
+  { key: "qualityProfile", ru: "Профиль качества", en: "Quality Profile" },
+  { key: "nextAiring", ru: "Следующий эфир", en: "Next Airing" },
+  { key: "previousAiring", ru: "Предыдущий эфир", en: "Previous Airing" },
+  { key: "added", ru: "Дата добавления", en: "Added" },
+  { key: "seasonCount", ru: "Сезоны", en: "Seasons" },
+  { key: "episodeProgress", ru: "Прогресс серий", en: "Episodes" },
+  { key: "episodeCount", ru: "Количество серий", en: "Episode Count" },
+  { key: "latestSeason", ru: "Последний сезон", en: "Latest Season" },
+  { key: "path", ru: "Путь", en: "Path" },
+  { key: "sizeOnDisk", ru: "Размер на диске", en: "Size on Disk" },
+  { key: "averageSize", ru: "Средний размер серии", en: "Average Size per Episode" },
+  { key: "rating", ru: "Рейтинг", en: "Rating" },
+];
+
+let LIBRARY_SORT_KEY = localStorage.getItem("aliasarr_library_sort") || "title";
+let LIBRARY_SORT_DIRECTION = localStorage.getItem("aliasarr_library_sort_direction") || "asc";
+
 let LIBRARY_CATEGORY_FILTER = localStorage.getItem("aliasarr_library_cat") || "all";
 let LIBRARY_MONITOR_FILTER = localStorage.getItem("aliasarr_library_mon") || "all";
 let CACHED_COLLECTIONS = [];
@@ -6915,7 +6937,11 @@ async function loadShows(silent = false) {
     const sameLength = hadExisting && CACHED_SHOWS.length === newShows.length;
     CACHED_SHOWS = newShows;
 
-    if (silent && hadExisting && sameLength) {
+    const dynamicSortKeys = new Set([
+      "status", "nextAiring", "previousAiring", "seasonCount", "episodeProgress",
+      "episodeCount", "latestSeason", "sizeOnDisk", "averageSize",
+    ]);
+    if (silent && hadExisting && sameLength && !dynamicSortKeys.has(LIBRARY_SORT_KEY)) {
       // Плавное бесшовное обновление индикаторов выполнения в DOM без мерцания и сброса скролла
       newShows.forEach(updateShowCardProgressInDOM);
     } else {
@@ -6936,19 +6962,108 @@ async function loadShows(silent = false) {
 function toggleCategoryMenu() {
   document.getElementById("view-switcher-menu")?.classList.remove("open");
   document.getElementById("monitor-switcher-menu")?.classList.remove("open");
+  document.getElementById("library-sort-switcher-menu")?.classList.remove("open");
   document.getElementById("category-switcher-menu")?.classList.toggle("open");
 }
 
 function toggleMonitorMenu() {
   document.getElementById("view-switcher-menu")?.classList.remove("open");
   document.getElementById("category-switcher-menu")?.classList.remove("open");
+  document.getElementById("library-sort-switcher-menu")?.classList.remove("open");
   document.getElementById("monitor-switcher-menu")?.classList.toggle("open");
 }
 
 function toggleViewMenu() {
   document.getElementById("category-switcher-menu")?.classList.remove("open");
   document.getElementById("monitor-switcher-menu")?.classList.remove("open");
+  document.getElementById("library-sort-switcher-menu")?.classList.remove("open");
   document.getElementById("view-switcher-menu")?.classList.toggle("open");
+}
+
+function toggleLibrarySortMenu() {
+  document.getElementById("view-switcher-menu")?.classList.remove("open");
+  document.getElementById("category-switcher-menu")?.classList.remove("open");
+  document.getElementById("monitor-switcher-menu")?.classList.remove("open");
+  const menu = document.getElementById("library-sort-switcher-menu");
+  const button = document.getElementById("library-sort-switcher-btn");
+  if (!menu) return;
+  renderLibrarySortMenu();
+  const open = menu.classList.toggle("open");
+  if (button) button.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+function setLibrarySort(key) {
+  if (!LIBRARY_SORT_OPTIONS.some(option => option.key === key)) return;
+  if (LIBRARY_SORT_KEY === key) {
+    LIBRARY_SORT_DIRECTION = LIBRARY_SORT_DIRECTION === "asc" ? "desc" : "asc";
+  } else {
+    LIBRARY_SORT_KEY = key;
+    LIBRARY_SORT_DIRECTION = ["title", "network", "country", "qualityProfile", "path"].includes(key) ? "asc" : "desc";
+  }
+  try {
+    localStorage.setItem("aliasarr_library_sort", LIBRARY_SORT_KEY);
+    localStorage.setItem("aliasarr_library_sort_direction", LIBRARY_SORT_DIRECTION);
+  } catch (e) {}
+  document.getElementById("library-sort-switcher-menu")?.classList.remove("open");
+  document.getElementById("library-sort-switcher-btn")?.setAttribute("aria-expanded", "false");
+  renderLibrary();
+}
+
+function renderLibrarySortMenu() {
+  const menu = document.getElementById("library-sort-switcher-menu");
+  const label = document.getElementById("library-sort-switcher-label");
+  const selected = LIBRARY_SORT_OPTIONS.find(option => option.key === LIBRARY_SORT_KEY) || LIBRARY_SORT_OPTIONS[1];
+  const optionLabel = CURRENT_LANG === "en" ? selected.en : selected.ru;
+  const directionLabel = LIBRARY_SORT_DIRECTION === "asc" ? (CURRENT_LANG === "en" ? "ascending" : "по возрастанию") : (CURRENT_LANG === "en" ? "descending" : "по убыванию");
+  if (label) label.textContent = `${optionLabel} (${directionLabel})`;
+  if (!menu) return;
+  menu.innerHTML = LIBRARY_SORT_OPTIONS.map(option => {
+    const active = option.key === LIBRARY_SORT_KEY;
+    const arrow = active ? (LIBRARY_SORT_DIRECTION === "asc" ? "↑" : "↓") : "";
+    return `<button class="${active ? "active" : ""}" onclick="setLibrarySort('${option.key}')"><span>${escapeHtml(CURRENT_LANG === "en" ? option.en : option.ru)}</span><span class="sort-direction-indicator">${arrow}</span></button>`;
+  }).join("");
+}
+
+function librarySortValue(show, key) {
+  const episodeCount = Number(show.episodes_count || 0);
+  switch (key) {
+    case "status": {
+      const statusRanks = { "status-downloading": 5, "status-importing": 4, "status-upgrade": 3, "status-wanted": 2, "status-complete": 1 };
+      const status = getShowStatusInfo(show);
+      return `${show.monitored ? "1" : "0"}:${statusRanks[status.statusClass] || 0}`;
+    }
+    case "network": return show.network || "";
+    case "country": return show.country || "";
+    case "qualityProfile": return qualityProfileName(show.quality_profile_id) || "";
+    case "nextAiring": return show.next_airing ? Date.parse(show.next_airing) : null;
+    case "previousAiring": return show.previous_airing ? Date.parse(show.previous_airing) : null;
+    case "added": return show.created_at ? Date.parse(show.created_at) : null;
+    case "seasonCount": return Number(show.seasons_count || 0);
+    case "episodeProgress": return episodeCount ? Number(show.downloaded_episodes_count || 0) / episodeCount : 0;
+    case "episodeCount": return episodeCount;
+    case "latestSeason": return Number(show.latest_season || 0);
+    case "path": return show.path || "";
+    case "sizeOnDisk": return Number(show.size_on_disk_bytes || 0);
+    case "averageSize": return episodeCount ? Number(show.size_on_disk_bytes || 0) / episodeCount : 0;
+    case "rating": return Number(show.rating || 0);
+    case "title":
+    default: return show.title || "";
+  }
+}
+
+function sortLibraryShows(shows) {
+  const direction = LIBRARY_SORT_DIRECTION === "desc" ? -1 : 1;
+  return shows.map((show, index) => ({ show, index })).sort((left, right) => {
+    const a = librarySortValue(left.show, LIBRARY_SORT_KEY);
+    const b = librarySortValue(right.show, LIBRARY_SORT_KEY);
+    if (a == null && b == null) return left.index - right.index;
+    if (a == null) return 1;
+    if (b == null) return -1;
+    let result = 0;
+    if (typeof a === "number" && typeof b === "number") result = a - b;
+    else result = String(a).localeCompare(String(b), CURRENT_LANG === "en" ? "en" : "ru", { numeric: true, sensitivity: "base" });
+    return result === 0 ? left.index - right.index : result * direction;
+  }).map(entry => entry.show);
 }
 
 function selectLibraryCategory(cat) {
@@ -6984,6 +7099,10 @@ document.addEventListener("click", (e) => {
   }
   if (!e.target.closest("#monitor-switcher")) {
     document.getElementById("monitor-switcher-menu")?.classList.remove("open");
+  }
+  if (!e.target.closest("#library-sort-switcher")) {
+    document.getElementById("library-sort-switcher-menu")?.classList.remove("open");
+    document.getElementById("library-sort-switcher-btn")?.setAttribute("aria-expanded", "false");
   }
 });
 
@@ -7027,6 +7146,7 @@ function renderLibrary() {
   if (viewLabel) viewLabel.textContent = t(VIEW_MODE_LABELS[LIBRARY_VIEW_MODE]);
 
   updateLibraryFilterButtons();
+  renderLibrarySortMenu();
 
   const grid = document.getElementById("shows-grid");
   const tableWrap = document.getElementById("shows-table-wrap");
@@ -7079,6 +7199,8 @@ function renderLibrary() {
       (s.aliases || []).some(a => a.text && a.text.toLowerCase().includes(query))
     );
   }
+
+  shows = sortLibraryShows(shows);
 
   if (!CACHED_SHOWS.length) {
     if (grid) grid.innerHTML = "";
@@ -13105,6 +13227,8 @@ let INTERACTIVE_SEARCH_STATE = {
   results: [],
   indexerFilter: "all",
   statusFilter: "all",
+  sortKey: "relevance",
+  sortDirection: "desc",
   page: 1,
   pageSize: 30,
 };
@@ -13126,6 +13250,8 @@ async function openInteractiveSearch(showId, seasonNumber = null, episodeNumber 
     results: [],
     indexerFilter: "all",
     statusFilter: "all",
+    sortKey: "relevance",
+    sortDirection: "desc",
     page: 1,
     pageSize: 30,
   };
@@ -13313,6 +13439,58 @@ function onInteractiveFilterChange() {
   renderInteractiveSearchTable();
 }
 
+function setInteractiveSearchSort(key) {
+  const state = INTERACTIVE_SEARCH_STATE;
+  if (state.sortKey === key) {
+    state.sortDirection = state.sortDirection === "asc" ? "desc" : "asc";
+  } else {
+    state.sortKey = key;
+    state.sortDirection = ["title", "indexer", "quality", "languages"].includes(key) ? "asc" : "desc";
+  }
+  state.page = 1;
+  renderInteractiveSearchTable();
+}
+
+function interactiveSortHeader(key, label, style = "") {
+  const state = INTERACTIVE_SEARCH_STATE;
+  const active = state.sortKey === key;
+  const direction = active ? state.sortDirection : "none";
+  const icon = active ? (direction === "asc" ? "arrow-up" : "arrow-down") : "arrow-up-down";
+  const ariaSort = active ? (direction === "asc" ? "ascending" : "descending") : "none";
+  return `<th class="interactive-sort-header" style="${style}" aria-sort="${ariaSort}"><button type="button" onclick="setInteractiveSearchSort('${key}')"><span>${label}</span><i data-lucide="${icon}" class="ico-xs"></i></button></th>`;
+}
+
+function interactiveSearchSortValue(release, key) {
+  switch (key) {
+    case "age": return release.age_days == null ? null : Number(release.age_days);
+    case "title": return release.title || "";
+    case "indexer": return release.indexer || "";
+    case "size": return Number(release.size_bytes || 0);
+    case "seeders": return Number(release.seeders || 0);
+    case "quality": return Number(release.quality_rank || 0);
+    case "languages": return [...(release.languages || []), release.release_group || ""].join(" ");
+    case "score": return Number(release.custom_format_score || 0);
+    default: return 0;
+  }
+}
+
+function sortInteractiveSearchResults(results) {
+  const state = INTERACTIVE_SEARCH_STATE;
+  if (state.sortKey === "relevance") return results;
+  const direction = state.sortDirection === "desc" ? -1 : 1;
+  return results.map((release, index) => ({ release, index })).sort((left, right) => {
+    const a = interactiveSearchSortValue(left.release, state.sortKey);
+    const b = interactiveSearchSortValue(right.release, state.sortKey);
+    if (a == null && b == null) return left.index - right.index;
+    if (a == null) return 1;
+    if (b == null) return -1;
+    let result = 0;
+    if (typeof a === "number" && typeof b === "number") result = a - b;
+    else result = String(a).localeCompare(String(b), CURRENT_LANG === "en" ? "en" : "ru", { numeric: true, sensitivity: "base" });
+    return result === 0 ? left.index - right.index : result * direction;
+  }).map(entry => entry.release);
+}
+
 function renderInteractiveSearchTable() {
   const bodyEl = document.getElementById("interactive-search-body");
   const state = INTERACTIVE_SEARCH_STATE;
@@ -13326,6 +13504,7 @@ function renderInteractiveSearchTable() {
   } else if (state.statusFilter === "rejected") {
     filtered = filtered.filter(r => !r.approved);
   }
+  filtered = sortInteractiveSearchResults(filtered);
 
   if (!filtered.length) {
     bodyEl.innerHTML = `<div style="text-align:center; padding:48px; color:var(--text-muted);"><p style="font-size:15px;">${t("library.no_results")}</p><p class="hint">Попробуйте ввести другое название в поисковой строке выше</p></div>`;
@@ -13343,14 +13522,14 @@ function renderInteractiveSearchTable() {
         <thead>
           <tr>
             <th style="width:30px; text-align:center;"></th>
-            <th style="width:60px;">Возраст</th>
-            <th>Релиз / Раздача</th>
-            <th style="width:110px;">Индексатор</th>
-            <th style="width:90px;">Размер</th>
-            <th style="width:70px; text-align:center;">Сиды</th>
-            <th style="width:140px;">Качество</th>
-            <th style="width:130px;">Языки / Группа</th>
-            <th style="width:110px; text-align:center;">Форматы / Счёт</th>
+            ${interactiveSortHeader("age", "Возраст", "width:60px;")}
+            ${interactiveSortHeader("title", "Релиз / Раздача")}
+            ${interactiveSortHeader("indexer", "Индексатор", "width:110px;")}
+            ${interactiveSortHeader("size", "Размер", "width:90px;")}
+            ${interactiveSortHeader("seeders", "Сиды", "width:70px; text-align:center;")}
+            ${interactiveSortHeader("quality", "Качество", "width:140px;")}
+            ${interactiveSortHeader("languages", "Языки / Группа", "width:130px;")}
+            ${interactiveSortHeader("score", "Форматы / Счёт", "width:110px; text-align:center;")}
             <th style="width:100px; text-align:right;">Действие</th>
           </tr>
         </thead>
@@ -16842,9 +17021,9 @@ function openReleaseHistoryDrawer(globalIdx) {
       // 3. Rejected sample list / criteria
       if (item.details && Array.isArray(item.details.rejected_sample) && item.details.rejected_sample.length > 0) {
         const rejItems = item.details.rejected_sample.map(r => `
-          <div style="padding:4px 8px; border-bottom:1px solid rgba(255,255,255,0.04); font-size:11px; display:flex; justify-content:space-between; gap:8px;">
-            <span class="mono" style="word-break:break-all; color:var(--text);">${escapeHtml(typeof r === 'string' ? r : (r.title || JSON.stringify(r)))}</span>
-            ${r.reason ? `<span class="badge-tag" style="background:rgba(239,68,68,0.15); color:#f87171; font-size:10px; flex-shrink:0;">${escapeHtml(r.reason)}</span>` : ""}
+          <div class="history-rejected-item">
+            <span class="mono history-rejected-title">${escapeHtml(typeof r === 'string' ? r : (r.title || JSON.stringify(r)))}</span>
+            ${r.reason ? `<span class="badge-tag history-rejected-reason">${escapeHtml(r.reason)}</span>` : ""}
           </div>
         `).join("");
 
@@ -17101,8 +17280,10 @@ async function loadGeneralSettings() {
     }
 
     applyTheme(s.theme || "dark");
+    applyDesign(s.design_system || localStorage.getItem("aliasarr_design") || "classic");
     applyLanguage(s.language || "ru");
     applyScrollbarMode(s.scrollbar_mode || localStorage.getItem("aliasarr_scrollbar") || "autohide");
+    applyGlassMode(s.glass_mode || localStorage.getItem("aliasarr_glass") || "off");
 
     const hintEl = document.getElementById("apikey-source-hint");
     const regenBtn = document.getElementById("regenerate-key-btn");
@@ -17132,6 +17313,8 @@ async function saveInterfaceSettings(btn) {
       const theme = document.getElementById("setting-theme").value;
       const scrollbar_mode = document.getElementById("setting-scrollbar")?.value || "autohide";
       const timezone = document.getElementById("setting-timezone").value;
+      const design_system = document.documentElement.getAttribute("data-design") || "classic";
+      const glass_mode = document.documentElement.getAttribute("data-glass") || "off";
       await api("/api/v1/settings", {
         method: "PUT",
         body: JSON.stringify({
@@ -17139,6 +17322,8 @@ async function saveInterfaceSettings(btn) {
           theme,
           scrollbar_mode,
           timezone,
+          design_system,
+          glass_mode,
         }),
       });
       applyTheme(theme);
@@ -23359,8 +23544,14 @@ async function startApp() {
     if (s && s.theme) {
       applyTheme(s.theme);
     }
+    if (s && s.design_system) {
+      applyDesign(s.design_system);
+    }
     if (s && s.scrollbar_mode) {
       applyScrollbarMode(s.scrollbar_mode);
+    }
+    if (s && s.glass_mode) {
+      applyGlassMode(s.glass_mode);
     }
     if (s && s.timezone) {
       APP_TIMEZONE = s.timezone;

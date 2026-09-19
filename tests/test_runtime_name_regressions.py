@@ -24,6 +24,9 @@ class TestRuntimeNameRegressions(unittest.TestCase):
         self.assertIn("Any", matcher._is_int.__annotations__["v"])
         self.assertIn("Session", metadata.trigger_show_metadata_refresh_if_needed.__annotations__["db"])
 
+    def test_shows_logger_is_captured_by_application_logger_tree(self):
+        self.assertEqual(shows.logger.name, "aliasarr.api.shows")
+
     def test_manual_import_tracks_destinations_locally(self):
         local_names = shows.execute_global_manual_import.__code__.co_varnames
         self.assertIn("used_dest_paths", local_names)
