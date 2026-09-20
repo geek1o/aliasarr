@@ -84,7 +84,7 @@ def recycle_media_path(
         recycled_path=str(record.quarantined_path),
         operation=record.operation,
         size_bytes=record.size_bytes,
-        created_at=dt.datetime.now(dt.UTC).isoformat(),
+        created_at=dt.datetime.now(dt.timezone.utc).isoformat(),
         library_root=str(owner),
     )
     try:
@@ -177,12 +177,12 @@ def purge_expired_recycled_media(
 ) -> list[str]:
     if retention_days < 0:
         raise ValueError("retention_days не может быть отрицательным")
-    current = now or dt.datetime.now(dt.UTC)
+    current = now or dt.datetime.now(dt.timezone.utc)
     removed: list[str] = []
     for entry in list_recycled_media(library_roots):
         created = dt.datetime.fromisoformat(entry.created_at)
         if created.tzinfo is None:
-            created = created.replace(tzinfo=dt.UTC)
+            created = created.replace(tzinfo=dt.timezone.utc)
         if created <= current - dt.timedelta(days=retention_days):
             purge_recycled_media(entry.id, library_roots=library_roots)
             removed.append(entry.id)

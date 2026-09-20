@@ -77,7 +77,7 @@ class RecycleBinTests(unittest.TestCase):
         removed = purge_expired_recycled_media(
             library_roots=[self.library],
             retention_days=30,
-            now=dt.datetime(2024, 3, 1, tzinfo=dt.UTC),
+            now=dt.datetime(2024, 3, 1, tzinfo=dt.timezone.utc),
         )
         self.assertEqual(removed, [entry.id])
         self.assertFalse(Path(entry.recycled_path).exists())

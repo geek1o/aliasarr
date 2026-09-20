@@ -256,7 +256,7 @@ async def check_indexer_availability(
         if attempt < attempts and delay > 0:
             await asyncio.sleep(delay)
 
-    indexer.last_check_at = dt.datetime.now(dt.UTC)
+    indexer.last_check_at = dt.datetime.now(dt.timezone.utc)
     indexer.last_check_ok = ok
     if ok:
         indexer.consecutive_failures = 0

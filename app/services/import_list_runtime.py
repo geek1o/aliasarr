@@ -215,7 +215,7 @@ async def run_import_list(
 def enqueue_due_import_lists(db: Session) -> int:
     from app.services.task_manager import task_manager
 
-    now = dt.datetime.now(dt.UTC)
+    now = dt.datetime.now(dt.timezone.utc)
     queued = 0
     for row in db.query(ImportList).filter(ImportList.enabled == True).order_by(ImportList.id).all():  # noqa: E712
         if not definition_from_row(row).is_due(now):
