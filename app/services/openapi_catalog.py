@@ -432,6 +432,30 @@ ENDPOINT_CATALOG: dict[tuple[str, str], tuple[str, str, str, str]] = {
         'Прерывает выполняющийся фоновый процесс сбора названий релизов.',
         'Stops the ongoing background release title harvesting task.',
     ),
+    ('/api/v1/release-inspector', 'POST'): (
+        'Проверить разбор и решение по релизу',
+        'Inspect release parsing and decision',
+        'Без сетевых запросов показывает разбор названия, совпавший алиас, покрытие серий, качество и причины принятия или отклонения релиза.',
+        'Without network access, explains title parsing, alias matching, episode coverage, quality, and every available acceptance or rejection reason.',
+    ),
+    ('/api/v1/tasks/{task_id}', 'GET'): (
+        'Получить состояние фоновой операции',
+        'Get background task status',
+        'Возвращает сохранённое состояние, прогресс, результат и ошибку одной фоновой операции.',
+        'Returns persisted status, progress, result, and error details for one background operation.',
+    ),
+    ('/api/v1/tasks/{task_id}/cancel', 'POST'): (
+        'Отменить фоновую операцию',
+        'Cancel background task',
+        'Отменяет активную или ожидающую фоновую команду и сохраняет результат отмены в истории.',
+        'Cancels an active or queued background command and preserves the cancellation in task history.',
+    ),
+    ('/api/v1/tasks/{task_id}/retry', 'POST'): (
+        'Повторить фоновую операцию',
+        'Retry background task',
+        'Повторно ставит завершившуюся с ошибкой восстанавливаемую команду в постоянную очередь.',
+        'Queues a failed durable command again while preserving its operation identity.',
+    ),
     ('/api/v1/download-clients', 'GET'): (
         'Список подключенных торрент-клиентов',
         'List connected download clients',

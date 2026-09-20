@@ -13634,6 +13634,7 @@ function renderInteractiveReleaseRow(r) {
       <td style="text-align:center;">${scoreBadge} ${cfList ? `<div style="margin-top:2px;">${cfList}</div>` : ""}</td>
       <td style="text-align:right; white-space:nowrap;">
         <div style="display:inline-flex; align-items:center; gap:4px; justify-content:flex-end;">
+          <button class="btn btn-secondary btn-small" title="${CURRENT_LANG === 'en' ? 'Inspect release' : 'Проверить релиз'}" onclick="openReleaseInspectorFromSearch(${INTERACTIVE_SEARCH_STATE.results.indexOf(r)})" style="padding:4px 6px;"><i data-lucide="scan-search" class="ico-xs"></i></button>
           <button class="btn ${grabBtnClass} btn-small" onclick='grabRelease(this, ${showId}, ${JSON.stringify(r).replace(/'/g, "&apos;")})'>${grabBtnText}</button>
           <button class="btn btn-secondary btn-small" title="${CURRENT_LANG === 'en' ? 'Add to blocklist' : 'В черный список'}" onclick='blockReleaseFromSearch(this, ${showId}, ${JSON.stringify(r).replace(/'/g, "&apos;")})' style="padding:4px 6px; color:var(--text-muted);"><i data-lucide="shield-alert" class="ico-xs"></i></button>
         </div>
@@ -22290,96 +22291,167 @@ async function loadDatasetData(page = 1) {
   }
 }
 
+let RELEASE_INSPECTOR_CONTEXT = {};
+
 function openDatasetDiagnoseModal(index) {
   const item = DATASET_CURRENT_ITEMS[index];
   if (!item) return;
-
-  const modal = document.getElementById("modal-dataset-diagnose");
-  const body = document.getElementById("modal-dataset-diagnose-body");
-  if (!modal || !body) return;
-
-  const title = escapeHtml(item.title || "");
-  const indexer = escapeHtml(item.indexer || "—");
-  const sizeStr = item.size_bytes ? formatBytes(item.size_bytes) : "—";
-  const analysis = item.analysis || {};
-  const dbMatch = item.db_match || null;
-
-  let verdictHtml = "";
-  if (dbMatch) {
-    if (dbMatch.approved) {
-      verdictHtml = `<div style="padding:12px; border-radius:8px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981;">
-        <div style="font-weight:700; font-size:14px; display:flex; align-items:center; gap:6px;">
-          <i data-lucide="check-circle-2" class="ico-sm"></i> Одобрено движком DecisionEngine
-        </div>
-        <div style="font-size:12px; margin-top:4px; color:var(--text-main);">Релиз полностью удовлетворяет правилам качества, сезона и серий. В боевом режиме он был бы автоматически отправлен на загрузку.</div>
-      </div>`;
-    } else {
-      const reasonsList = (dbMatch.rejections && dbMatch.rejections.length > 0)
-        ? `<ul style="margin:6px 0 0 16px; padding:0; font-size:12px;">${dbMatch.rejections.map(r => `<li>${escapeHtml(r)}</li>`).join("")}</ul>`
-        : `<div style="font-size:12px; margin-top:4px;">Не подошли параметры раздачи.</div>`;
-      verdictHtml = `<div style="padding:12px; border-radius:8px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444;">
-        <div style="font-weight:700; font-size:14px; display:flex; align-items:center; gap:6px;">
-          <i data-lucide="shield-x" class="ico-sm"></i> Отклонено движком DecisionEngine
-        </div>
-        ${reasonsList}
-      </div>`;
-    }
-  } else {
-    verdictHtml = `<div class="hint">Релиз не был привязан к тайтлу библиотеки (поиск по независимому пресету).</div>`;
-  }
-
-  let dbDetailsHtml = "";
-  if (dbMatch) {
-    dbDetailsHtml = `
-      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
-        <div class="panel" style="padding:10px;">
-          <div class="hint" style="font-size:11px;">Тайтл в библиотеке</div>
-          <div style="font-weight:600;">${escapeHtml(dbMatch.show_title || "—")}</div>
-          <div class="hint" style="font-size:11px; margin-top:4px;">Совпавший алиас:</div>
-          <div style="font-size:12px; color:var(--teal);">${escapeHtml(dbMatch.matched_alias || "—")} (Score: ${dbMatch.match_score}%)</div>
-        </div>
-
-        <div class="panel" style="padding:10px;">
-          <div class="hint" style="font-size:11px;">Сопоставление серий</div>
-          <div style="font-weight:600;">${escapeHtml(dbMatch.covered_summary || "—")}</div>
-          <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
-            <span class="badge badge-success" style="font-size:11px;">${dbMatch.wanted_overlap || 0} разыскиваемых</span>
-            <span class="badge badge-info" style="font-size:11px;">${dbMatch.downloaded_overlap || 0} уже скачано</span>
-            ${(dbMatch.part_offset && dbMatch.part_offset > 0) ? `<span class="badge badge-warning" style="font-size:11px;">Смещение кура: +${dbMatch.part_offset}</span>` : ""}
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  body.innerHTML = `
-    <div style="margin-bottom:12px;">
-      <div class="hint" style="font-size:11px;">Название релиза:</div>
-      <div style="font-weight:600; font-size:13px; line-height:1.4; word-break:break-word;">${title}</div>
-      <div class="hint" style="font-size:11px; margin-top:4px;">Трекер: <strong>${indexer}</strong> • Размер: <strong>${sizeStr}</strong></div>
-    </div>
-
-    ${verdictHtml}
-    ${dbDetailsHtml}
-
-    <div class="panel" style="padding:10px; margin-top:10px;">
-      <div class="hint" style="font-size:11px;">Синтаксический разбор парсера:</div>
-      <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">
-        <span class="badge badge-info">Тип: ${escapeHtml(analysis.kind || "unknown")}</span>
-        <span class="badge badge-secondary">Сезон: ${analysis.season !== null && analysis.season !== undefined ? analysis.season : "не указан"}</span>
-        <span class="badge badge-secondary">Серии: ${analysis.episodes && analysis.episodes.length ? analysis.episodes.join(", ") : "—"}</span>
-        ${analysis.part ? `<span class="badge badge-warning">Часть/Кур: ${analysis.part}</span>` : ""}
-        <span class="badge ${analysis.status === 'parsed' ? 'badge-success' : 'badge-danger'}">Статус: ${escapeHtml(analysis.status_text || analysis.status || "")}</span>
-      </div>
-    </div>
-  `;
-
-  openModal("modal-dataset-diagnose");
-  if (typeof lucide !== "undefined") lucide.createIcons();
+  openReleaseInspector({
+    title: item.title || "",
+    showId: item.db_match?.show_id || null,
+    sizeBytes: item.size_bytes || 0,
+    seeders: item.seeders || 0,
+    categories: item.categories || [],
+    guid: item.guid || null,
+  });
 }
 
-function closeDatasetDiagnoseModal() {
-  closeModal("modal-dataset-diagnose");
+function openReleaseInspectorFromSearch(index) {
+  const item = INTERACTIVE_SEARCH_STATE.results[index];
+  if (!item) return;
+  openReleaseInspector({
+    title: item.title || "",
+    showId: INTERACTIVE_SEARCH_STATE.showId || null,
+    season: INTERACTIVE_SEARCH_STATE.season,
+    episode: INTERACTIVE_SEARCH_STATE.episode,
+    sizeBytes: item.size_bytes || 0,
+    seeders: item.seeders || 0,
+    categories: item.categories || [],
+    guid: item.guid || null,
+    downloadUrl: item.download_url || null,
+  });
+}
+
+function openReleaseInspector(context = {}) {
+  RELEASE_INSPECTOR_CONTEXT = { ...context };
+  const titleInput = document.getElementById("release-inspector-title");
+  const showSelect = document.getElementById("release-inspector-show");
+  const sizeInput = document.getElementById("release-inspector-size");
+  const seedersInput = document.getElementById("release-inspector-seeders");
+  const result = document.getElementById("release-inspector-result");
+  if (!titleInput || !showSelect || !sizeInput || !seedersInput || !result) return;
+
+  titleInput.value = context.title || "";
+  sizeInput.value = Number(context.sizeBytes || 0);
+  seedersInput.value = Number(context.seeders || 0);
+  showSelect.innerHTML = "";
+  const emptyOption = document.createElement("option");
+  emptyOption.value = "";
+  emptyOption.textContent = CURRENT_LANG === "en" ? "Parser only (no library title)" : "Только парсер (без тайтла библиотеки)";
+  showSelect.appendChild(emptyOption);
+  const availableShows = (typeof CACHED_SHOWS !== "undefined" && Array.isArray(CACHED_SHOWS)) ? CACHED_SHOWS : [];
+  availableShows.forEach(show => {
+    const option = document.createElement("option");
+    option.value = String(show.id);
+    option.textContent = formatShowTitleWithYear(show.title, show.year);
+    showSelect.appendChild(option);
+  });
+  showSelect.value = context.showId ? String(context.showId) : "";
+  result.innerHTML = "";
+  openModal("release-inspector-modal");
+  if (typeof lucide !== "undefined") lucide.createIcons();
+  if (titleInput.value.trim()) runReleaseInspector();
+}
+
+async function runReleaseInspector() {
+  const title = document.getElementById("release-inspector-title")?.value.trim() || "";
+  const showValue = document.getElementById("release-inspector-show")?.value || "";
+  const sizeBytes = Number(document.getElementById("release-inspector-size")?.value || 0);
+  const seeders = Number(document.getElementById("release-inspector-seeders")?.value || 0);
+  const result = document.getElementById("release-inspector-result");
+  const runButton = document.getElementById("release-inspector-run");
+  if (!result || !title) {
+    toast(CURRENT_LANG === "en" ? "Enter a release title" : "Введите название релиза", true);
+    return;
+  }
+
+  result.innerHTML = renderRaysLoaderHtml(null, CURRENT_LANG === "en" ? "Inspecting release…" : "Проверяем релиз…", "release-inspector");
+  if (runButton) runButton.disabled = true;
+  try {
+    const payload = {
+      title,
+      show_id: showValue ? Number(showValue) : null,
+      season: RELEASE_INSPECTOR_CONTEXT.season ?? null,
+      episode: RELEASE_INSPECTOR_CONTEXT.episode ?? null,
+      size_bytes: Number.isFinite(sizeBytes) && sizeBytes >= 0 ? sizeBytes : 0,
+      seeders: Number.isFinite(seeders) && seeders >= 0 ? seeders : 0,
+      categories: RELEASE_INSPECTOR_CONTEXT.categories || [],
+      guid: RELEASE_INSPECTOR_CONTEXT.guid || null,
+      download_url: RELEASE_INSPECTOR_CONTEXT.downloadUrl || null,
+    };
+    const data = await api("/api/v1/release-inspector", { method: "POST", body: JSON.stringify(payload) });
+    renderReleaseInspectorResult(data);
+  } catch (error) {
+    result.innerHTML = `<div class="release-inspector-error">${escapeHtml(formatToastMessage(error.message))}</div>`;
+  } finally {
+    if (runButton) runButton.disabled = false;
+  }
+}
+
+function renderReleaseInspectorResult(data) {
+  const result = document.getElementById("release-inspector-result");
+  if (!result || !data) return;
+  const analysis = data.analysis || {};
+  const match = data.match || null;
+  const coverage = data.coverage || null;
+  const decision = data.decision || {};
+  const approved = decision.approved === true;
+  const reasons = decision.rejections || [];
+  const verdictText = approved
+    ? (CURRENT_LANG === "en" ? "Approved by DecisionEngine" : "Одобрено DecisionEngine")
+    : (CURRENT_LANG === "en" ? "Rejected by DecisionEngine" : "Отклонено DecisionEngine");
+  const reasonHtml = reasons.length
+    ? `<ul>${reasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>`
+    : `<p class="hint">${CURRENT_LANG === "en" ? "No rejection reasons." : "Причин отклонения нет."}</p>`;
+  const formatBadges = (decision.custom_formats || []).map(format =>
+    `<span class="badge badge-secondary">${escapeHtml(format.name)} (${Number(format.score || 0)})</span>`
+  ).join(" ");
+  const episodeBadges = coverage?.episodes?.length
+    ? coverage.episodes.slice(0, 60).map(ep => `<span class="badge badge-ghost">${escapeHtml(ep.key)} · ${escapeHtml(ep.status)}</span>`).join(" ")
+    : `<span class="hint">—</span>`;
+  const aliasScope = match?.alias_scope;
+
+  result.innerHTML = `
+    <div class="release-inspector-verdict ${approved ? "approved" : "rejected"}">
+      <div class="release-inspector-verdict-title"><i data-lucide="${approved ? "check-circle-2" : "shield-x"}" class="ico-sm"></i>${verdictText}</div>
+      ${reasonHtml}
+    </div>
+    <div class="release-inspector-card-grid">
+      <section class="panel release-inspector-card">
+        <h4>${CURRENT_LANG === "en" ? "Parser" : "Парсер"}</h4>
+        <div class="release-inspector-badges">
+          <span class="badge badge-info">${escapeHtml(analysis.kind || "unknown")}</span>
+          <span class="badge badge-secondary">S${analysis.season == null ? "—" : String(analysis.season).padStart(2, "0")}</span>
+          <span class="badge badge-secondary">E: ${analysis.episodes?.length ? analysis.episodes.join(", ") : "—"}</span>
+          ${analysis.part ? `<span class="badge badge-warning">Part ${Number(analysis.part)}</span>` : ""}
+          <span class="badge badge-ghost">${escapeHtml(analysis.matched_pattern || "none")}</span>
+        </div>
+      </section>
+      <section class="panel release-inspector-card">
+        <h4>${CURRENT_LANG === "en" ? "Title match" : "Сопоставление тайтла"}</h4>
+        ${match ? `<div><strong>${escapeHtml(match.show_title || "—")}</strong></div>
+          <div class="hint">${CURRENT_LANG === "en" ? "Alias" : "Алиас"}: ${escapeHtml(match.alias_text || "—")} · ${Number(match.score || 0)}%</div>
+          ${aliasScope ? `<div class="hint">Scope: S${aliasScope.season ?? "—"}, E${aliasScope.episode_start ?? "—"}–${aliasScope.episode_end ?? "—"}, offset ${Number(aliasScope.episode_offset || 0)}</div>` : ""}`
+          : `<div class="hint">${CURRENT_LANG === "en" ? "No library title selected." : "Тайтл библиотеки не выбран."}</div>`}
+      </section>
+      <section class="panel release-inspector-card">
+        <h4>${CURRENT_LANG === "en" ? "Episode coverage" : "Покрытие серий"}</h4>
+        <div><strong>${escapeHtml(coverage?.summary || "—")}</strong></div>
+        <div class="hint">Wanted: ${Number(coverage?.wanted_overlap || 0)} · Downloaded: ${Number(coverage?.downloaded_overlap || 0)} · Offset: ${Number(coverage?.effective_offset || 0)}</div>
+        <div class="release-inspector-badges">${episodeBadges}</div>
+      </section>
+      <section class="panel release-inspector-card">
+        <h4>${CURRENT_LANG === "en" ? "Release properties" : "Свойства релиза"}</h4>
+        <div class="release-inspector-badges">
+          <span class="badge badge-primary">${escapeHtml(decision.quality || "—")}</span>
+          ${(decision.language_badges || []).map(language => `<span class="badge badge-info">${escapeHtml(language)}</span>`).join(" ")}
+          ${decision.release_group ? `<span class="badge badge-secondary">${escapeHtml(decision.release_group)}</span>` : ""}
+          <span class="badge badge-ghost">CF ${Number(decision.custom_format_score || 0)}</span>
+          ${formatBadges}
+        </div>
+      </section>
+    </div>`;
+  if (typeof lucide !== "undefined") lucide.createIcons();
 }
 
 function copyDatasetRowTitle(btn) {

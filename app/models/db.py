@@ -680,6 +680,46 @@ class AuditLog(Base):
     ip_address: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
 
+class BackgroundTask(Base):
+    """Persisted background activity and durable command queue entry."""
+
+    __tablename__ = "background_tasks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    message: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="running", index=True)
+    mode: Mapped[str] = mapped_column(String(16), nullable=False, default="inline")
+    progress: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    show_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    total_items: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    current_item: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    resumable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, unique=True)
+    concurrency_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    # Set only while queued/running. Multiple NULL values are supported by SQLite and Postgres.
+    active_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, unique=True)
+    worker_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    available_at: Mapped[dt.datetime] = mapped_column(DateTime, nullable=False, default=dt.datetime.utcnow)
+    claimed_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime, nullable=True)
+    heartbeat_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime, nullable=True)
+    started_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime, nullable=True)
+    ended_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, nullable=False, default=dt.datetime.utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=dt.datetime.utcnow,
+        onupdate=dt.datetime.utcnow,
+    )
+
+
 class Session(Base):
     """Серверная сессия для браузерного логина."""
 

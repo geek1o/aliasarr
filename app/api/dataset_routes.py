@@ -26,6 +26,7 @@ from app.services.matcher import (
 )
 from app.services.decision_engine import DecisionEngine
 from app.services.settings_service import get_or_create_settings
+from app.services.release_inspector import inspect_release
 
 logger = logging.getLogger("aliasarr.dataset")
 
@@ -422,6 +423,7 @@ async def _run_harvest_task(targets: list[dict], indexer_id: Optional[int]):
                             "guid": guid,
                             "indexer": indexer_row.name,
                             "size_bytes": size_bytes,
+                            "seeders": seeders,
                             "categories": categories,
                             "query": q,
                             "created_at": dt.datetime.utcnow().isoformat() + "Z",
@@ -623,31 +625,55 @@ def diagnose_release(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_any_permission("manual_search", "manage_settings")),
 ):
-    settings = get_or_create_settings(db)
     target_show = None
     if req.show_id:
         target_show = db.get(Show, req.show_id)
+        if not target_show:
+            raise HTTPException(status_code=404, detail="Тайтл не найден")
     if not target_show:
         all_shows = db.query(Show).all()
         target_show = _find_show_by_query(req.title, all_shows)
 
-    analysis = _analyze_record({"title": req.title, "categories": req.categories or []})
+    inspected = inspect_release(
+        db,
+        title=req.title,
+        show=target_show,
+        size_bytes=req.size_bytes or 0,
+        seeders=req.seeders if req.seeders is not None else 10,
+        categories=req.categories or [],
+    )
+    analysis = inspected["analysis"]
     db_match = None
-    if target_show:
-        db_match = _evaluate_record_against_show(
-            target_show,
-            req.title,
-            req.size_bytes or 0,
-            req.seeders or 10,
-            req.categories or [],
-            db,
-            settings,
-        )
+    if target_show and inspected.get("match"):
+        matched = inspected["match"]
+        coverage = inspected.get("coverage") or {}
+        decision = inspected["decision"]
+        db_match = {
+            "show_id": target_show.id,
+            "show_title": target_show.title,
+            "matched_alias": matched.get("alias_text"),
+            "match_score": matched.get("score", 0),
+            "is_title_matched": matched.get("matched", False),
+            "covered_summary": coverage.get("summary", "—"),
+            "covered_count": coverage.get("count", 0),
+            "wanted_overlap": coverage.get("wanted_overlap", 0),
+            "downloaded_overlap": coverage.get("downloaded_overlap", 0),
+            "effective_season": matched.get("effective_season"),
+            "part_offset": coverage.get("part_offset", 0),
+            "approved": decision.get("approved", False),
+            "rejections": decision.get("rejections", []),
+            "quality": decision.get("quality"),
+            "languages": decision.get("language_badges", []),
+            "release_group": decision.get("release_group"),
+            "custom_formats": decision.get("custom_formats", []),
+            "custom_format_score": decision.get("custom_format_score", 0),
+        }
 
     return {
         "title": req.title,
         "analysis": analysis,
         "db_match": db_match,
+        "inspector": inspected,
     }
 
 

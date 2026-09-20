@@ -5660,20 +5660,42 @@
 </div>
 
 
-<div id="modal-dataset-diagnose" class="modal-overlay">
-  <div class="modal modal-medium" style="max-width: 720px; width: 95%;">
-    <button class="modal-close" onclick="closeModal('modal-dataset-diagnose')"><i data-lucide="x"></i></button>
+<div id="release-inspector-modal" class="modal-overlay">
+  <div class="modal modal-wide release-inspector-modal">
+    <button class="modal-close" onclick="closeModal('release-inspector-modal')"><i data-lucide="x"></i></button>
     <div class="modal-header" style="margin-bottom: 16px;">
       <h3 style="margin:0; display:flex; align-items:center; gap:8px;">
-        <i data-lucide="search" class="ico-sm" style="color:var(--teal)"></i>
-        <span>Диагностика сопоставления раздачи</span>
+        <i data-lucide="scan-search" class="ico-sm" style="color:var(--teal)"></i>
+        <span>Release Inspector</span>
       </h3>
     </div>
-    <div class="modal-body" style="padding: 4px 0;">
-      <div id="modal-dataset-diagnose-body" class="form-col" style="gap:12px;"></div>
+    <div class="modal-body release-inspector-scroll">
+      <div class="release-inspector-form">
+        <label class="form-label" for="release-inspector-title">Название релиза</label>
+        <textarea id="release-inspector-title" class="input" rows="2" maxlength="2048" placeholder="Вставьте полное название раздачи"></textarea>
+        <div class="release-inspector-input-grid">
+          <div>
+            <label class="form-label" for="release-inspector-show">Тайтл библиотеки</label>
+            <select id="release-inspector-show" class="input"></select>
+          </div>
+          <div>
+            <label class="form-label" for="release-inspector-size">Размер, байт</label>
+            <input id="release-inspector-size" class="input mono" type="number" min="0" value="0">
+          </div>
+          <div>
+            <label class="form-label" for="release-inspector-seeders">Сиды</label>
+            <input id="release-inspector-seeders" class="input mono" type="number" min="0" value="0">
+          </div>
+        </div>
+        <div class="release-inspector-actions">
+          <span class="hint"><i data-lucide="shield-check" class="ico-xs"></i> Только анализ: без поиска и загрузки</span>
+          <button class="btn btn-primary" id="release-inspector-run" onclick="runReleaseInspector()"><i data-lucide="scan-search" class="ico-sm"></i> Проверить</button>
+        </div>
+      </div>
+      <div id="release-inspector-result" class="release-inspector-result"></div>
     </div>
     <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
-      <button class="btn btn-secondary" onclick="closeModal('modal-dataset-diagnose')">Закрыть</button>
+      <button class="btn btn-secondary" onclick="closeModal('release-inspector-modal')">Закрыть</button>
     </div>
   </div>
 </div>

@@ -4,7 +4,7 @@ import datetime as dt
 import re
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class AliasCreate(BaseModel):
@@ -385,6 +385,7 @@ class SearchResultOut(BaseModel):
     page_url: Optional[str] = None
     seeders: int = 0
     size_bytes: int = 0
+    categories: list[int] = Field(default_factory=list)
     matched: bool = False
     matched_alias: Optional[str] = None
     match_score: float = 0.0
@@ -404,6 +405,45 @@ class SearchResultOut(BaseModel):
     rejections: list[str] = []
     publish_date: Optional[str] = None
     age_days: Optional[float] = None
+
+
+class ReleaseInspectorRequest(BaseModel):
+    """Безопасный read-only запрос для разбора одного названия релиза."""
+
+    title: str = Field(min_length=1, max_length=2048)
+    show_id: Optional[int] = Field(default=None, gt=0)
+    season: Optional[int] = Field(default=None, ge=0, le=999)
+    episode: Optional[int] = Field(default=None, ge=0, le=9999)
+    size_bytes: int = Field(default=0, ge=0)
+    seeders: int = Field(default=0, ge=0)
+    categories: list[int] = Field(default_factory=list, max_length=64)
+    torrent_hash: Optional[str] = Field(default=None, max_length=256)
+    guid: Optional[str] = Field(default=None, max_length=2048)
+    download_url: Optional[str] = Field(default=None, max_length=4096)
+
+    @field_validator("title")
+    @classmethod
+    def normalize_release_title(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Название релиза не может быть пустым")
+        return value
+
+    @field_validator("categories")
+    @classmethod
+    def validate_categories(cls, value: list[int]) -> list[int]:
+        if any(category < 0 or category > 999999 for category in value):
+            raise ValueError("Некорректная категория индексатора")
+        return value
+
+
+class ReleaseInspectorResponse(BaseModel):
+    title: str
+    show: Optional[dict] = None
+    analysis: dict
+    match: Optional[dict] = None
+    coverage: Optional[dict] = None
+    decision: dict
 
 
 class RenamePreviewItem(BaseModel):

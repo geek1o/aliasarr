@@ -71,6 +71,14 @@ except ImportError:
 
 from app.services.parser import ReleaseKind, parse_episode
 from app.services.quality import parse_quality, detect_file_quality
+from app.services.file_preflight import (
+    ConflictPolicy,
+    FileIntent,
+    OperationMode,
+    atomic_transfer,
+    preflight_file_operation,
+)
+from app.services.path_security import configured_library_roots, configured_download_roots, require_descendant
 
 SUBTITLE_EXTENSIONS = {".srt", ".ass", ".ssa", ".sub", ".idx", ".vtt", ".smi"}
 AUDIO_EXTENSIONS = {".mka", ".aac", ".ac3", ".dts", ".flac", ".mp3", ".m4a", ".wav", ".eac3", ".opus"}
@@ -331,21 +339,26 @@ def transfer_media_file(
     if os.path.abspath(src) == os.path.abspath(dst):
         return "none"
 
-    dst_dir = os.path.dirname(dst)
-    if dst_dir:
-        os.makedirs(dst_dir, exist_ok=True)
+    requested_mode = OperationMode.HARDLINK if use_hardlinks else (
+        OperationMode.COPY if keep_source else OperationMode.MOVE
+    )
+    report = preflight_file_operation(
+        [FileIntent(src, dst, requested_mode, conflict_policy=ConflictPolicy.REPLACE)],
+        allow_hardlink_fallback=True,
+        probe_write=True,
+    ).raise_for_errors()
+    effective_mode = report.decisions[0].effective_mode
 
-    if os.path.exists(dst):
-        try:
-            os.remove(dst)
-        except OSError:
-            pass
+    # A failed hardlink used to fall back according to the seeding policy. Keep
+    # that public behaviour, but make both fallback paths atomic as well.
+    if requested_mode == OperationMode.HARDLINK and effective_mode == OperationMode.COPY and not keep_source:
+        effective_mode = OperationMode.MOVE
 
-    if use_hardlinks:
+    if requested_mode == OperationMode.HARDLINK and effective_mode == OperationMode.HARDLINK:
         try:
-            os.link(src, dst)
+            result = atomic_transfer(src, dst, mode=OperationMode.HARDLINK, replace=True)
             logger.info("Хардлинк успешно создан: %s -> %s", src, dst)
-            return "hardlink"
+            return result
         except OSError as link_err:
             fallback_mode = "копирование (сохранение раздачи)" if keep_source else "перемещение"
             logger.warning(
@@ -353,23 +366,46 @@ def transfer_media_file(
                 link_err, fallback_mode, src, dst,
             )
 
-    if keep_source:
-        shutil.copy2(src, dst)
+            effective_mode = OperationMode.COPY if keep_source else OperationMode.MOVE
+
+    if effective_mode == OperationMode.COPY:
+        result = atomic_transfer(src, dst, mode=OperationMode.COPY, replace=True)
         logger.info("Файл скопирован (раздача сохранена): %s -> %s", src, dst)
-        return "copy"
-    else:
-        try:
-            shutil.move(src, dst)
-            logger.info("Файл перемещен: %s -> %s", src, dst)
-            return "move"
-        except OSError:
-            shutil.copy2(src, dst)
-            try:
-                os.remove(src)
-            except OSError:
-                pass
-            logger.info("Файл перемещен (fallback copy+remove): %s -> %s", src, dst)
-            return "move"
+        return result
+
+    result = atomic_transfer(src, dst, mode=OperationMode.MOVE, replace=True)
+    logger.info("Файл перемещен: %s -> %s", src, dst)
+    return result
+
+
+def _validate_media_operation_roots(
+    settings,
+    show_root: str,
+    download_path: str,
+    specific_files=None,
+    *,
+    library_root: str | None = None,
+) -> None:
+    """Validate import roots before creating a destination or scanning a source."""
+    library_roots = list(configured_library_roots(settings)) if settings else []
+    if library_root:
+        library_roots.append(library_root)
+    if library_roots:
+        require_descendant(show_root, library_roots, allow_root=True)
+
+    download_roots = list(configured_download_roots(settings)) if settings else []
+    # ``download_path`` is the exact release root resolved by the download
+    # client/monitor.  Restrict individual files to it even when the caller uses
+    # an explicit temporary root that is not stored in AppSettings (tests,
+    # manual jobs, and remote-path mappings).
+    if download_path:
+        download_roots.append(download_path)
+    if not download_roots:
+        return
+    if download_path:
+        require_descendant(download_path, download_roots, allow_root=True)
+    for file_path in specific_files or ():
+        require_descendant(file_path, download_roots)
 
 
 _INVALID_FS_CHARS = re.compile(r'[<>:"/\\|?*]')
@@ -680,21 +716,18 @@ def copy_file_with_progress(
     Копирует файл по чанкам (4 МБ) с вызовом callback(bytes_copied, total_bytes)
     для плавного и точного отображения прогресса в реальном времени.
     """
-    total_size = os.path.getsize(src) if os.path.exists(src) else 0
-    copied = 0
-    with open(src, "rb") as fsrc, open(dst, "wb") as fdst:
-        while True:
-            buf = fsrc.read(chunk_size)
-            if not buf:
-                break
-            fdst.write(buf)
-            copied += len(buf)
-            if callback and total_size > 0:
-                callback(copied, total_size)
-    try:
-        shutil.copystat(src, dst)
-    except Exception:
-        pass
+    preflight_file_operation(
+        [FileIntent(src, dst, OperationMode.COPY, conflict_policy=ConflictPolicy.REPLACE)],
+        probe_write=True,
+    ).raise_for_errors()
+    atomic_transfer(
+        src,
+        dst,
+        mode=OperationMode.COPY,
+        replace=True,
+        callback=callback,
+        chunk_size=chunk_size,
+    )
     apply_media_permissions(dst, is_dir=False)
 
 
@@ -709,26 +742,19 @@ def move_file_with_progress(
     Если файлы на одном диске/файловой системе — атомарный перенос с вызовом callback (0% -> 100%).
     Если на разных дисках — копирование по чанкам с callback и последующее удаление источника.
     """
-    src_stat = os.stat(src)
-    dst_dir = os.path.dirname(dst)
-    os.makedirs(dst_dir, exist_ok=True)
-    apply_media_permissions(dst_dir, is_dir=True)
-    dst_dir_stat = os.stat(dst_dir)
-
-    if src_stat.st_dev == dst_dir_stat.st_dev:
-        if callback:
-            callback(0, src_stat.st_size)
-        os.replace(src, dst)
-        if callback:
-            callback(src_stat.st_size, src_stat.st_size)
-        apply_media_permissions(dst, is_dir=False)
-    else:
-        copy_file_with_progress(src, dst, callback=callback, chunk_size=chunk_size)
-        try:
-            os.remove(src)
-        except Exception:
-            pass
-        apply_media_permissions(dst, is_dir=False)
+    preflight_file_operation(
+        [FileIntent(src, dst, OperationMode.MOVE, conflict_policy=ConflictPolicy.REPLACE)],
+        probe_write=True,
+    ).raise_for_errors()
+    atomic_transfer(
+        src,
+        dst,
+        mode=OperationMode.MOVE,
+        replace=True,
+        callback=callback,
+        chunk_size=chunk_size,
+    )
+    apply_media_permissions(dst, is_dir=False)
 
 
 def episode_file_sort_key(fpath: str) -> tuple[int, int, list[int | str]]:
@@ -1084,15 +1110,15 @@ def process_download(
     """
     results = []
     show_root = getattr(show, "path", None) or os.path.join(root_folder, sanitize_filename(getattr(show, "title", "") or "Show"))
-    os.makedirs(show_root, exist_ok=True)
 
     keep_source = False
     use_hardlinks = True
+    settings = None
     if db:
         try:
             from app.services.settings_service import get_or_create_settings
-            st = get_or_create_settings(db)
-            use_hardlinks = getattr(st, "use_hardlinks", True)
+            settings = get_or_create_settings(db)
+            use_hardlinks = getattr(settings, "use_hardlinks", True)
 
             indexer_obj = None
             if torrent_hash:
@@ -1122,6 +1148,15 @@ def process_download(
                 keep_source = True
         except Exception as exc:
             logger.debug("Ошибка при определении настроек сидирования: %s", exc)
+
+    _validate_media_operation_roots(
+        settings,
+        show_root,
+        download_path,
+        specific_files,
+        library_root=root_folder,
+    )
+    os.makedirs(show_root, exist_ok=True)
 
     release_files = find_release_files(download_path, specific_files=specific_files)
     video_files = release_files["video"]
@@ -1162,8 +1197,9 @@ def process_download(
             download_path,
         )
 
-    from app.services.settings_service import get_or_create_settings
-    settings = get_or_create_settings(db) if db else None
+    if settings is None and db:
+        from app.services.settings_service import get_or_create_settings
+        settings = get_or_create_settings(db)
     import_extras = getattr(settings, "import_extra_files", True) if settings else True
 
     # 1. Сохраняем шрифты в общую папку шоу /fonts
@@ -1675,25 +1711,32 @@ def process_download(
                         })
                         continue
 
-                    try:
-                        old_stem = os.path.splitext(episode.file_path)[0]
-                        if os.path.exists(episode.file_path) and os.path.abspath(episode.file_path) != os.path.abspath(dest_video_path):
-                            os.remove(episode.file_path)
-                        old_dir = os.path.dirname(episode.file_path)
-                        if os.path.isdir(old_dir):
-                            for old_f in os.listdir(old_dir):
-                                if old_f.startswith(os.path.basename(old_stem) + "."):
-                                    try:
-                                        p_old = os.path.join(old_dir, old_f)
-                                        if os.path.abspath(p_old) != os.path.abspath(dest_video_path):
-                                            os.remove(p_old)
-                                    except Exception:
-                                        pass
-                    except OSError:
-                        pass
+                    old_stem = os.path.splitext(episode.file_path)[0]
+                    old_paths_to_remove = []
+                    if os.path.exists(episode.file_path) and os.path.abspath(episode.file_path) != os.path.abspath(dest_video_path):
+                        old_paths_to_remove.append(episode.file_path)
+                    old_dir = os.path.dirname(episode.file_path)
+                    if os.path.isdir(old_dir):
+                        for old_f in os.listdir(old_dir):
+                            if old_f.startswith(os.path.basename(old_stem) + "."):
+                                p_old = os.path.join(old_dir, old_f)
+                                if os.path.abspath(p_old) != os.path.abspath(dest_video_path):
+                                    old_paths_to_remove.append(p_old)
+
+                else:
+                    old_paths_to_remove = []
 
                 transfer_res = transfer_media_file(file_path, dest_video_path, keep_source=keep_source, use_hardlinks=use_hardlinks)
                 apply_media_permissions(dest_video_path, is_dir=False)
+                # The replacement is now fully published. Only at this point may
+                # the previous differently-named file and its companions go away.
+                for old_path in dict.fromkeys(old_paths_to_remove):
+                    if os.path.abspath(old_path) in {os.path.abspath(file_path), os.path.abspath(dest_video_path)}:
+                        continue
+                    try:
+                        os.remove(old_path)
+                    except OSError:
+                        pass
             except Exception as exc:
                 results.append({"file": file_path, "status": "failed", "reason": str(exc)})
                 continue
@@ -1986,11 +2029,12 @@ def process_movie_download(
 
     keep_source = False
     use_hardlinks = True
+    settings = None
     if db:
         try:
             from app.services.settings_service import get_or_create_settings
-            st = get_or_create_settings(db)
-            use_hardlinks = getattr(st, "use_hardlinks", True)
+            settings = get_or_create_settings(db)
+            use_hardlinks = getattr(settings, "use_hardlinks", True)
 
             indexer_obj = None
             if torrent_hash:
@@ -2026,6 +2070,13 @@ def process_movie_download(
     movie_root = show.path or os.path.join(
         root_folder,
         f"{sanitize_filename(show.title)} ({show.year})" if show.year else sanitize_filename(show.title),
+    )
+    _validate_media_operation_roots(
+        settings,
+        movie_root,
+        download_path,
+        specific_files,
+        library_root=root_folder,
     )
     old_ep = db.query(Episode).filter_by(show_id=show.id, season_number=1, episode_number=1).first()
 
@@ -2177,30 +2228,31 @@ def process_movie_download(
             pass
 
     try:
-        # Если уже был старый файл (замена по качеству), удаляем его
+        # Запоминаем старый файл, но не удаляем его до успешной публикации нового.
         old_ep = db.query(Episode).filter_by(show_id=show.id, season_number=1, episode_number=1).first()
+        old_movie_path = None
         if old_ep and old_ep.file_path and os.path.exists(old_ep.file_path) and os.path.abspath(old_ep.file_path) != os.path.abspath(dest_video_path):
-            try:
-                os.remove(old_ep.file_path)
-            except OSError:
-                pass
+            old_movie_path = old_ep.file_path
         if merged_staging_created and staging_file and os.path.exists(staging_file):
-            if os.path.exists(dest_video_path) and os.path.abspath(staging_file) != os.path.abspath(dest_video_path):
-                try:
-                    os.remove(dest_video_path)
-                except OSError:
-                    pass
-            shutil.move(staging_file, dest_video_path)
+            preflight_file_operation(
+                [FileIntent(staging_file, dest_video_path, OperationMode.MOVE, conflict_policy=ConflictPolicy.REPLACE)],
+                destination_roots=configured_library_roots(settings) if settings else (),
+                probe_write=True,
+            ).raise_for_errors()
+            atomic_transfer(staging_file, dest_video_path, mode=OperationMode.MOVE, replace=True)
             transfer_res = "merged"
         else:
             transfer_res = transfer_media_file(main_file, dest_video_path, keep_source=keep_source, use_hardlinks=use_hardlinks)
         apply_media_permissions(dest_video_path, is_dir=False)
-    except Exception as exc:
-        if staging_file and os.path.exists(staging_file):
+        if old_movie_path and os.path.abspath(old_movie_path) not in {
+            os.path.abspath(main_file),
+            os.path.abspath(dest_video_path),
+        }:
             try:
-                os.remove(staging_file)
+                os.remove(old_movie_path)
             except OSError:
                 pass
+    except Exception as exc:
         return [{"file": main_file, "status": "failed", "reason": str(exc)}]
 
     # Копируем шрифты

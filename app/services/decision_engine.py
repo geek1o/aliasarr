@@ -81,6 +81,7 @@ class DecisionEngine:
         torrent_hash: Optional[str] = None,
         guid: Optional[str] = None,
         download_url: Optional[str] = None,
+        precomputed_match: Optional[Any] = None,
     ) -> DecisionResult:
         """
         Полная оценка релиза по всем спецификациям Decision Engine.
@@ -129,15 +130,18 @@ class DecisionEngine:
 
         # 4. Проверка соответствия шоу и сезона/серий (Title & SeasonSpecification)
         if show:
-            aliases = build_alias_candidates(show, db=db)
-            match = match_release(
-                title,
-                show.id,
-                aliases,
-                content_type=show.content_type,
-                categories=categories,
-                show_year=getattr(show, "year", None),
-            )
+            if precomputed_match is not None:
+                match = precomputed_match
+            else:
+                aliases = build_alias_candidates(show, db=db)
+                match = match_release(
+                    title,
+                    show.id,
+                    aliases,
+                    content_type=show.content_type,
+                    categories=categories,
+                    show_year=getattr(show, "year", None),
+                )
             if not match.matched:
                 rejections.append(f"Название релиза не соответствует тайтлу «{show.title}»")
 

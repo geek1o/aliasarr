@@ -649,10 +649,11 @@ def match_release(
     content_type: str = "series",
     categories: Optional[list[int]] = None,
     show_year: Optional[int] = None,
+    parsed: Optional[ParsedRelease] = None,
 ) -> MatchResult:
     """Полный матчинг релиза: алиас (fuzzy) + парсинг номера серии + проверка типа контента и года."""
     alias, score = best_alias_match(release_name, aliases, threshold, content_type=content_type)
-    parsed = parse_episode(release_name)
+    parsed = parsed or parse_episode(release_name)
 
     # Отсеиваем не-видео релизы (игры, консоли, ROM, софт, манга, артбуки, OST/саундтреки)
     if is_non_video_release(release_name, categories=categories):
@@ -1193,4 +1194,3 @@ def get_show_title_words(show: Any) -> set[str]:
             if text:
                 words.update(normalize_title_words(text))
     return words
-

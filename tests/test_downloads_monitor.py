@@ -234,8 +234,11 @@ class TestDownloadsMonitor(unittest.TestCase):
             )
 
             resolved_path, specific_files = _resolve_torrent_files_and_path(t_movie, settings, show_movie)
-            self.assertEqual(specific_files, [m_file])
-            self.assertEqual(resolved_path, m_file)
+            self.assertEqual(
+                [os.path.realpath(path) for path in specific_files],
+                [os.path.realpath(m_file)],
+            )
+            self.assertEqual(os.path.realpath(resolved_path), os.path.realpath(m_file))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -1151,6 +1154,4 @@ class TestDownloadsMonitor(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
 

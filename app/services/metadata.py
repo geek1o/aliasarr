@@ -4170,7 +4170,12 @@ def should_refresh_show(show, db, force: bool = False) -> bool:
         return False
 
 
-async def refresh_all_shows_metadata(db=None, force: bool = False, username: str = "system") -> dict:
+async def refresh_all_shows_metadata(
+    db=None,
+    force: bool = False,
+    username: str = "system",
+    task_handle=None,
+) -> dict:
     """
     Фоновое регулярное обновление метаданных для библиотеки по алгоритму Sonarr/Radarr.
     Автоматически обновляет тайтлы, требующие синхронизации (невышедшие серии, TBA/Episode N, активные онгоинги).
@@ -4202,7 +4207,7 @@ async def refresh_all_shows_metadata(db=None, force: bool = False, username: str
         logger.debug("Все %d тайтлов имеют актуальные метаданные (Sonarr/Radarr rate-limit). Пропуск.", len(all_shows))
         return {"total": len(all_shows), "updated": 0, "message": "Все метаданные актуальны"}
 
-    task = task_manager.start_task(
+    task = task_handle or task_manager.start_task(
         name="metadata_refresh",
         title="Обновление метаданных библиотеки",
         message=f"Подготовка к обновлению {len(candidate_shows)} тайтлов...",

@@ -65,6 +65,11 @@ from app.services.postprocess import process_download, process_movie_download, V
 from app.services.release_log_service import log_release_event
 from app.services.settings_service import get_or_create_settings
 from app.services import blocklist_service
+from app.services.path_security import (
+    configured_download_roots,
+    require_descendant,
+    safe_join_under,
+)
 
 logger = logging.getLogger("aliasarr.downloads_monitor")
 
@@ -161,9 +166,26 @@ def _resolve_torrent_files_and_path(t, settings, show: Optional[Show] = None) ->
     импортируются ТОЛЬКО файлы из этого торрента, без сканирования сторонних папок и релизов.
     """
     content_type = getattr(show, "content_type", "series") if show else "series"
-    candidates_base = []
+    allowed_roots = configured_download_roots(settings)
+    candidates_base: list[str] = []
+
+    def _safe_base(raw_path: str) -> str:
+        resolved = os.path.realpath(os.path.expanduser(raw_path))
+        if allowed_roots:
+            require_descendant(resolved, allowed_roots, allow_root=True)
+        return resolved
+
+    def _add_base(raw_path: str, *, first: bool = False) -> str:
+        resolved = _safe_base(raw_path)
+        if resolved not in candidates_base:
+            if first:
+                candidates_base.insert(0, resolved)
+            else:
+                candidates_base.append(resolved)
+        return resolved
+
     if t.save_path:
-        candidates_base.append(t.save_path)
+        _add_base(t.save_path)
 
     # Категорийные папки загрузок
     cat_folder = ""
@@ -175,14 +197,15 @@ def _resolve_torrent_files_and_path(t, settings, show: Optional[Show] = None) ->
         cat_folder = getattr(settings, "download_folder_series", "")
 
     if cat_folder:
-        candidates_base.append(cat_folder)
+        _add_base(cat_folder)
 
     content_path = getattr(t, "content_path", "") or ""
-    if content_path and os.path.exists(content_path):
-        if os.path.isfile(content_path):
-            return content_path, [content_path]
-        elif os.path.isdir(content_path):
-            candidates_base.insert(0, content_path)
+    safe_content_path = _safe_base(content_path) if content_path else ""
+    if safe_content_path and os.path.exists(safe_content_path):
+        if os.path.isfile(safe_content_path):
+            return safe_content_path, [safe_content_path]
+        elif os.path.isdir(safe_content_path):
+            _add_base(safe_content_path, first=True)
 
     # 1. Если клиент вернул список файлов торрента (t.files) — находим их точные пути на диске
     if getattr(t, "files", None):
@@ -195,20 +218,15 @@ def _resolve_torrent_files_and_path(t, settings, show: Optional[Show] = None) ->
                 continue
             found = False
             for b_dir in candidates_base:
-                p1 = os.path.join(b_dir, fname)
-                if os.path.exists(p1) and os.path.isfile(p1):
-                    resolved_files.append(p1)
+                candidate = safe_join_under(b_dir, fname)
+                if candidate.exists() and candidate.is_file():
+                    resolved_files.append(str(candidate))
                     found = True
                     break
-                p2 = os.path.join(b_dir, os.path.basename(fname))
-                if os.path.exists(p2) and os.path.isfile(p2):
-                    resolved_files.append(p2)
-                    found = True
-                    break
-            if not found and content_path and os.path.isdir(content_path):
-                p3 = os.path.join(content_path, fname)
-                if os.path.exists(p3) and os.path.isfile(p3):
-                    resolved_files.append(p3)
+            if not found and safe_content_path and os.path.isdir(safe_content_path):
+                candidate = safe_join_under(safe_content_path, fname)
+                if candidate.exists() and candidate.is_file():
+                    resolved_files.append(str(candidate))
 
         if resolved_files:
             if len(resolved_files) == 1:
@@ -222,42 +240,44 @@ def _resolve_torrent_files_and_path(t, settings, show: Optional[Show] = None) ->
     # 2. Проверяем конкретную папку или файл os.path.join(save_path, name)
     for b_dir in candidates_base:
         if t.name:
-            target = os.path.join(b_dir, t.name)
-            if os.path.exists(target):
-                if os.path.isfile(target):
-                    return target, [target]
-                return target, []
+            target = safe_join_under(b_dir, t.name)
+            if target.exists():
+                if target.is_file():
+                    return str(target), [str(target)]
+                return str(target), []
 
     # 3. Если content_path существует на диске
-    if content_path and os.path.exists(content_path):
-        if os.path.isfile(content_path):
-            return content_path, [content_path]
-        return content_path, []
+    if safe_content_path and os.path.exists(safe_content_path):
+        if os.path.isfile(safe_content_path):
+            return safe_content_path, [safe_content_path]
+        return safe_content_path, []
 
     # 4. Fallback: если список файлов не был получен, ищем в корне save_path файлы, матчащиеся с тайтлом шоу
-    if show and t.save_path and os.path.isdir(t.save_path):
+    safe_save_path = _safe_base(t.save_path) if t.save_path else ""
+    if show and safe_save_path and os.path.isdir(safe_save_path):
         from app.services.matcher import build_alias_candidates, best_alias_match
         aliases = build_alias_candidates(show)
         matched_items = []
         try:
-            for item in os.listdir(t.save_path):
-                item_path = os.path.join(t.save_path, item)
+            for item in os.listdir(safe_save_path):
+                item_path = safe_join_under(safe_save_path, item)
                 b_alias, b_score = best_alias_match(item, aliases, threshold=65)
                 if b_alias and b_score >= 65:
-                    if os.path.isfile(item_path):
-                        matched_items.append(item_path)
-                    elif os.path.isdir(item_path):
-                        return item_path, []
+                    if item_path.is_file():
+                        matched_items.append(str(item_path))
+                    elif item_path.is_dir():
+                        return str(item_path), []
             if matched_items:
                 if len(matched_items) == 1:
                     return matched_items[0], matched_items
-                return t.save_path, matched_items
+                return safe_save_path, matched_items
         except Exception:
             pass
 
     # 5. Крайний fallback
-    direct = os.path.join(t.save_path, t.name) if t.save_path and t.name else (t.save_path or "")
-    return direct, []
+    if safe_save_path and t.name:
+        return str(safe_join_under(safe_save_path, t.name)), []
+    return safe_save_path, []
 
 
 def _resolve_download_path(t, settings, content_type: str) -> str:

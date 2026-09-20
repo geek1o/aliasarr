@@ -155,6 +155,7 @@ class TestUpgradeAndTracking(unittest.IsolatedAsyncioTestCase):
              patch("os.path.isdir", return_value=False), \
              patch("os.path.getsize", return_value=2000000000), \
              patch("shutil.move"), \
+             patch("app.services.postprocess.transfer_media_file", return_value="move"), \
              patch("os.makedirs"), \
              patch("app.services.postprocess.apply_media_permissions"), \
              patch("app.services.postprocess.log_release_event"):

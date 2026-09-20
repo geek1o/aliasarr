@@ -1742,9 +1742,47 @@ def clear_tasks_history(
     return {"success": True}
 
 
+@router.get("/tasks/{task_id}", summary="Состояние фоновой операции")
+def get_task_details(
+    task_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    from app.services.task_manager import task_manager
+
+    task = task_manager.get_task(task_id)
+    if task is None:
+        raise HTTPException(404, "Task not found")
+    return task.to_dict()
+
+
+@router.post("/tasks/{task_id}/cancel", summary="Отменить фоновую операцию")
+def cancel_background_task(
+    task_id: str,
+    current_user: User = Depends(require_permission("manage_library")),
+):
+    from app.services.task_manager import task_manager
+
+    task = task_manager.cancel_task(task_id)
+    if task is None:
+        raise HTTPException(404, "Task not found")
+    return task.to_dict()
+
+
+@router.post("/tasks/{task_id}/retry", summary="Повторить фоновую операцию")
+def retry_background_task(
+    task_id: str,
+    current_user: User = Depends(require_permission("manage_library")),
+):
+    from app.services.task_manager import task_manager
+
+    task = task_manager.retry_task(task_id)
+    if task is None:
+        raise HTTPException(404, "Task not found")
+    return task.to_dict()
+
+
 @router.api_route("/operations/refresh-all-metadata", methods=["GET", "POST"], summary="Запуск полного обновления метаданных библиотеки")
 async def trigger_refresh_all_metadata(
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("manage_library")),
 ):
@@ -1752,21 +1790,20 @@ async def trigger_refresh_all_metadata(
     Запуск полного фонового обновления метаданных для всех тайтлов в библиотеке
     (Sonarr/Radarr Refresh Series/Movies).
     """
-    from app.services.metadata import refresh_all_shows_metadata
-    from app.database import SessionLocal
     from app.services.task_manager import task_manager
 
-    status_data = task_manager.get_status()
-    running_tasks = status_data.get("running_tasks", [])
-    if any(t.get("name") == "metadata_refresh" for t in running_tasks):
-        return {"success": False, "message": "Обновление метаданных уже выполняется"}
-
-    async def _runner():
-        try:
-            await refresh_all_shows_metadata(None, force=True, username=current_user.username)
-        except Exception as exc:
-            logger.warning("Ошибка ручного фонового обновления метаданных: %s", exc)
-
-    background_tasks.add_task(_runner)
-    return {"success": True, "message": "Запущено фоновое обновление метаданных библиотеки"}
-
+    task = task_manager.enqueue(
+        "metadata_refresh",
+        "Обновление метаданных библиотеки",
+        {"force": True, "username": current_user.username},
+        message="Ожидает выполнения",
+        active_key="metadata_refresh",
+        max_attempts=3,
+        resumable=True,
+    )
+    return {
+        "success": task.status in ("queued", "running"),
+        "message": "Обновление метаданных поставлено в постоянную очередь",
+        "task_id": task.id,
+        "status": task.status,
+    }

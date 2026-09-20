@@ -165,6 +165,9 @@ def _ensure_performance_indexes() -> None:
         ("idx_download_history_torrent_hash", "download_history", "torrent_hash"),
         ("idx_episodes_upgrade_requested", "episodes", "upgrade_requested"),
         ("idx_shows_upgrade_requested", "shows", "upgrade_requested"),
+        ("idx_background_tasks_status_available", "background_tasks", "status, available_at"),
+        ("idx_background_tasks_name_status", "background_tasks", "name, status"),
+        ("idx_background_tasks_ended_at", "background_tasks", "ended_at"),
     ]
     try:
         with engine.begin() as conn:
@@ -233,4 +236,3 @@ def optimize_and_checkpoint_db(db_engine=None) -> None:
             conn.commit()
     except Exception as exc:
         logger.debug("Ошибка optimize_and_checkpoint_db: %s", exc)
-

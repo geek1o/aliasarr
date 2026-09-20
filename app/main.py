@@ -33,6 +33,7 @@ from app.api import (
     library_import_routes,
     metadata_routes,
     operations,
+    release_inspector_routes,
     release_logs_routes,
     settings_routes,
     shows,
@@ -165,6 +166,7 @@ app.include_router(metadata_routes.router)
 app.include_router(custom_formats_routes.router)
 app.include_router(settings_routes.router)
 app.include_router(operations.router)
+app.include_router(release_inspector_routes.router)
 app.include_router(auth_routes.router)
 app.include_router(users_routes.router)
 app.include_router(audit_routes.router)
@@ -204,6 +206,17 @@ async def on_startup():
 
     init_db()
     install_db_log_handler()
+    try:
+        from app.services.task_manager import task_manager
+        from app.services.task_handlers import register_builtin_task_handlers
+
+        register_builtin_task_handlers()
+        recovery = task_manager.recover_startup()
+        await task_manager.start_worker()
+        if any(recovery.values()):
+            logger.info("Восстановление фоновых операций после запуска: %s", recovery)
+    except Exception as exc:
+        logger.warning("Не удалось запустить постоянную очередь операций: %s", exc)
     db = SessionLocal()
     try:
         settings = get_or_create_settings(db)
@@ -644,6 +657,12 @@ async def on_startup():
 @app.on_event("shutdown")
 async def on_shutdown():
     scheduler.shutdown()
+    try:
+        from app.services.task_manager import task_manager
+
+        await task_manager.shutdown(timeout=10.0)
+    except Exception as exc:
+        logger.debug("Ошибка остановки постоянной очереди операций: %s", exc)
     try:
         from app.services.log_service import stop_db_log_worker
         stop_db_log_worker()
