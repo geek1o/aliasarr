@@ -114,6 +114,26 @@ def _validate_destructive_media_paths(settings, paths: list[str | None]) -> None
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+def _remove_or_recycle_path(path: str, settings, *, operation: str) -> bool:
+    """Remove one path, or move it into the recoverable library recycle bin."""
+    if not path or not os.path.exists(path):
+        return False
+    if bool(getattr(settings, "recycle_bin_enabled", False)):
+        from app.services.path_security import configured_library_roots
+        from app.services.recycle_bin import recycle_media_path
+
+        recycle_media_path(
+            path,
+            library_roots=configured_library_roots(settings),
+            operation=operation,
+        )
+    elif os.path.isdir(path) and not os.path.islink(path):
+        shutil.rmtree(path)
+    else:
+        os.remove(path)
+    return True
+
+
 def _attach_computed_fields(db: Session, shows: list[Show]) -> list[ShowOut]:
     """Добавляет к каждому шоу агрегаты для табличного вида библиотеки:
     количество сезонов/серий и дату ближайшего невышедшего эфира."""
@@ -646,17 +666,18 @@ async def delete_show(
         )
 
         def _remove_files_sync(f_paths: list[str], s_path: Optional[str]):
+            if s_path and os.path.isdir(s_path):
+                try:
+                    _remove_or_recycle_path(s_path, settings, operation="show_delete")
+                    return
+                except Exception:
+                    logger.exception("Не удалось удалить или переместить в корзину папку %s", s_path)
             for f in f_paths:
                 if f and os.path.isfile(f):
                     try:
-                        os.remove(f)
+                        _remove_or_recycle_path(f, settings, operation="show_delete")
                     except Exception:
-                        pass
-            if s_path and os.path.isdir(s_path):
-                try:
-                    shutil.rmtree(s_path, ignore_errors=True)
-                except Exception:
-                    pass
+                        logger.exception("Не удалось удалить или переместить в корзину файл %s", f)
 
         import asyncio
         file_paths_to_delete = [ep.file_path for ep in episodes if ep.file_path]
@@ -737,18 +758,20 @@ async def delete_content(
 
             def _remove_files_sync(f_paths: list[str], s_path: Optional[str]) -> int:
                 count = 0
+                if s_path and os.path.isdir(s_path):
+                    count = sum(1 for path in f_paths if path and os.path.isfile(path))
+                    try:
+                        _remove_or_recycle_path(s_path, settings, operation="show_delete")
+                        return count
+                    except Exception:
+                        logger.exception("Не удалось удалить или переместить в корзину папку %s", s_path)
                 for f in f_paths:
                     if f and os.path.isfile(f):
                         try:
-                            os.remove(f)
-                            count += 1
+                            if _remove_or_recycle_path(f, settings, operation="show_delete"):
+                                count += 1
                         except Exception:
-                            pass
-                if s_path and os.path.isdir(s_path):
-                    try:
-                        shutil.rmtree(s_path, ignore_errors=True)
-                    except Exception:
-                        pass
+                            logger.exception("Не удалось удалить или переместить в корзину файл %s", f)
                 return count
 
             import asyncio
@@ -828,14 +851,14 @@ async def delete_content(
                     try:
                         # Удаляем файл серии
                         fpath = ep.file_path
-                        os.remove(fpath)
-                        deleted_files += 1
+                        if _remove_or_recycle_path(fpath, settings, operation="season_delete"):
+                            deleted_files += 1
                         season_folders_to_check.add(os.path.dirname(fpath))
 
                         # Удаляем сопутствующие файлы субтитров/аудио/обложек
                         for companion in iter_companion_files(fpath, DELETABLE_COMPANION_EXTENSIONS):
                             try:
-                                os.remove(companion)
+                                _remove_or_recycle_path(companion, settings, operation="season_companion_delete")
                             except Exception:
                                 pass
                     except Exception:
@@ -919,13 +942,13 @@ async def delete_content(
                 if payload.delete_files and os.path.isfile(ep.file_path):
                     try:
                         fpath = ep.file_path
-                        os.remove(fpath)
-                        deleted_files += 1
+                        if _remove_or_recycle_path(fpath, settings, operation="episode_delete"):
+                            deleted_files += 1
 
                         # Удаляем сопутствующие файлы субтитров/аудио/обложек
                         for companion in iter_companion_files(fpath, DELETABLE_COMPANION_EXTENSIONS):
                             try:
-                                os.remove(companion)
+                                _remove_or_recycle_path(companion, settings, operation="episode_companion_delete")
                             except Exception:
                                 pass
                     except Exception:

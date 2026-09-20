@@ -47,6 +47,7 @@ class Task:
         result: Optional[dict] = None,
         attempts: int = 0,
         max_attempts: int = 1,
+        resumable: bool = False,
     ) -> None:
         self.id = task_id
         self.name = name
@@ -65,6 +66,7 @@ class Task:
         self.result = result
         self.attempts = attempts
         self.max_attempts = max_attempts
+        self.resumable = resumable
         self._manager = manager
 
     @classmethod
@@ -90,6 +92,7 @@ class Task:
             result=row.result,
             attempts=row.attempts,
             max_attempts=row.max_attempts,
+            resumable=bool(row.resumable),
         )
 
     def _copy_from(self, other: "Task") -> None:
@@ -110,6 +113,7 @@ class Task:
             "result",
             "attempts",
             "max_attempts",
+            "resumable",
         ):
             setattr(self, attr, getattr(other, attr))
 
@@ -193,6 +197,9 @@ class Task:
             "ended_at": self.ended_at.isoformat() if self.ended_at else None,
             "duration_seconds": round(max(0.1, duration), 1),
             "error": self.error,
+            "resumable": self.resumable,
+            "attempts": self.attempts,
+            "max_attempts": self.max_attempts,
         }
 
 
@@ -644,7 +651,9 @@ class TaskManager:
             row = db.get(BackgroundTask, task_id)
             if not row:
                 return None
-            if row.status in ACTIVE_STATUSES:
+            if row.status == "queued" or (
+                row.status == "running" and row.mode == "command" and row.resumable
+            ):
                 row.status = "cancelled"
                 row.message = message
                 row.ended_at = self._now()

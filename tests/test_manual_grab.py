@@ -45,7 +45,10 @@ class TestManualGrab(unittest.TestCase):
         bg_tasks = MagicMock()
         mock_user = MagicMock()
 
-        with patch("app.api.indexers.get_client") as mock_get_client,              patch("app.api.indexers.get_or_create_settings") as mock_settings,              patch("app.api.indexers.notify_all", new_callable=AsyncMock):
+        with patch("app.api.indexers.get_client") as mock_get_client, \
+             patch("app.api.indexers.get_or_create_settings") as mock_settings, \
+             patch("app.services.download_preflight.prepare_download_target", return_value="/downloads"), \
+             patch("app.api.indexers.notify_all", new_callable=AsyncMock):
             
             mock_client = AsyncMock()
             mock_client.add_torrent.return_value = "dummyhash12345"
@@ -88,6 +91,7 @@ class TestManualGrab(unittest.TestCase):
 
         with patch("app.api.indexers.get_client") as mock_get_client, \
              patch("app.api.indexers.get_or_create_settings") as mock_settings, \
+             patch("app.services.download_preflight.prepare_download_target", return_value="/downloads/movies"), \
              patch("app.api.indexers.notify_all", new_callable=AsyncMock):
 
             mock_client = AsyncMock()
@@ -151,6 +155,7 @@ class TestManualGrab(unittest.TestCase):
 
         with patch("app.api.indexers.get_client") as mock_get_client, \
              patch("app.api.indexers.get_or_create_settings") as mock_settings, \
+             patch("app.services.download_preflight.prepare_download_target", return_value="/downloads"), \
              patch("app.api.indexers.notify_all", new_callable=AsyncMock):
 
             mock_client = AsyncMock()

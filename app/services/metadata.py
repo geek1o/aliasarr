@@ -4221,6 +4221,14 @@ async def refresh_all_shows_metadata(
     try:
         from app.database import SessionLocal
         for i, show in enumerate(candidate_shows):
+            if not task_manager.is_active(task.id):
+                return {
+                    "total": len(candidate_shows),
+                    "updated": updated_count,
+                    "errors": errors_count,
+                    "cancelled": True,
+                    "message": "Обновление метаданных отменено",
+                }
             task_manager.update_task(
                 task.id,
                 message=f"Обновление «{show.title}» ({i + 1}/{len(candidate_shows)})",

@@ -22,6 +22,7 @@ try:
         Alias,
         Base,
         DownloadClient,
+        DelayProfile,
         Episode,
         EpisodeStatus,
         Indexer,
@@ -321,6 +322,28 @@ class TestAutoSearch(unittest.TestCase):
 
             self.assertEqual(result["grabbed"], [], "Ни один из релизов не относится ко 2 сезону — захватываться не должно")
             self.assertEqual(len(fake_dc.added), 0)
+
+    def test_automatic_search_defers_fresh_release_by_delay_profile(self):
+        show = make_show(self.session, title="Delayed Show")
+        self.session.add(Alias(show_id=show.id, text="Delayed Show"))
+        self.session.add(DelayProfile(name="Default delay", torrent_delay_minutes=60))
+        self.session.commit()
+
+        make_episode(self.session, show, season=1, episode=1)
+        make_indexer(self.session)
+        make_download_client(self.session)
+        fresh = _release("fresh", "Delayed.Show.S01E01.1080p.WEBDL", seeders=50)
+        fresh.pub_date = dt.datetime.now(dt.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
+
+        fake_dc = FakeDownloadClient()
+        with patch(
+            "app.services.indexer_service.TorznabIndexerClient.search",
+            lambda self_c, query, categories=None: _async_return([fresh]),
+        ), patch("app.services.auto_search.get_client", lambda row: fake_dc):
+            result = asyncio.run(auto_search._do_search_and_grab(self.session, show))
+
+        self.assertEqual(result["grabbed"], [])
+        self.assertEqual(fake_dc.added, [])
 
     def test_correct_season_release_grabbed_with_ru_season_word(self):
         """Релиз с явным «Сезон 1 Серия 3» должен матчиться под нужный сезон/серию."""
@@ -1150,7 +1173,6 @@ class TestSeasonQueries(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
 
 
 

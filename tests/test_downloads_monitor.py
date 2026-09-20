@@ -242,6 +242,48 @@ class TestDownloadsMonitor(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_remote_download_client_path_mapping(self):
+        import tempfile
+        import shutil
+        from app.services.download_client import TorrentFile
+        from app.services.downloads_monitor import _resolve_torrent_files_and_path
+
+        tmp = tempfile.mkdtemp()
+        try:
+            local_downloads = os.path.join(tmp, "downloads")
+            release_dir = os.path.join(local_downloads, "release")
+            os.makedirs(release_dir)
+            media = os.path.join(release_dir, "episode.mkv")
+            with open(media, "wb") as stream:
+                stream.write(b"video")
+            settings = SimpleNamespace(
+                download_folder_series=local_downloads,
+                download_folder_movies="",
+                download_folder_anime="",
+            )
+            show = SimpleNamespace(content_type="series", title="Show")
+            torrent = TorrentInfo(
+                hash="mapped",
+                name="release",
+                progress=1.0,
+                state="seeding",
+                save_path="/remote/downloads",
+                size=5,
+                files=[TorrentFile(index=0, name="release/episode.mkv", size=5, progress=1.0, priority=1)],
+            )
+
+            resolved, files = _resolve_torrent_files_and_path(
+                torrent,
+                settings,
+                show,
+                [{"remote_root": "/remote/downloads", "local_root": local_downloads}],
+            )
+
+            self.assertEqual(os.path.realpath(resolved), os.path.realpath(media))
+            self.assertEqual([os.path.realpath(path) for path in files], [os.path.realpath(media)])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_seeding_time_limit_logic(self):
         show = SimpleNamespace(id=1, title="Test Show", content_type="series", monitored=True)
         dc = SimpleNamespace(id=10, name="DC1", type="qbittorrent", enabled=True, seed_time_limit=60, seed_ratio_limit=None)
@@ -1154,4 +1196,3 @@ class TestDownloadsMonitor(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -10,10 +10,8 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Optional
-from xml.etree import ElementTree
 
 try:
     import httpx
@@ -21,16 +19,11 @@ except ImportError:
     httpx = None
 
 from app.services.rate_limiter import RateLimitExceededError, get_rate_limiter
-
-TORZNAB_NS = {"torznab": "http://torznab.com/schemas/2015/feed"}
-
-_TITLELESS_RELEASE_PREFIX = re.compile(
-    r"^(?:s\d|e\d|\d{1,2}x\d|season\s+\d|сезон\s+\d|"
-    r"web(?:-?dl|rip)\b|hdtv\b|bd(?:remux|rip)\b|blu-?ray\b|"
-    r"(?:720|1080|2160)p\b)",
-    re.IGNORECASE,
+from app.services.indexer_adapters import (
+    element_text,
+    normalize_release_title,
+    parse_xml_releases,
 )
-
 
 def xml_element_text(element) -> str:
     """Return all text from an RSS element, including nested markup.
@@ -39,16 +32,16 @@ def xml_element_text(element) -> str:
     ``element.text`` then contains only the prefix (and can be empty), while the
     season/quality suffixes live in child nodes and tails.
     """
-    if element is None:
-        return ""
-    return "".join(element.itertext()).strip()
+    return element_text(element)
 
 
 def torznab_release_title(item, title_element) -> str:
     title = xml_element_text(title_element)
     if title:
         return title
-    for attr in item.findall("torznab:attr", TORZNAB_NS):
+    for attr in item:
+        if attr.tag.rsplit("}", 1)[-1].lower() != "attr":
+            continue
         if (attr.get("name") or "").lower() in ("title", "releasetitle"):
             value = (attr.get("value") or "").strip()
             if value:
@@ -63,13 +56,7 @@ def restore_query_in_release_title(title: str, query: str) -> str:
     for example ``S2E1-9 - 2026 WEBRip``.  Prefix only clearly metadata-led
     titles so ordinary releases from other indexers remain untouched.
     """
-    clean_title = (title or "").strip()
-    clean_query = (query or "").strip()
-    if not clean_title or not clean_query:
-        return clean_title
-    if not _TITLELESS_RELEASE_PREFIX.match(clean_title):
-        return clean_title
-    return f"{clean_query} {clean_title}"
+    return normalize_release_title(title, query)
 
 
 @dataclass
@@ -126,62 +113,8 @@ class TorznabClient:
             return releases
 
     def _parse_response(self, xml_text: str) -> list[TorznabRelease]:
-        releases: list[TorznabRelease] = []
-        try:
-            root = ElementTree.fromstring(xml_text)
-        except ElementTree.ParseError:
-            return releases
-
-        for item in root.iter("item"):
-            title_el = item.find("title")
-            guid_el = item.find("guid")
-            link_el = item.find("link")
-            comments_el = item.find("comments")
-            if title_el is None:
-                continue
-
-            size = 0
-            seeders = 0
-            peers = 0
-            infohash = None
-            categories: list[int] = []
-            for attr in item.findall("torznab:attr", TORZNAB_NS):
-                name = attr.get("name")
-                value = attr.get("value")
-                if name == "size" and value:
-                    size = int(value)
-                elif name == "seeders" and value:
-                    seeders = int(value)
-                elif name == "peers" and value:
-                    peers = int(value)
-                elif name == "infohash" and value:
-                    infohash = value
-                elif name == "category" and value:
-                    try:
-                        categories.append(int(value))
-                    except ValueError:
-                        pass
-
-            # Ссылка на страницу раздачи на трекере (тег <comments> или guid)
-            guid_text = (guid_el.text if guid_el is not None else "") or ""
-            comments_text = comments_el.text if comments_el is not None else None
-            page_url = comments_text or (guid_text if guid_text.startswith("http") else None)
-
-            title = torznab_release_title(item, title_el)
-            if not title:
-                continue
-
-            releases.append(
-                TorznabRelease(
-                    title=title,
-                    guid=guid_text or (link_el.text if link_el is not None else ""),
-                    download_url=link_el.text if link_el is not None else None,
-                    page_url=page_url,
-                    size_bytes=size,
-                    seeders=seeders,
-                    peers=peers,
-                    infohash=infohash,
-                    categories=categories,
-                )
-            )
-        return releases
+        return parse_xml_releases(
+            xml_text,
+            protocol="torznab",
+            release_factory=TorznabRelease,
+        ).releases

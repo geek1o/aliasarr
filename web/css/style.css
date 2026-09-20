@@ -738,6 +738,57 @@ body::before {
   border-radius: 3px;
   border: 1px solid rgba(45, 212, 191, 0.3);
 }
+
+.tasks-item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tasks-item-action {
+  flex: 0 0 auto;
+}
+
+.automation-chip-list,
+.automation-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.automation-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-alt);
+  flex-wrap: wrap;
+}
+
+.automation-row-main {
+  display: flex;
+  flex: 1 1 260px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.automation-row-main .hint {
+  overflow-wrap: anywhere;
+}
+
+.automation-row .input-small {
+  width: auto;
+  max-width: 190px;
+}
+
+.automation-empty {
+  color: var(--text-muted);
+  padding: 12px;
+  text-align: center;
+}
 .tasks-status-progress-badge {
   display: inline-flex;
   align-items: center;

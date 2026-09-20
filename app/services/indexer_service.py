@@ -9,7 +9,6 @@ import logging
 import re
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass, field
 from typing import Any, Optional
 from xml.etree import ElementTree
 
@@ -19,18 +18,16 @@ except ImportError:
     httpx = None
 
 import datetime as dt
+
+from app.services.indexer_adapters import normalize_release_title, parse_xml_releases
 from app.services.rate_limiter import RateLimitExceededError, get_rate_limiter
 from app.services.torznab import (
     TorznabRelease,
-    restore_query_in_release_title,
-    torznab_release_title,
     xml_element_text,
 )
 
 logger = logging.getLogger("aliasarr.indexer_service")
 
-TORZNAB_NS = {"torznab": "http://torznab.com/schemas/2015/feed"}
-NEWZNAB_NS = {"newznab": "http://newznab.com/schemas/2010/feed"}
 NYAA_NS = {"nyaa": "https://nyaa.si/xmlns/nyaa"}
 
 
@@ -149,91 +146,15 @@ class TorznabIndexerClient(BaseIndexerClient):
         xml_text = await _fetch_text_async(url, params=params, timeout=self.timeout, min_interval_seconds=self.rate_limit_seconds, is_probe=is_probe)
         releases = self._parse_xml(xml_text)
         for release in releases:
-            release.title = restore_query_in_release_title(release.title, query)
+            release.title = normalize_release_title(release.title, query)
         return releases
 
     def _parse_xml(self, xml_text: str) -> list[TorznabRelease]:
-        releases: list[TorznabRelease] = []
-        try:
-            root = ElementTree.fromstring(xml_text)
-        except ElementTree.ParseError:
-            return releases
-
-        for item in root.iter("item"):
-            title_el = item.find("title")
-            guid_el = item.find("guid")
-            link_el = item.find("link")
-            comments_el = item.find("comments")
-            pub_date_el = item.find("pubDate")
-            if title_el is None:
-                continue
-
-            size = 0
-            seeders = 0
-            peers = 0
-            infohash = None
-            categories: list[int] = []
-            for attr in item.findall("torznab:attr", TORZNAB_NS):
-                name = attr.get("name")
-                value = attr.get("value")
-                if name == "size" and value:
-                    try:
-                        size = int(value)
-                    except ValueError:
-                        pass
-                elif name == "seeders" and value:
-                    try:
-                        seeders = int(value)
-                    except ValueError:
-                        pass
-                elif name == "peers" and value:
-                    try:
-                        peers = int(value)
-                    except ValueError:
-                        pass
-                elif name == "infohash" and value:
-                    infohash = value
-                elif name == "category" and value:
-                    try:
-                        categories.append(int(value))
-                    except ValueError:
-                        pass
-
-            guid_text = (guid_el.text if guid_el is not None else "") or ""
-            comments_text = comments_el.text if comments_el is not None else None
-            page_url = comments_text or (guid_text if guid_text.startswith("http") else None)
-            download_url = link_el.text if link_el is not None else None
-
-            # Если размер не найден в атрибутах torznab, проверяем enclosure
-            if size == 0:
-                enclosure = item.find("enclosure")
-                if enclosure is not None and enclosure.get("length"):
-                    try:
-                        size = int(enclosure.get("length"))
-                    except ValueError:
-                        pass
-                if not download_url and enclosure is not None:
-                    download_url = enclosure.get("url")
-
-            title = torznab_release_title(item, title_el)
-            if not title:
-                continue
-
-            releases.append(
-                TorznabRelease(
-                    title=title,
-                    guid=guid_text or download_url or "",
-                    download_url=download_url,
-                    page_url=page_url,
-                    size_bytes=size,
-                    seeders=seeders,
-                    peers=peers,
-                    pub_date=pub_date_el.text if pub_date_el is not None else None,
-                    infohash=infohash,
-                    categories=categories,
-                )
-            )
-        return releases
+        return parse_xml_releases(
+            xml_text,
+            protocol="torznab",
+            release_factory=TorznabRelease,
+        ).releases
 
 
 class NewznabIndexerClient(BaseIndexerClient):
@@ -251,66 +172,11 @@ class NewznabIndexerClient(BaseIndexerClient):
         return self._parse_xml(xml_text)
 
     def _parse_xml(self, xml_text: str) -> list[TorznabRelease]:
-        releases: list[TorznabRelease] = []
-        try:
-            root = ElementTree.fromstring(xml_text)
-        except ElementTree.ParseError:
-            return releases
-
-        for item in root.iter("item"):
-            title_el = item.find("title")
-            guid_el = item.find("guid")
-            link_el = item.find("link")
-            comments_el = item.find("comments")
-            pub_date_el = item.find("pubDate")
-            if title_el is None:
-                continue
-
-            size = 0
-            categories: list[int] = []
-            for attr in item.findall("newznab:attr", NEWZNAB_NS):
-                name = attr.get("name")
-                value = attr.get("value")
-                if name == "size" and value:
-                    try:
-                        size = int(value)
-                    except ValueError:
-                        pass
-                elif name == "category" and value:
-                    try:
-                        categories.append(int(value))
-                    except ValueError:
-                        pass
-
-            enclosure = item.find("enclosure")
-            download_url = link_el.text if link_el is not None else None
-            if enclosure is not None:
-                if not download_url:
-                    download_url = enclosure.get("url")
-                if size == 0 and enclosure.get("length"):
-                    try:
-                        size = int(enclosure.get("length"))
-                    except ValueError:
-                        pass
-
-            guid_text = (guid_el.text if guid_el is not None else "") or ""
-            page_url = comments_el.text if comments_el is not None else (guid_text if guid_text.startswith("http") else None)
-
-            releases.append(
-                TorznabRelease(
-                    title=xml_element_text(title_el),
-                    guid=guid_text or download_url or "",
-                    download_url=download_url,
-                    page_url=page_url,
-                    size_bytes=size,
-                    seeders=100,  # Usenet retention full speed
-                    peers=0,
-                    pub_date=pub_date_el.text if pub_date_el is not None else None,
-                    infohash=None,
-                    categories=categories,
-                )
-            )
-        return releases
+        return parse_xml_releases(
+            xml_text,
+            protocol="newznab",
+            release_factory=TorznabRelease,
+        ).releases
 
 
 class NyaaIndexerClient(BaseIndexerClient):
@@ -478,7 +344,8 @@ class TorrentLeechIndexerClient(TorrentRssIndexerClient):
 
 def get_indexer_client(indexer_row) -> BaseIndexerClient:
     """Фабрика создания подходящего клиента индексатора по его типу."""
-    itype = str(getattr(indexer_row, "type", "torznab")).lower()
+    raw_type = getattr(indexer_row, "type", "torznab")
+    itype = str(getattr(raw_type, "value", raw_type)).lower()
     base_url = getattr(indexer_row, "base_url", "")
     api_key = getattr(indexer_row, "api_key", None)
     timeout = getattr(indexer_row, "timeout_seconds", 30)

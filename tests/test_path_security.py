@@ -16,7 +16,7 @@ try:
     from app.api.shows import delete_show
     from app.models.db import Base, Show, User
     from app.services import backup_service, settings_service
-    from app.services.path_security import UnsafeMediaPathError, require_library_descendant
+    from app.services.path_security import UnsafeMediaPathError, map_client_path, map_local_path, require_library_descendant
     HAS_DEPS = True
 except ImportError:
     HAS_DEPS = False
@@ -24,6 +24,19 @@ except ImportError:
 
 @unittest.skipUnless(HAS_DEPS, "FastAPI / SQLAlchemy dependencies not installed in host runner")
 class TestPathSecurity(unittest.TestCase):
+    def test_remote_path_mapping_round_trip_uses_longest_prefix(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            local = Path(temp_dir, "downloads")
+            local_tv = local / "tv"
+            mappings = [
+                {"remote_root": "/remote", "local_root": str(local)},
+                {"remote_root": "/remote-tv", "local_root": str(local_tv)},
+            ]
+            local_episode = local_tv / "Show" / "episode.mkv"
+            client_path = map_local_path(str(local_episode), mappings)
+            self.assertEqual(client_path, "/remote-tv/Show/episode.mkv")
+            self.assertEqual(map_client_path(client_path, mappings), local_episode.resolve())
+
     def test_accepts_descendant_but_rejects_root_and_sibling(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir, "library")

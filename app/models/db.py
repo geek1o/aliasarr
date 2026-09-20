@@ -21,6 +21,7 @@ import enum
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Column,
     DateTime,
     Enum as SAEnum,
     Float,
@@ -28,6 +29,7 @@ from sqlalchemy import (
     Integer,
     JSON,
     String,
+    Table,
     Text,
     UniqueConstraint,
 )
@@ -36,6 +38,22 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 class Base(DeclarativeBase):
     pass
+
+
+show_tags = Table(
+    "show_tags",
+    Base.metadata,
+    Column("show_id", ForeignKey("shows.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id", ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
+indexer_tags = Table(
+    "indexer_tags",
+    Base.metadata,
+    Column("indexer_id", ForeignKey("indexers.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id", ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class MonitorStatus(str, enum.Enum):
@@ -106,6 +124,53 @@ class ContentCategory(str, enum.Enum):
     MOVIE = "movie"
     SERIES = "series"
     ANIME = "anime"
+
+
+class Tag(Base):
+    """Метка для области действия политик поиска (тайтлы и индексаторы)."""
+
+    __tablename__ = "tags"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+
+    shows: Mapped[list["Show"]] = relationship(
+        secondary=show_tags,
+        back_populates="tags",
+    )
+    indexers: Mapped[list["Indexer"]] = relationship(
+        secondary=indexer_tags,
+        back_populates="tags",
+    )
+    delay_profiles: Mapped[list["DelayProfile"]] = relationship(
+        back_populates="tag",
+        cascade="all, delete-orphan",
+    )
+
+
+class DelayProfile(Base):
+    """Политика задержки автоматического захвата, глобальная или привязанная к метке."""
+
+    __tablename__ = "delay_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    tag_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tags.id", ondelete="CASCADE"),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+    preferred_protocol: Mapped[str] = mapped_column(String(20), default="torrent")
+    usenet_delay_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    torrent_delay_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    bypass_if_highest_quality: Mapped[bool] = mapped_column(Boolean, default=False)
+    bypass_custom_format_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+
+    tag: Mapped[Optional["Tag"]] = relationship(back_populates="delay_profiles")
 
 
 class MovieCollection(Base):
@@ -203,6 +268,10 @@ class Show(Base):
         back_populates="show",
         foreign_keys="Blocklist.show_id",
         primaryjoin="Show.id == foreign(Blocklist.show_id)",
+    )
+    tags: Mapped[list["Tag"]] = relationship(
+        secondary=show_tags,
+        back_populates="shows",
     )
 
 
@@ -357,6 +426,11 @@ class Indexer(Base):
     last_check_ok: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)  # None = ещё не проверялось
     consecutive_failures: Mapped[int] = mapped_column(Integer, default=0)
 
+    tags: Mapped[list["Tag"]] = relationship(
+        secondary=indexer_tags,
+        back_populates="indexers",
+    )
+
 
 class MetadataSource(Base):
     __tablename__ = "metadata_sources"
@@ -430,6 +504,40 @@ class DownloadClient(Base):
     seed_time_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
     # Коэффициент раздачи (Ratio limit; None/0 = без ограничения)
     seed_ratio_limit: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=None)
+    # Пути, которые удалённый клиент видит иначе, чем контейнер Aliasarr.
+    # [{"remote_root": "/downloads", "local_root": "/data/downloads"}]
+    remote_path_mappings: Mapped[list] = mapped_column(JSON, default=list)
+
+
+class ImportList(Base):
+    """Периодически синхронизируемый список TMDb/Trakt."""
+
+    __tablename__ = "import_lists"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    source: Mapped[str] = mapped_column(String(30), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(500), nullable=False)
+    api_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    username: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    access_token: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    interval_minutes: Mapped[int] = mapped_column(Integer, default=360)
+    last_synced_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime, nullable=True)
+    include_movies: Mapped[bool] = mapped_column(Boolean, default=True)
+    include_series: Mapped[bool] = mapped_column(Boolean, default=True)
+    include_crew: Mapped[bool] = mapped_column(Boolean, default=False)
+    language: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    monitored: Mapped[bool] = mapped_column(Boolean, default=True)
+    search_on_add: Mapped[bool] = mapped_column(Boolean, default=False)
+    quality_profile_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("quality_profiles.id", ondelete="SET NULL"), nullable=True
+    )
+    root_folder: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    tag_ids: Mapped[list] = mapped_column(JSON, default=list)
+    last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
 
 
 class NotificationConfig(Base):
@@ -512,6 +620,8 @@ class AppSettings(Base):
     )
     # Использовать Hardlinks (жесткие ссылки) вместо копирования для сидируемых раздач (0 байт лишнего места)
     use_hardlinks: Mapped[bool] = mapped_column(Boolean, default=True)
+    recycle_bin_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    recycle_bin_retention_days: Mapped[int] = mapped_column(Integer, default=30)
 
     # Legacy column kept for existing databases. Authentication is controlled by login_enabled.
     auth_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

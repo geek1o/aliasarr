@@ -42,6 +42,8 @@ class SettingsOut(BaseModel):
     import_extra_files: bool = True
     extra_file_extensions: str = "srt, ass, sub, idx, vtt, nfo, mka, ttf, otf, woff"
     use_hardlinks: bool = True
+    recycle_bin_enabled: bool = False
+    recycle_bin_retention_days: int = 30
 
     login_enabled: bool
     username: str
@@ -116,6 +118,8 @@ class SettingsUpdate(BaseModel):
     import_extra_files: Optional[bool] = None
     extra_file_extensions: Optional[str] = None
     use_hardlinks: Optional[bool] = None
+    recycle_bin_enabled: Optional[bool] = None
+    recycle_bin_retention_days: Optional[int] = None
 
     language: Optional[str] = None
     theme: Optional[str] = None
@@ -186,6 +190,8 @@ def _to_settings_out(settings, is_owner: bool = False) -> SettingsOut:
         import_extra_files=getattr(settings, "import_extra_files", True),
         extra_file_extensions=getattr(settings, "extra_file_extensions", "srt, ass, sub, idx, vtt, nfo, mka, ttf, otf, woff") or "srt, ass, sub, idx, vtt, nfo, mka, ttf, otf, woff",
         use_hardlinks=getattr(settings, "use_hardlinks", True),
+        recycle_bin_enabled=bool(getattr(settings, "recycle_bin_enabled", False)),
+        recycle_bin_retention_days=getattr(settings, "recycle_bin_retention_days", 30) or 30,
         login_enabled=settings.login_enabled,
         username=settings.username,
         language=settings.language,
@@ -314,6 +320,12 @@ def update_settings(
         settings.extra_file_extensions = payload.extra_file_extensions
     if payload.use_hardlinks is not None:
         settings.use_hardlinks = payload.use_hardlinks
+    if payload.recycle_bin_enabled is not None:
+        settings.recycle_bin_enabled = payload.recycle_bin_enabled
+    if payload.recycle_bin_retention_days is not None:
+        if payload.recycle_bin_retention_days < 1 or payload.recycle_bin_retention_days > 3650:
+            raise HTTPException(400, "Срок хранения корзины должен быть от 1 до 3650 дней")
+        settings.recycle_bin_retention_days = payload.recycle_bin_retention_days
 
     if payload.language is not None:
         if payload.language not in ("ru", "en"):

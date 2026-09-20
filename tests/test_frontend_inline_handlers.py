@@ -14,6 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_JS = ROOT / "web" / "js" / "app.js"
+JS_FILES = tuple((ROOT / "web" / "js").rglob("*.js"))
 INDEX_HTML = ROOT / "web" / "index.html"
 
 HANDLER_ATTR_RE = re.compile(
@@ -49,8 +50,8 @@ def declared_globals(app_js: str) -> set[str]:
 
 class TestInlineHandlers(unittest.TestCase):
     def test_every_handler_in_markup_resolves_to_a_declared_function(self):
-        app_js = read(APP_JS)
-        known = declared_globals(app_js) | NOT_GLOBAL_FUNCTIONS
+        javascript = "\n".join(read(path) for path in JS_FILES)
+        known = declared_globals(javascript) | NOT_GLOBAL_FUNCTIONS
 
         missing: set[str] = set()
         for body in HANDLER_ATTR_RE.findall(read(INDEX_HTML)):

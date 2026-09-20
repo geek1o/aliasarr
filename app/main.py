@@ -29,10 +29,13 @@ from app.api import (
     custom_formats_routes,
     dataset_routes,
     download_clients,
+    import_lists_routes,
     indexers,
     library_import_routes,
     metadata_routes,
     operations,
+    policy_routes,
+    recycle_bin_routes,
     release_inspector_routes,
     release_logs_routes,
     settings_routes,
@@ -166,6 +169,9 @@ app.include_router(metadata_routes.router)
 app.include_router(custom_formats_routes.router)
 app.include_router(settings_routes.router)
 app.include_router(operations.router)
+app.include_router(policy_routes.router)
+app.include_router(import_lists_routes.router)
+app.include_router(recycle_bin_routes.router)
 app.include_router(release_inspector_routes.router)
 app.include_router(auth_routes.router)
 app.include_router(users_routes.router)
@@ -599,11 +605,52 @@ async def on_startup():
                 return
 
             try:
-                from app.services.metadata import refresh_all_shows_metadata, refresh_all_collections_metadata
-                await refresh_all_shows_metadata(None, username="scheduler")
-                await refresh_all_collections_metadata(None)
+                from app.services.task_manager import task_manager
+
+                task_manager.enqueue(
+                    "metadata_refresh",
+                    "Обновление метаданных библиотеки",
+                    {"force": False, "username": "scheduler"},
+                    active_key="metadata_refresh",
+                    max_attempts=3,
+                    resumable=True,
+                )
             except Exception as exc:
-                logger.warning("Ошибка автоматического обновления метаданных библиотеки: %s", exc)
+                logger.warning("Ошибка постановки обновления метаданных в очередь: %s", exc)
+
+    async def _import_lists_job():
+        db = SessionLocal()
+        try:
+            from app.services.import_list_runtime import enqueue_due_import_lists
+
+            queued = enqueue_due_import_lists(db)
+            if queued:
+                logger.info("Списки импорта: поставлено в очередь: %d", queued)
+        except Exception as exc:
+            logger.warning("Ошибка планирования списков импорта: %s", exc)
+        finally:
+            db.close()
+
+    async def _recycle_bin_cleanup_job():
+        db = SessionLocal()
+        try:
+            settings = get_or_create_settings(db)
+            if not getattr(settings, "recycle_bin_enabled", False):
+                return
+            from app.services.path_security import configured_library_roots
+            from app.services.recycle_bin import purge_expired_recycled_media
+
+            removed = await asyncio.to_thread(
+                purge_expired_recycled_media,
+                library_roots=configured_library_roots(settings),
+                retention_days=getattr(settings, "recycle_bin_retention_days", 30) or 30,
+            )
+            if removed:
+                logger.info("Корзина медиатеки: удалено просроченных элементов: %d", len(removed))
+        except Exception as exc:
+            logger.warning("Ошибка очистки корзины медиатеки: %s", exc)
+        finally:
+            db.close()
 
     scheduler.add_job(_tracker_job, "interval", minutes=tracker_interval, id="recheck_tracked_releases")
     # Периодический поиск разыскиваемого контента
@@ -615,6 +662,8 @@ async def on_startup():
     scheduler.add_job(_calendar_poll_job, "interval", minutes=calendar_poll_interval, id="calendar_poll")
     scheduler.add_job(_ssl_renew_job, "interval", hours=24, id="ssl_renew_check")
     scheduler.add_job(_auto_backup_job, "interval", hours=24, id="auto_backup_check")
+    scheduler.add_job(_import_lists_job, "interval", minutes=15, id="import_lists")
+    scheduler.add_job(_recycle_bin_cleanup_job, "interval", hours=24, id="recycle_bin_cleanup")
     # Автоматическое обновление метаданных по алгоритму Sonarr/Radarr (каждые 6 часов)
     scheduler.add_job(_refresh_metadata_job, "interval", hours=6, id="refresh_metadata")
     scheduler.start()

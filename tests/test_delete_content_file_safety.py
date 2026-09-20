@@ -120,6 +120,36 @@ class TestDeleteContentFileSafety(unittest.TestCase):
         self.assertFalse(os.path.isdir(season_dir), "опустевшая папка сезона убирается как и раньше")
         self.assertTrue(os.path.isdir(show_dir), "папка тайтла остаётся")
 
+    def test_recycle_bin_keeps_deleted_episode_recoverable(self):
+        settings = self.db.get(AppSettings, 1)
+        settings.recycle_bin_enabled = True
+        self.db.commit()
+        show_dir = os.path.join(self.root, "Recoverable")
+        show = Show(title="Recoverable", content_type="series", path=show_dir)
+        self.db.add(show)
+        self.db.commit()
+        ep_file = self._write(os.path.join(show_dir, "Season 01", "episode.mkv"))
+        self.db.add(
+            Episode(
+                show_id=show.id,
+                season_number=1,
+                episode_number=1,
+                file_path=ep_file,
+                status=EpisodeStatus.DOWNLOADED,
+            )
+        )
+        self.db.commit()
+
+        self._delete_seasons(show, [1])
+
+        from app.services.recycle_bin import list_recycled_media, restore_recycled_media
+
+        entries = list_recycled_media([self.root])
+        self.assertEqual(len(entries), 1)
+        restored = restore_recycled_media(entries[0].id, library_roots=[self.root])
+        self.assertEqual(str(restored), os.path.realpath(ep_file))
+        self.assertTrue(os.path.isfile(ep_file))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -358,7 +358,7 @@ class IndexerCreate(BaseModel):
     type: str = "torznab"
     base_url: str
     api_key: Optional[str] = None
-    categories: list[int] = []
+    categories: list[int] = Field(default_factory=list)
     priority: int = 25
     enabled: bool = True
     timeout_seconds: int = 30
@@ -367,9 +367,21 @@ class IndexerCreate(BaseModel):
     seed_time_limit_hours: Optional[int] = None
 
 
-class IndexerOut(IndexerCreate):
+class IndexerOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
     id: int
+    name: str
+    type: str = "torznab"
+    base_url: str
+    categories: list[int] = Field(default_factory=list)
+    priority: int = 25
+    enabled: bool = True
+    timeout_seconds: int = 30
+    enable_seeding: bool = False
+    seed_ratio_limit: Optional[float] = None
+    seed_time_limit_hours: Optional[int] = None
+    has_api_key: bool = False
     last_check_at: Optional[dt.datetime] = None
     last_check_ok: Optional[bool] = None
     consecutive_failures: int = 0

@@ -1220,6 +1220,7 @@
           <button class="settings-tab-btn" data-settings-tab="quality"><i data-lucide="award" class="ico-xs"></i><span data-i18n="settingsnav.quality_profiles">Качество</span></button>
           <button class="settings-tab-btn" data-settings-tab="metadata"><i data-lucide="database" class="ico-xs"></i><span data-i18n="settingsnav.metadata">Метаданные</span></button>
           <button class="settings-tab-btn" data-settings-tab="notifications"><i data-lucide="bell" class="ico-xs"></i><span data-i18n="settingsnav.notifications">Уведомления</span></button>
+          <button class="settings-tab-btn" data-settings-tab="automation"><i data-lucide="workflow" class="ico-xs"></i><span>Автоматизация</span></button>
         </div>
       </div>
 
@@ -2847,6 +2848,18 @@
               <input id="dc-seed-ratio-limit" class="input" type="number" step="0.1" min="0" placeholder="0 (без ограничения)" data-i18n-placeholder="dc.seed_ratio_placeholder">
             </div>
 
+            <div class="settings-field-group">
+              <label class="settings-field-label">Удалённый путь загрузчика</label>
+              <input id="dc-remote-path" class="input mono" placeholder="/downloads">
+              <span class="settings-field-hint">Путь, который сообщает download client</span>
+            </div>
+
+            <div class="settings-field-group">
+              <label class="settings-field-label">Локальный путь Aliasarr</label>
+              <input id="dc-local-path" class="input mono" placeholder="/data/downloads">
+              <span class="settings-field-hint">Соответствующая папка внутри контейнера Aliasarr</span>
+            </div>
+
             <div class="form-row" style="grid-column: 1 / -1; margin-top: 6px;">
               <button class="btn btn-secondary" onclick="testDownloadClientAdhoc(this)" data-i18n="common.test">Тест</button>
               <button class="btn btn-secondary" id="dc-cancel-btn" style="display:none" onclick="resetDownloadClientForm()" data-i18n="common.cancel">Отмена</button>
@@ -3701,6 +3714,58 @@
               </select>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- ПАНЕЛЬ: АВТОМАТИЗАЦИЯ И ПОЛИТИКИ -->
+      <div id="settings-automation" class="settings-panel">
+        <div class="settings-section-card">
+          <div class="settings-card-header"><div class="settings-card-header-left"><div class="settings-card-icon-badge"><i data-lucide="tags"></i></div><div class="settings-card-title-wrap"><h3>Теги политик</h3><p class="subtitle">Ограничивайте индексаторы и профили задержки выбранными тайтлами</p></div></div></div>
+          <div class="form-row"><input id="automation-tag-name" class="input" placeholder="Название тега"><button class="btn btn-primary" onclick="createAutomationTag()">Добавить</button></div>
+          <div id="automation-tags-list" class="automation-chip-list"></div>
+        </div>
+
+        <div class="settings-section-card">
+          <div class="settings-card-header"><div class="settings-card-header-left"><div class="settings-card-icon-badge"><i data-lucide="timer"></i></div><div class="settings-card-title-wrap"><h3>Delay Profiles</h3><p class="subtitle">Задержка автоматического захвата с приоритетом Torrent или Usenet</p></div></div></div>
+          <div class="form-grid-modern">
+            <div class="settings-field-group"><label class="settings-field-label">Название</label><input id="delay-name" class="input" value="По умолчанию"></div>
+            <div class="settings-field-group"><label class="settings-field-label">Тег (пусто — глобально)</label><select id="delay-tag" class="input"><option value="">Глобальный</option></select></div>
+            <div class="settings-field-group"><label class="settings-field-label">Предпочтительный протокол</label><select id="delay-protocol" class="input"><option value="torrent">Torrent</option><option value="usenet">Usenet</option><option value="either">Без предпочтения</option></select></div>
+            <div class="settings-field-group"><label class="settings-field-label">Задержка Torrent, мин</label><input id="delay-torrent-minutes" class="input" type="number" min="0" value="0"></div>
+            <div class="settings-field-group"><label class="settings-field-label">Задержка Usenet, мин</label><input id="delay-usenet-minutes" class="input" type="number" min="0" value="0"></div>
+            <div class="settings-field-group"><label class="settings-field-label">Bypass CF score</label><input id="delay-cf-score" class="input" type="number" placeholder="Не задан"></div>
+            <label class="switch-toggle"><input id="delay-bypass-quality" type="checkbox"><span class="switch-slider"></span><span class="switch-title">Не ждать максимальное качество</span></label>
+            <div><button class="btn btn-primary" onclick="createDelayProfile()">Создать профиль</button></div>
+          </div>
+          <div id="delay-profiles-list" class="automation-list"></div>
+        </div>
+
+        <div class="settings-section-card">
+          <div class="settings-card-header"><div class="settings-card-header-left"><div class="settings-card-icon-badge"><i data-lucide="list-plus"></i></div><div class="settings-card-title-wrap"><h3>Списки импорта</h3><p class="subtitle">TMDb List, фильмы персоны TMDb и пользовательские списки Trakt</p></div></div></div>
+          <div class="form-grid-modern">
+            <div class="settings-field-group"><label class="settings-field-label">Название</label><input id="import-list-name" class="input" placeholder="Мой список"></div>
+            <div class="settings-field-group"><label class="settings-field-label">Источник</label><select id="import-list-source" class="input" onchange="toggleImportListUsername()"><option value="tmdb_list">TMDb List</option><option value="tmdb_person">TMDb Person</option><option value="trakt_list">Trakt List</option></select></div>
+            <div class="settings-field-group"><label class="settings-field-label">ID / slug списка</label><input id="import-list-source-id" class="input mono"></div>
+            <div class="settings-field-group"><label class="settings-field-label">API key</label><input id="import-list-api-key" class="input mono" type="password"></div>
+            <div class="settings-field-group" id="import-list-username-wrap" style="display:none"><label class="settings-field-label">Trakt username</label><input id="import-list-username" class="input"></div>
+            <div class="settings-field-group"><label class="settings-field-label">Интервал, мин</label><input id="import-list-interval" class="input" type="number" min="1" value="360"></div>
+            <label class="switch-toggle"><input id="import-list-movies" type="checkbox" checked><span class="switch-slider"></span><span class="switch-title">Фильмы</span></label>
+            <label class="switch-toggle"><input id="import-list-series" type="checkbox" checked><span class="switch-slider"></span><span class="switch-title">Сериалы</span></label>
+            <label class="switch-toggle"><input id="import-list-search" type="checkbox"><span class="switch-slider"></span><span class="switch-title">Искать после добавления</span></label>
+            <div><button class="btn btn-primary" onclick="createImportList()">Добавить список</button></div>
+          </div>
+          <div id="import-lists-list" class="automation-list"></div>
+        </div>
+
+        <div class="settings-section-card">
+          <div class="settings-card-header"><div class="settings-card-header-left"><div class="settings-card-icon-badge"><i data-lucide="archive-restore"></i></div><div class="settings-card-title-wrap"><h3>Корзина медиатеки</h3><p class="subtitle">Восстановление удалённых файлов до автоматической очистки</p></div></div></div>
+          <div class="form-row">
+            <label class="switch-toggle"><input id="recycle-bin-enabled" type="checkbox"><span class="switch-slider"></span><span class="switch-title">Перемещать удаляемые медиа в корзину</span></label>
+            <label class="settings-field-label">Хранить дней <input id="recycle-bin-days" class="input" type="number" min="1" max="3650" value="30" style="width:100px"></label>
+            <button class="btn btn-primary" onclick="saveRecycleBinSettings()">Сохранить</button>
+            <button class="btn btn-secondary" onclick="loadRecycleBin()">Обновить</button>
+          </div>
+          <div id="recycle-bin-list" class="automation-list"></div>
         </div>
       </div>
 
@@ -5700,6 +5765,15 @@
   </div>
 </div>
 
+<div id="indexer-diagnostics-modal" class="modal-overlay">
+  <div class="modal modal-wide" style="max-width:900px">
+    <button class="modal-close" onclick="closeModal('indexer-diagnostics-modal')"><i data-lucide="x"></i></button>
+    <h2 style="margin-top:0">Диагностика индексатора</h2>
+    <p class="hint">Соединение, capabilities, категории и качество разбора примеров.</p>
+    <pre id="indexer-diagnostics-content" class="mono" style="max-height:65vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:12px"></pre>
+  </div>
+</div>
+
 <div id="modal-preview-rename" class="modal-overlay">
   <div class="modal modal-large" style="max-width: 880px; width: 95%; max-height: 90vh; display: flex; flex-direction: column;">
     <button class="modal-close" onclick="closeModal('modal-preview-rename')"><i data-lucide="x"></i></button>
@@ -5897,5 +5971,6 @@
 
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="/ui/static/js/app.js?v=20260918-1"></script>
+<script src="/ui/static/js/features/automation-settings.js?v=20260920-1"></script>
 </body>
 </html>

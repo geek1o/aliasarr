@@ -1765,6 +1765,8 @@ def cancel_background_task(
     task = task_manager.cancel_task(task_id)
     if task is None:
         raise HTTPException(404, "Task not found")
+    if task.status in ("queued", "running"):
+        raise HTTPException(409, "Эта выполняемая операция не поддерживает безопасную отмену")
     return task.to_dict()
 
 

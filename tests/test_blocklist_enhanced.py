@@ -392,6 +392,7 @@ class TestBlocklistEnhanced(unittest.IsolatedAsyncioTestCase):
         with patch("app.services.auto_search.get_or_create_settings", return_value=settings), \
              patch("app.services.auto_search.get_client", return_value=mock_dl_client), \
              patch("app.services.auto_search._collect_candidates") as mock_collect, \
+             patch("app.services.download_preflight.prepare_download_target", return_value="/downloads/tv"), \
              patch("app.services.blocklist_service.is_release_blocked") as mock_is_blocked, \
              patch("app.services.auto_search.log_release_event"):
 

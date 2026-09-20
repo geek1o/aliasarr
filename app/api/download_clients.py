@@ -4,7 +4,7 @@ from typing import Optional, List, Dict, Any
 
 import datetime as dt
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -12,6 +12,19 @@ from app.models.db import DownloadClient, Episode, User
 from app.services.user_service import require_permission, get_current_user
 
 router = APIRouter(prefix="/api/v1/download-clients", tags=["download-clients"])
+
+
+class RemotePathMappingIn(BaseModel):
+    remote_root: str = Field(min_length=1, max_length=1000)
+    local_root: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("remote_root", "local_root")
+    @classmethod
+    def clean_path(cls, value: str) -> str:
+        clean = value.strip()
+        if not clean:
+            raise ValueError("Путь не может быть пустым")
+        return clean
 
 
 class DownloadClientIn(BaseModel):
@@ -26,9 +39,21 @@ class DownloadClientIn(BaseModel):
     is_default: bool = False
     seed_time_limit: Optional[int] = None
     seed_ratio_limit: Optional[float] = None
+    remote_path_mappings: list[RemotePathMappingIn] = Field(default_factory=list)
 
 
-class DownloadClientOut(DownloadClientIn):
+class DownloadClientOut(BaseModel):
+    name: str
+    type: str
+    host: str
+    port: int
+    username: Optional[str] = None
+    category: Optional[str] = "aliasarr"
+    enabled: bool = True
+    is_default: bool = False
+    seed_time_limit: Optional[int] = None
+    seed_ratio_limit: Optional[float] = None
+    remote_path_mappings: list[RemotePathMappingIn] = Field(default_factory=list)
     id: int
     is_available: Optional[bool] = None
     last_checked_at: Optional[dt.datetime] = None
@@ -92,6 +117,8 @@ def update_download_client(
     if not dc:
         raise HTTPException(404, "Download client not found")
     for field, value in payload.model_dump().items():
+        if field == "password" and value is None:
+            continue
         setattr(dc, field, value)
     db.add(dc)
     db.commit()
@@ -162,4 +189,3 @@ async def test_download_client_adhoc(
         return {"success": True, "message": f"Подключение успешно, активных торрентов: {len(torrents)}"}
     except Exception as exc:
         return {"success": False, "message": f"Не удалось подключиться: {exc}"}
-

@@ -89,7 +89,10 @@ class PersistentTaskTests(unittest.TestCase):
         )
         self.assertEqual(first.id, same_request.id)
         self.assertEqual(first.id, same_active.id)
-        self.assertEqual(self.manager.get_status()["queued_count"], 1)
+        status = self.manager.get_status()
+        self.assertEqual(status["queued_count"], 1)
+        self.assertTrue(status["queued"][0]["resumable"])
+        self.assertEqual(status["queued"][0]["max_attempts"], 3)
 
     def test_claim_is_atomic_between_managers(self):
         queued = self.manager.enqueue("once", "Один раз")
@@ -152,6 +155,18 @@ class PersistentTaskTests(unittest.TestCase):
         self.assertIsNotNone(self.manager.get_task(running.id))
         self.assertIsNotNone(self.manager.get_task(queued.id))
         self.assertIsNone(self.manager.get_task(completed.id))
+
+    def test_cancel_only_stops_queued_or_resumable_command_tasks(self):
+        inline = self.manager.start_task("inline", "Inline")
+        queued = self.manager.enqueue("queued", "Queued")
+        running_command = self.manager.enqueue("command", "Command")
+        self.assertEqual(self.manager.claim_next().id, queued.id)
+        # Claim the second command after cancelling the first running command.
+        self.assertEqual(self.manager.cancel_task(queued.id).status, "cancelled")
+        self.assertEqual(self.manager.claim_next().id, running_command.id)
+
+        self.assertEqual(self.manager.cancel_task(running_command.id).status, "cancelled")
+        self.assertEqual(self.manager.cancel_task(inline.id).status, "running")
 
 
 if __name__ == "__main__":

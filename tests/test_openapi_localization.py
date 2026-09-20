@@ -41,8 +41,8 @@ class TestOpenApiLocalization(unittest.TestCase):
 
     def test_catalog_size_and_exact_count(self):
         """Verify that every endpoint is represented in the localization catalog."""
-        self.assertEqual(len(ENDPOINT_CATALOG), 203)
-        self.assertEqual(len(ENDPOINT_SUMMARIES), 203)
+        self.assertEqual(len(ENDPOINT_CATALOG), 227)
+        self.assertEqual(len(ENDPOINT_SUMMARIES), 227)
 
     def test_catalog_bilingual_integrity_and_zero_cyrillic_leak(self):
         """Verify that English translations have strictly ZERO Cyrillic characters and valid content."""

@@ -1204,8 +1204,12 @@ const TRANSLATIONS = {
     "tasks.no_recent": "История операций пуста",
     "tasks.clear_history": "Очистить",
     "tasks.status_running": "Выполняется",
+    "tasks.status_queued": "В очереди",
     "tasks.status_completed": "Завершено",
     "tasks.status_failed": "Ошибка",
+    "tasks.status_cancelled": "Отменено",
+    "tasks.cancel": "Отменить",
+    "tasks.retry": "Повторить",
 
     // Events & Journal
     "events.filter_all": "Все события",
@@ -2746,8 +2750,12 @@ const TRANSLATIONS = {
     "tasks.no_recent": "Operation history is empty",
     "tasks.clear_history": "Clear",
     "tasks.status_running": "Running",
+    "tasks.status_queued": "Queued",
     "tasks.status_completed": "Completed",
     "tasks.status_failed": "Failed",
+    "tasks.status_cancelled": "Cancelled",
+    "tasks.cancel": "Cancel",
+    "tasks.retry": "Retry",
 
     // Events & Journal
     "events.filter_all": "All events",
@@ -3617,6 +3625,7 @@ function applyUserPermissionsToUI() {
   const tabUsers = document.querySelector('#tab-settings .settings-tab-btn[data-settings-tab="users"]');
   const tabIndexers = document.querySelector('#tab-settings .settings-tab-btn[data-settings-tab="indexers"]');
   const tabDownloaders = document.querySelector('#tab-settings .settings-tab-btn[data-settings-tab="download-clients"]');
+  const tabAutomation = document.querySelector('#tab-settings .settings-tab-btn[data-settings-tab="automation"]');
 
   const hasSettingsPerm = hasPermission("manage_settings");
   if (tabGeneral) tabGeneral.style.display = hasSettingsPerm ? "" : "none";
@@ -3627,6 +3636,7 @@ function applyUserPermissionsToUI() {
   if (tabUsers) tabUsers.style.display = hasPermission("manage_users") ? "" : "none";
   if (tabIndexers) tabIndexers.style.display = hasPermission("manage_indexers") ? "" : "none";
   if (tabDownloaders) tabDownloaders.style.display = hasPermission("manage_downloaders") ? "" : "none";
+  if (tabAutomation) tabAutomation.style.display = hasSettingsPerm ? "" : "none";
 
   // System API key card in General Settings - strictly for Master Admin
   const cardSystemApiKey = document.getElementById("card-system-apikey");
@@ -13708,6 +13718,7 @@ async function grabRelease(button, showId, result) {
           season: INTERACTIVE_SEARCH_STATE.season,
           episode: INTERACTIVE_SEARCH_STATE.episode,
           indexer_id: result.indexer_id || null,
+          size_bytes: result.size_bytes || null,
         }),
       });
       toast(t("history.event.grabbed"));
@@ -19113,6 +19124,7 @@ async function loadIndexers() {
         <td>
           <div class="row-actions">
             <button class="btn-icon-only" title="Test" onclick="testIndexer(this, ${i.id})"><i data-lucide="arrow-left-right" class="ico-sm"></i></button>
+            <button class="btn-icon-only" title="Диагностика" onclick="diagnoseIndexer(this, ${i.id})"><i data-lucide="stethoscope" class="ico-sm"></i></button>
             <button class="btn-icon-only" title="Check" onclick="syncIndexerAvailability(this, ${i.id})"><i data-lucide="refresh-cw" class="ico-sm"></i></button>
             <button class="btn-icon-only" title="${t("common.edit")}" onclick='editIndexer(${JSON.stringify(i).replace(/'/g, "&apos;")})'><i data-lucide="edit-2" class="ico-sm"></i></button>
             <button class="btn-icon-only danger" title="${t("common.delete")}" onclick="removeIndexer(${i.id})"><i data-lucide="trash-2" class="ico-sm"></i></button>
@@ -19232,7 +19244,7 @@ function editIndexer(i) {
   document.getElementById("idx-name").value = i.name;
   document.getElementById("idx-type").value = i.type;
   document.getElementById("idx-url").value = i.base_url;
-  document.getElementById("idx-key").value = i.api_key || "";
+  document.getElementById("idx-key").value = "";
   document.getElementById("idx-priority").value = i.priority;
   const seedingCheck = document.getElementById("idx-enable-seeding");
   if (seedingCheck) {
@@ -19242,6 +19254,11 @@ function editIndexer(i) {
     document.getElementById("idx-seed-time").value = (i.seed_time_limit_hours !== null && i.seed_time_limit_hours !== undefined && i.seed_time_limit_hours > 0) ? i.seed_time_limit_hours : "";
   }
   onIndexerTypeChange();
+  if (i.has_api_key) {
+    document.getElementById("idx-key").placeholder = CURRENT_LANG === "en"
+      ? "Saved — leave blank to keep"
+      : "Сохранён — оставьте пустым, чтобы не менять";
+  }
   clearInlineStatus("idx-test-result");
   document.getElementById("idx-submit-btn").textContent = t("common.save");
   document.getElementById("idx-cancel-btn").style.display = "inline-block";
@@ -19252,6 +19269,7 @@ function resetIndexerForm() {
   EDITING_INDEXER_ID = null;
   document.getElementById("idx-form-title").textContent = t("indexers.add_title");
   ["idx-name", "idx-url", "idx-key"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("idx-key").placeholder = "API key";
   document.getElementById("idx-type").value = "torznab";
   document.getElementById("idx-priority").value = 25;
   const seedingCheck = document.getElementById("idx-enable-seeding");
@@ -19311,6 +19329,19 @@ async function testIndexer(button, id) {
         loadIndexers();
       }
     } catch (e) { toast((CURRENT_LANG === "en" ? "Error: " : "Ошибка: ") + e.message, true); }
+  });
+}
+
+async function diagnoseIndexer(button, id) {
+  await withLoading(button, async () => {
+    try {
+      const result = await api(`/api/v1/indexers/${id}/diagnostics`, { method: "POST" });
+      const content = document.getElementById("indexer-diagnostics-content");
+      if (content) content.textContent = JSON.stringify(result, null, 2);
+      openModal("indexer-diagnostics-modal");
+    } catch (e) {
+      toast((CURRENT_LANG === "en" ? "Diagnostics failed: " : "Ошибка диагностики: ") + e.message, true);
+    }
   });
 }
 
@@ -19456,6 +19487,9 @@ function editDownloadClient(d) {
   document.getElementById("dc-category").value = d.category || "aliasarr";
   document.getElementById("dc-seed-time-limit").value = d.seed_time_limit !== null && d.seed_time_limit !== undefined ? d.seed_time_limit : "";
   document.getElementById("dc-seed-ratio-limit").value = d.seed_ratio_limit !== null && d.seed_ratio_limit !== undefined ? d.seed_ratio_limit : "";
+  const firstMapping = (d.remote_path_mappings || [])[0] || {};
+  document.getElementById("dc-remote-path").value = firstMapping.remote_root || "";
+  document.getElementById("dc-local-path").value = firstMapping.local_root || "";
   document.getElementById("dc-default").checked = d.is_default;
   document.getElementById("dc-submit-btn").textContent = t("common.save");
   document.getElementById("dc-cancel-btn").style.display = "inline-block";
@@ -19464,7 +19498,7 @@ function editDownloadClient(d) {
 function resetDownloadClientForm() {
   EDITING_DC_ID = null;
   document.getElementById("dc-form-title").textContent = t("clients.add_title");
-  ["dc-name", "dc-host", "dc-port", "dc-user", "dc-pass", "dc-watch-dir", "dc-seed-time-limit", "dc-seed-ratio-limit"].forEach(id => {
+  ["dc-name", "dc-host", "dc-port", "dc-user", "dc-pass", "dc-watch-dir", "dc-seed-time-limit", "dc-seed-ratio-limit", "dc-remote-path", "dc-local-path"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = "";
   });
@@ -19487,6 +19521,12 @@ async function submitDownloadClient() {
   }
   const seedTimeVal = document.getElementById("dc-seed-time-limit")?.value?.trim();
   const seedRatioVal = document.getElementById("dc-seed-ratio-limit")?.value?.trim();
+  const remotePath = document.getElementById("dc-remote-path")?.value?.trim() || "";
+  const localPath = document.getElementById("dc-local-path")?.value?.trim() || "";
+  if ((remotePath && !localPath) || (!remotePath && localPath)) {
+    toast("Для сопоставления укажите оба пути", true);
+    return;
+  }
 
   const payload = {
     name: document.getElementById("dc-name").value.trim(),
@@ -19499,6 +19539,7 @@ async function submitDownloadClient() {
     is_default: document.getElementById("dc-default").checked,
     seed_time_limit: seedTimeVal !== "" && !isNaN(Number(seedTimeVal)) ? Number(seedTimeVal) : null,
     seed_ratio_limit: seedRatioVal !== "" && !isNaN(Number(seedRatioVal)) ? Number(seedRatioVal) : null,
+    remote_path_mappings: remotePath && localPath ? [{ remote_root: remotePath, local_root: localPath }] : [],
   };
   if (!payload.name || !payload.host || (type !== "blackhole" && !payload.port)) {
     toast(CURRENT_LANG === "en" ? "Fill required fields" : "Заполните обязательные поля", true);
@@ -19534,6 +19575,7 @@ async function testDownloadClientAdhoc(button) {
     password: document.getElementById("dc-pass").value.trim() || null,
     category: document.getElementById("dc-category").value.trim() || "aliasarr",
     is_default: document.getElementById("dc-default").checked,
+    remote_path_mappings: [],
   };
   if (type !== "blackhole" && (!payload.host || !payload.port)) {
     const errMsg = CURRENT_LANG === "en" ? "Specify host and port" : "Укажите хост и порт";
@@ -23162,7 +23204,7 @@ async function loadTasksStatus(manual = false) {
   _TASKS_IN_FLIGHT = true;
   try {
     const data = await api("/api/v1/tasks");
-    CURRENT_ACTIVE_TASKS = data.running || [];
+    CURRENT_ACTIVE_TASKS = [...(data.running || []), ...(data.queued || [])];
     renderTasksStatusWidget(data);
     const popup = document.getElementById("tasks-popup");
     if (popup && popup.style.display !== "none") {
@@ -23193,7 +23235,7 @@ function renderTasksStatusWidget(data) {
 
   if (!widget || !textEl) return;
 
-  const running = data.running || [];
+  const running = [...(data.running || []), ...(data.queued || [])];
   const recent = data.recent || [];
   const runningCount = running.length;
 
@@ -23271,7 +23313,7 @@ function renderTasksPopup(data) {
   const recentList = document.getElementById("tasks-recent-list");
   const runningBadge = document.getElementById("tasks-running-badge");
 
-  const running = data.running || [];
+  const running = [...(data.running || []), ...(data.queued || [])];
   const recent = data.recent || [];
 
   if (runningBadge) {
@@ -23297,7 +23339,8 @@ function renderTasksPopup(data) {
               </div>
               <div style="display:flex; align-items:center; gap:6px;">
                 ${pct !== null ? `<span class="tasks-item-pct">${pct}%</span>` : ""}
-                <span class="tasks-item-time">${tItem.duration_seconds}s</span>
+                <span class="tasks-item-time">${tItem.status === "queued" ? t("tasks.status_queued") : `${tItem.duration_seconds}s`}</span>
+                ${tItem.resumable ? `<button class="btn-text-small tasks-item-action" onclick="cancelBackgroundTask(event, ${jsArg(tItem.id)})">${t("tasks.cancel")}</button>` : ""}
               </div>
             </div>
             ${tItem.message ? `<div class="tasks-item-msg">${escapeHtml(translateLogMessage(tItem.message))}</div>` : ""}
@@ -23314,7 +23357,9 @@ function renderTasksPopup(data) {
     } else {
       recentList.innerHTML = recent.map(tItem => {
         const isError = tItem.status === "failed";
-        const icon = isError
+        const isCancelled = tItem.status === "cancelled";
+        const canRetry = (isError || isCancelled) && tItem.resumable;
+        const icon = isError || isCancelled
           ? `<span class="tasks-icon-failed"><i data-lucide="x" class="ico-xs"></i></span>`
           : `<span class="tasks-icon-success"><i data-lucide="check" class="ico-xs"></i></span>`;
         return `
@@ -23324,7 +23369,10 @@ function renderTasksPopup(data) {
                 ${icon}
                 <span class="tasks-item-title">${escapeHtml(translateLogMessage(tItem.title || tItem.name))}</span>
               </div>
-              <span class="tasks-item-time">${tItem.duration_seconds}s</span>
+              <div class="tasks-item-actions">
+                <span class="tasks-item-time">${tItem.duration_seconds}s</span>
+                ${canRetry ? `<button class="btn-text-small tasks-item-action" onclick="retryBackgroundTask(event, ${jsArg(tItem.id)})">${t("tasks.retry")}</button>` : ""}
+              </div>
             </div>
             ${tItem.message ? `<div class="tasks-item-msg">${escapeHtml(translateLogMessage(tItem.message))}</div>` : ""}
           </div>
@@ -23426,7 +23474,7 @@ function updateShowModalTaskBanner(tasks) {
 }
 
 function updateLibraryTasksProgress(data) {
-  const running = data.running || [];
+  const running = [...(data.running || []), ...(data.queued || [])];
   const hadTasksBefore = Boolean(window._HAD_RUNNING_TASKS);
   window._HAD_RUNNING_TASKS = running.length > 0;
 
@@ -23564,6 +23612,26 @@ async function clearTasksHistory(event) {
     await api("/api/v1/tasks/clear-history", { method: "POST" });
     loadTasksStatus(true);
   } catch (e) {}
+}
+
+async function cancelBackgroundTask(event, taskId) {
+  if (event) event.stopPropagation();
+  try {
+    await api(`/api/v1/tasks/${encodeURIComponent(taskId)}/cancel`, { method: "POST" });
+    await loadTasksStatus(true);
+  } catch (error) {
+    toast(formatToastMessage(error.message), true);
+  }
+}
+
+async function retryBackgroundTask(event, taskId) {
+  if (event) event.stopPropagation();
+  try {
+    await api(`/api/v1/tasks/${encodeURIComponent(taskId)}/retry`, { method: "POST" });
+    await loadTasksStatus(true);
+  } catch (error) {
+    toast(formatToastMessage(error.message), true);
+  }
 }
 
 function restartTasksPolling(intervalMs) {

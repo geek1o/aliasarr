@@ -456,6 +456,120 @@ ENDPOINT_CATALOG: dict[tuple[str, str], tuple[str, str, str, str]] = {
         'Повторно ставит завершившуюся с ошибкой восстанавливаемую команду в постоянную очередь.',
         'Queues a failed durable command again while preserving its operation identity.',
     ),
+    ('/api/v1/tags', 'GET'): (
+        'Список тегов политик', 'List policy tags',
+        'Возвращает теги и назначенные им тайтлы и индексаторы.',
+        'Returns tags and their assigned library items and indexers.',
+    ),
+    ('/api/v1/tags', 'POST'): (
+        'Создать тег политики', 'Create policy tag',
+        'Создаёт тег для ограничения индексаторов и профилей задержки.',
+        'Creates a tag used to scope indexers and delay profiles.',
+    ),
+    ('/api/v1/tags/{tag_id}', 'PUT'): (
+        'Изменить тег политики', 'Update policy tag',
+        'Изменяет название существующего тега.', 'Updates an existing tag name.',
+    ),
+    ('/api/v1/tags/{tag_id}', 'DELETE'): (
+        'Удалить тег политики', 'Delete policy tag',
+        'Удаляет тег и связанные с ним назначения и профиль задержки.',
+        'Deletes a tag together with its assignments and scoped delay profile.',
+    ),
+    ('/api/v1/tags/{tag_id}/shows/{show_id}', 'POST'): (
+        'Назначить тег тайтлу', 'Assign tag to library item',
+        'Назначает тег выбранному тайтлу медиатеки.', 'Assigns a tag to a library item.',
+    ),
+    ('/api/v1/tags/{tag_id}/shows/{show_id}', 'DELETE'): (
+        'Снять тег с тайтла', 'Unassign tag from library item',
+        'Снимает тег с выбранного тайтла медиатеки.', 'Removes a tag from a library item.',
+    ),
+    ('/api/v1/tags/{tag_id}/indexers/{indexer_id}', 'POST'): (
+        'Назначить тег индексатору', 'Assign tag to indexer',
+        'Ограничивает индексатор тайтлами с общей меткой.',
+        'Scopes an indexer to library items sharing the tag.',
+    ),
+    ('/api/v1/tags/{tag_id}/indexers/{indexer_id}', 'DELETE'): (
+        'Снять тег с индексатора', 'Unassign tag from indexer',
+        'Снимает ограничивающий тег с индексатора.', 'Removes a scoping tag from an indexer.',
+    ),
+    ('/api/v1/delay-profiles', 'GET'): (
+        'Список профилей задержки', 'List delay profiles',
+        'Возвращает глобальные и привязанные к тегам правила задержки автозахвата.',
+        'Returns global and tag-scoped automatic-grab delay rules.',
+    ),
+    ('/api/v1/delay-profiles', 'POST'): (
+        'Создать профиль задержки', 'Create delay profile',
+        'Создаёт правило ожидания Torrent или Usenet-релизов.',
+        'Creates a Torrent or Usenet release waiting rule.',
+    ),
+    ('/api/v1/delay-profiles/{profile_id}', 'PUT'): (
+        'Изменить профиль задержки', 'Update delay profile',
+        'Изменяет область, интервалы и условия обхода задержки.',
+        'Updates scope, intervals, and delay bypass conditions.',
+    ),
+    ('/api/v1/delay-profiles/{profile_id}', 'DELETE'): (
+        'Удалить профиль задержки', 'Delete delay profile',
+        'Удаляет правило задержки автозахвата.', 'Deletes an automatic-grab delay rule.',
+    ),
+    ('/api/v1/import-lists', 'GET'): (
+        'Список источников импорта', 'List import sources',
+        'Возвращает настроенные списки TMDb и Trakt без секретов.',
+        'Returns configured TMDb and Trakt lists without secrets.',
+    ),
+    ('/api/v1/import-lists', 'POST'): (
+        'Добавить список импорта', 'Create import list',
+        'Добавляет периодически синхронизируемый список TMDb или Trakt.',
+        'Creates a periodically synchronized TMDb or Trakt list.',
+    ),
+    ('/api/v1/import-lists/{list_id}', 'PUT'): (
+        'Изменить список импорта', 'Update import list',
+        'Изменяет источник, расписание и параметры добавления тайтлов.',
+        'Updates source, schedule, and library add options.',
+    ),
+    ('/api/v1/import-lists/{list_id}', 'DELETE'): (
+        'Удалить список импорта', 'Delete import list',
+        'Удаляет конфигурацию списка без удаления тайтлов медиатеки.',
+        'Deletes list configuration without removing library items.',
+    ),
+    ('/api/v1/import-lists/{list_id}/preview', 'POST'): (
+        'Предпросмотр списка импорта', 'Preview import list',
+        'Получает и дедуплицирует список без изменений медиатеки.',
+        'Fetches and deduplicates a list without changing the library.',
+    ),
+    ('/api/v1/import-lists/{list_id}/sync', 'POST'): (
+        'Синхронизировать список импорта', 'Synchronize import list',
+        'Ставит синхронизацию списка в постоянную фоновую очередь.',
+        'Queues list synchronization in the durable background queue.',
+    ),
+    ('/api/v1/recycle-bin', 'GET'): (
+        'Содержимое корзины медиатеки', 'List media recycle bin',
+        'Возвращает доступные для восстановления файлы и папки.',
+        'Lists recoverable media files and directories.',
+    ),
+    ('/api/v1/recycle-bin/{entry_id}', 'GET'): (
+        'Элемент корзины медиатеки', 'Get recycle-bin entry',
+        'Возвращает сведения об одном элементе корзины.', 'Returns one recycle-bin entry.',
+    ),
+    ('/api/v1/recycle-bin/{entry_id}/restore', 'POST'): (
+        'Восстановить элемент корзины', 'Restore recycle-bin entry',
+        'Атомарно возвращает файл или папку в исходное место.',
+        'Atomically restores a file or directory to its original path.',
+    ),
+    ('/api/v1/recycle-bin/{entry_id}', 'DELETE'): (
+        'Очистить элемент корзины', 'Purge recycle-bin entry',
+        'Безвозвратно удаляет выбранный элемент корзины.',
+        'Permanently removes the selected recycle-bin entry.',
+    ),
+    ('/api/v1/recycle-bin/cleanup', 'POST'): (
+        'Очистить просроченную корзину', 'Clean expired recycle bin',
+        'Удаляет элементы старше заданного срока хранения.',
+        'Purges entries older than the requested retention period.',
+    ),
+    ('/api/v1/indexers/{indexer_id}/diagnostics', 'POST'): (
+        'Диагностика индексатора', 'Diagnose indexer',
+        'Проверяет соединение, capabilities, категории и разбор примеров релизов.',
+        'Checks connectivity, capabilities, categories, and sample release parsing.',
+    ),
     ('/api/v1/download-clients', 'GET'): (
         'Список подключенных торрент-клиентов',
         'List connected download clients',

@@ -67,6 +67,7 @@ from app.services.settings_service import get_or_create_settings
 from app.services import blocklist_service
 from app.services.path_security import (
     configured_download_roots,
+    map_client_path,
     require_descendant,
     safe_join_under,
 )
@@ -159,7 +160,12 @@ def _folder_and_template(settings, content_type: str) -> tuple[str, str, str]:
     )
 
 
-def _resolve_torrent_files_and_path(t, settings, show: Optional[Show] = None) -> tuple[str, list[str]]:
+def _resolve_torrent_files_and_path(
+    t,
+    settings,
+    show: Optional[Show] = None,
+    path_mappings: Optional[list[dict]] = None,
+) -> tuple[str, list[str]]:
     """
     Определяет точный путь к завершённой раздаче и конкретный список файлов торрента.
     Гарантирует 100% изоляцию импорта: если скачивался один файл или конкретная папка,
@@ -170,7 +176,8 @@ def _resolve_torrent_files_and_path(t, settings, show: Optional[Show] = None) ->
     candidates_base: list[str] = []
 
     def _safe_base(raw_path: str) -> str:
-        resolved = os.path.realpath(os.path.expanduser(raw_path))
+        mapped = map_client_path(raw_path, path_mappings or ())
+        resolved = os.path.realpath(os.path.expanduser(mapped))
         if allowed_roots:
             require_descendant(resolved, allowed_roots, allow_root=True)
         return resolved
@@ -415,7 +422,12 @@ async def _check_seeding_torrents(db: Session, active_clients: list[DownloadClie
                         settings = get_or_create_settings(db)
                         show_obj = db.get(Show, show_id)
                         if show_obj and hasattr(show_obj, "title"):
-                            _, t_files = _resolve_torrent_files_and_path(t, settings, show_obj)
+                            _, t_files = _resolve_torrent_files_and_path(
+                                t,
+                                settings,
+                                show_obj,
+                                getattr(dc_row, "remote_path_mappings", None) or [],
+                            )
                             if t_files:
                                 from app.services.postprocess import VIDEO_EXTENSIONS, is_extra_or_sample
                                 video_t_files = [
@@ -1138,7 +1150,12 @@ async def check_downloads(db: Session) -> list[dict]:
         except Exception as exc:
             logger.debug("Не удалось получить детальные файлы торрента %s: %s", torrent_hash, exc)
         torrent_obj = full_torrent or t
-        download_path, specific_files = _resolve_torrent_files_and_path(torrent_obj, settings, show)
+        download_path, specific_files = _resolve_torrent_files_and_path(
+            torrent_obj,
+            settings,
+            show,
+            getattr(dc_row, "remote_path_mappings", None) or [],
+        )
 
         # Проверяем реальное наличие файлов на диске перед запуском импорта
         has_actual_files = False

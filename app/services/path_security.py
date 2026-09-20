@@ -169,6 +169,33 @@ def map_client_path(
     return safe_join_under(local_root, suffix)
 
 
+def map_local_path(
+    local_path: str,
+    mappings: Sequence[PathMapping | Mapping[str, Any]],
+) -> str:
+    """Translate a local Aliasarr path to the matching download-client path."""
+    candidate = Path(local_path).expanduser().resolve(strict=False)
+    choices: list[tuple[int, Path, str]] = []
+    for item in mappings:
+        mapping = _coerce_mapping(item)
+        if not mapping.local_root.strip() or not mapping.remote_root.strip():
+            continue
+        local_root = Path(mapping.local_root).expanduser().resolve(strict=False)
+        try:
+            candidate.relative_to(local_root)
+        except ValueError:
+            continue
+        choices.append((len(local_root.parts), local_root, mapping.remote_root))
+    if not choices:
+        return str(local_path)
+    _, local_root, remote_root = max(choices, key=lambda value: value[0])
+    relative = candidate.relative_to(local_root)
+    remote = remote_root.rstrip("/\\")
+    if not relative.parts:
+        return remote
+    return f"{remote}/{'/'.join(relative.parts)}"
+
+
 def require_library_descendant(path: str, settings) -> Path:
     """Resolve *path* and require it to be below, but not equal to, a library root.
 

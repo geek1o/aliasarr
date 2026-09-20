@@ -39,6 +39,13 @@ manual_logger = logging.getLogger("aliasarr.manual_search")
 router = APIRouter(prefix="/api/v1/indexers", tags=["indexers"])
 
 
+def _indexer_out(indexer: Indexer) -> IndexerOut:
+    """Serialize an indexer without exposing its API key."""
+    return IndexerOut.model_validate(indexer).model_copy(
+        update={"has_api_key": bool(indexer.api_key)}
+    )
+
+
 def _parse_release_age_and_date(pub_date_raw: Any) -> tuple[Optional[str], Optional[float]]:
     """Парсит дату публикации (RFC 2822, ISO, строки) и вычисляет возраст в днях (Sonarr ReleaseResource.Age)."""
     if not pub_date_raw:
@@ -85,7 +92,7 @@ def _parse_release_age_and_date(pub_date_raw: Any) -> tuple[Optional[str], Optio
 
 @router.get("", response_model=list[IndexerOut])
 def list_indexers(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return db.query(Indexer).all()
+    return [_indexer_out(indexer) for indexer in db.query(Indexer).all()]
 
 
 @router.post("", response_model=IndexerOut, status_code=201)
@@ -103,7 +110,21 @@ def create_indexer(
     db.add(indexer)
     db.commit()
     db.refresh(indexer)
-    return indexer
+    return _indexer_out(indexer)
+
+
+@router.post("/{indexer_id}/diagnostics", summary="Полная диагностика индексатора")
+async def diagnose_indexer_endpoint(
+    indexer_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("manage_indexers")),
+):
+    indexer = db.get(Indexer, indexer_id)
+    if not indexer:
+        raise HTTPException(404, "Indexer not found")
+    from app.services.indexer_diagnostics import diagnose_indexer
+
+    return await diagnose_indexer(indexer)
 
 
 @router.put("/{indexer_id}", response_model=IndexerOut)
@@ -122,11 +143,13 @@ def update_indexer(
     if data.get("seed_ratio_limit") is not None and data["seed_ratio_limit"] <= 0:
         data["seed_ratio_limit"] = None
     for field, value in data.items():
+        if field == "api_key" and value is None:
+            continue
         setattr(indexer, field, value)
     db.add(indexer)
     db.commit()
     db.refresh(indexer)
-    return indexer
+    return _indexer_out(indexer)
 
 
 @router.delete("/{indexer_id}", status_code=204)
@@ -597,6 +620,7 @@ class GrabRequest(BaseModel):
     season: Optional[int] = None
     episode: Optional[int] = None
     episode_ids: Optional[list[int]] = None
+    size_bytes: Optional[int] = None
 
 
 @router.post("/grab")
@@ -636,12 +660,18 @@ async def grab_release(
 
     client = get_client(download_client_row)
     settings = get_or_create_settings(db)
-    if show.content_type == "movie":
-        save_path = settings.download_folder_movies
-    elif show.content_type == "anime":
-        save_path = settings.download_folder_anime
-    else:
-        save_path = settings.download_folder_series
+    from app.services.download_preflight import prepare_download_target
+    from app.services.file_preflight import FilePreflightError
+
+    try:
+        save_path = prepare_download_target(
+            settings,
+            show.content_type,
+            download_client_row,
+            size_bytes=payload.size_bytes,
+        )
+    except FilePreflightError as exc:
+        raise HTTPException(507, str(exc)) from exc
     should_pause = (show.content_type != "movie")
     try:
         try:

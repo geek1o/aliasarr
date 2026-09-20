@@ -1638,6 +1638,9 @@ async def _do_search_and_grab(
         return {"show_id": show.id, "grabbed": [], "reason": "no_wanted_episodes"}
 
     indexers = db.query(Indexer).filter(Indexer.enabled == True).all()  # noqa: E712
+    from app.services.delay_profiles import filter_indexers_for_show
+
+    indexers = filter_indexers_for_show(db, show, indexers)
     if not indexers:
         return {"show_id": show.id, "grabbed": [], "reason": "no_enabled_indexers"}
 
@@ -2038,6 +2041,40 @@ async def _do_search_and_grab(
             "cf_score": cf_score,
         })
 
+    # Delay Profiles применяются только в автоматическом поиске. Ручной поиск
+    # использует отдельный API и продолжает показывать все подходящие релизы.
+    from app.services.delay_profiles import filter_delayed_candidates
+
+    scored_candidates, delayed_candidates, delay_profile = filter_delayed_candidates(
+        db,
+        show,
+        scored_candidates,
+        quality_profile,
+    )
+    if delayed_candidates:
+        log_release_event(
+            stage="filter",
+            level="info",
+            show_title=show.title,
+            show_id=show.id,
+            message=(
+                f"Профиль задержки «{delay_profile.name}» отложил "
+                f"{len(delayed_candidates)} релизов до истечения периода ожидания"
+            ),
+            details={
+                "delay_profile_id": delay_profile.id,
+                "delayed": [
+                    {
+                        "title": c["rel"].title,
+                        "protocol": c["delay_decision"].protocol,
+                        "remaining_minutes": c["delay_decision"].remaining_minutes,
+                    }
+                    for c in delayed_candidates[:25]
+                ],
+            },
+            db=db,
+        )
+
     if not scored_candidates:
         log_release_event(
             stage="decision",
@@ -2075,6 +2112,7 @@ async def _do_search_and_grab(
     def candidate_sort_key(c):
         quality_pref = get_quality_preference(c["quality"], allowed_qualities) if c.get("quality") else 0
         cf_score = c.get("cf_score") or 0
+        preferred_protocol = 1 if c.get("preferred_protocol", True) else 0
         season_lbl = detect_season_label(c["rel"].title) if c.get("rel") else {"type": "none"}
         parsed = c["match"].parsed
 
@@ -2116,6 +2154,7 @@ async def _do_search_and_grab(
             wanted_coverage_count,
             season_episodes_count,
             cf_score,
+            preferred_protocol,
             -indexer_priority,
             seeders,
             match_score,
@@ -2234,13 +2273,30 @@ async def _do_search_and_grab(
             continue
 
         rel, match, indexer, covered = c["rel"], c["match"], c["indexer"], still_covered
-        # Папка временного скачивания для соответствующей категории контента
-        if show.content_type == "movie":
-            save_path = settings.download_folder_movies
-        elif show.content_type == "anime":
-            save_path = settings.download_folder_anime
-        else:
-            save_path = settings.download_folder_series
+        # До обращения к загрузчику проверяем локальный путь, права и свободное
+        # место, затем переводим путь в namespace удалённого клиента.
+        from app.services.download_preflight import prepare_download_target
+        from app.services.file_preflight import FilePreflightError
+
+        try:
+            save_path = prepare_download_target(
+                settings,
+                show.content_type,
+                download_client_row,
+                size_bytes=getattr(rel, "size_bytes", None),
+            )
+        except FilePreflightError as exc:
+            log_release_event(
+                stage="grab",
+                level="error",
+                show_title=show.title,
+                show_id=show.id,
+                release_title=rel.title,
+                indexer=getattr(indexer, "name", None),
+                message=f"Предварительная проверка загрузки не пройдена: {exc}",
+                db=db,
+            )
+            continue
 
         # Находим старые торрент-хэши для этих серий (если раздача заменяется/апгрейдится),
         # чтобы удалить старый дубликат из торрент-клиента и не качать дважды

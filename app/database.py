@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 
@@ -121,6 +122,9 @@ def _migrate_add_missing_columns() -> None:
                 elif isinstance(val, str):
                     clean_str = str(val).replace("'", "''")
                     default_sql = f" DEFAULT '{clean_str}'"
+                elif isinstance(val, (list, dict)):
+                    clean_json = json.dumps(val, ensure_ascii=False).replace("'", "''")
+                    default_sql = f" DEFAULT '{clean_json}'"
             elif not column.nullable:
                 if "INT" in str(col_type).upper() or "BOOL" in str(col_type).upper():
                     default_sql = " DEFAULT 0"
@@ -142,6 +146,21 @@ def _migrate_add_missing_columns() -> None:
         with engine.begin() as conn:
             conn.execute(text("UPDATE indexers SET seed_time_limit_hours = NULL WHERE seed_time_limit_hours = 0"))
             conn.execute(text("UPDATE indexers SET seed_ratio_limit = NULL WHERE seed_ratio_limit = 0"))
+    except Exception:
+        pass
+
+    # Older installations may already have received the JSON column from a
+    # pre-release build without a server default.  Normalize those rows too;
+    # otherwise response validation and path mapping expect a list but get NULL.
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "UPDATE download_clients SET remote_path_mappings = '[]' "
+                    "WHERE remote_path_mappings IS NULL "
+                    "OR CAST(remote_path_mappings AS TEXT) = ''"
+                )
+            )
     except Exception:
         pass
 
@@ -168,6 +187,10 @@ def _ensure_performance_indexes() -> None:
         ("idx_background_tasks_status_available", "background_tasks", "status, available_at"),
         ("idx_background_tasks_name_status", "background_tasks", "name, status"),
         ("idx_background_tasks_ended_at", "background_tasks", "ended_at"),
+        ("idx_show_tags_tag_show", "show_tags", "tag_id, show_id"),
+        ("idx_indexer_tags_tag_indexer", "indexer_tags", "tag_id, indexer_id"),
+        ("idx_delay_profiles_tag_enabled", "delay_profiles", "tag_id, enabled"),
+        ("idx_import_lists_enabled_due", "import_lists", "enabled, last_synced_at"),
     ]
     try:
         with engine.begin() as conn:
