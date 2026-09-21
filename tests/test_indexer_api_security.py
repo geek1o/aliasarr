@@ -11,6 +11,7 @@ from app.api.download_clients import DownloadClientIn, DownloadClientOut, update
 from app.api.indexers import _indexer_out, update_indexer
 from app.models.db import Base, DownloadClient, Indexer
 from app.schemas import IndexerCreate
+from app.services.log_safety import redact_sensitive_data
 
 
 class IndexerApiSecurityTests(unittest.TestCase):
@@ -45,6 +46,19 @@ class IndexerApiSecurityTests(unittest.TestCase):
 
         self.assertGreaterEqual(logging.getLogger("httpx").getEffectiveLevel(), logging.WARNING)
         self.assertGreaterEqual(logging.getLogger("httpcore").getEffectiveLevel(), logging.WARNING)
+
+    def test_http_exception_urls_are_redacted_before_logging(self):
+        secret = "do-not-leak"
+        message = (
+            "Client error for url "
+            f"'https://indexer.test/api?t=search&apikey={secret}&q=example'"
+        )
+
+        sanitized = redact_sensitive_data(message)
+
+        self.assertNotIn(secret, sanitized)
+        self.assertIn("apikey=<redacted>", sanitized)
+        self.assertIn("q=example", sanitized)
 
     def test_blank_key_on_update_preserves_stored_secret(self):
         indexer = Indexer(

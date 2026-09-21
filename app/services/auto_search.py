@@ -69,6 +69,7 @@ from app.services.notifications import notify_all
 from app.services.parser import ReleaseKind, detect_season_label, parse_episode
 from app.services.quality import is_allowed, parse_quality
 from app.services.indexer_service import get_indexer_client
+from app.services.log_safety import redact_sensitive_data
 from app.services.rate_limiter import RateLimitExceededError, get_rate_limiter
 from app.services.release_log_service import log_release_event
 from app.services.settings_service import get_or_create_settings
@@ -1436,7 +1437,12 @@ async def _collect_candidates(
                 )
                 return (idx, [])
             except Exception as exc:
-                logger.debug("Индексатор %s запрос «%s»: %s", getattr(idx, "name", idx), q_term, exc)
+                logger.debug(
+                    "Индексатор %s запрос «%s»: %s",
+                    getattr(idx, "name", idx),
+                    q_term,
+                    redact_sensitive_data(exc),
+                )
                 return (idx, [])
 
     tasks = []

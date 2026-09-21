@@ -16,6 +16,7 @@ from app.database import get_db
 from app.models.db import Indexer, Show, User, Episode, Alias, QualityProfile, EpisodeStatus
 from app.services.user_service import require_any_permission, get_current_user
 from app.services.indexer_service import get_indexer_client
+from app.services.log_safety import redact_sensitive_data
 from app.services.parser import parse_episode, detect_season_label, ReleaseKind
 from app.services.matcher import (
     is_non_video_release,
@@ -447,7 +448,12 @@ async def _run_harvest_task(targets: list[dict], indexer_id: Optional[int]):
                         new_records.append(rec)
                         _HARVEST_STATE["collected_count"] += 1
                 except Exception as exc:
-                    logger.debug("Indexer %s search '%s' error: %s", indexer_row.name, q, exc)
+                    logger.debug(
+                        "Indexer %s search '%s' error: %s",
+                        indexer_row.name,
+                        q,
+                        redact_sensitive_data(exc),
+                    )
 
         all_data = existing_records + new_records
         _save_stored_dataset(all_data)

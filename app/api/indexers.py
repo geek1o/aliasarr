@@ -25,6 +25,7 @@ from app.models.db import (
 from app.schemas import IndexerCreate, IndexerOut, SearchResultOut
 from app.services.download_client import get_client
 from app.services.indexer_service import get_indexer_client
+from app.services.log_safety import redact_sensitive_data
 from app.services.matcher import AliasCandidate, build_alias_candidates, match_release
 from app.services.notifications import notify_all
 from app.services.quality import parse_quality, is_upgrade
@@ -345,7 +346,12 @@ async def search_custom_releases(
                 manual_logger.warning("Индексатор «%s»: таймаут ожидания ответа (12с) по запросу «%s»", idx_name, query.strip())
                 return (idx, [])
             except Exception as exc:
-                manual_logger.warning("Индексатор «%s»: ошибка при поиске «%s»: %s", idx_name, query.strip(), exc)
+                manual_logger.warning(
+                    "Индексатор «%s»: ошибка при поиске «%s»: %s",
+                    idx_name,
+                    query.strip(),
+                    redact_sensitive_data(exc),
+                )
                 return (idx, [])
 
     tasks = [_fetch_custom(idx) for idx in sorted(indexers, key=lambda i: i.priority)]
@@ -512,7 +518,12 @@ async def search_releases_for_show(
                 manual_logger.warning("Индексатор «%s»: таймаут ожидания ответа (12с) по запросу «%s»", idx_name, q_term)
                 return (idx, [])
             except Exception as exc:
-                manual_logger.warning("Индексатор «%s»: ошибка при поиске «%s»: %s", idx_name, q_term, exc)
+                manual_logger.warning(
+                    "Индексатор «%s»: ошибка при поиске «%s»: %s",
+                    idx_name,
+                    q_term,
+                    redact_sensitive_data(exc),
+                )
                 return (idx, [])
 
     tasks = []

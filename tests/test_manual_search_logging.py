@@ -72,6 +72,32 @@ class TestManualSearchLogging(unittest.TestCase):
             self.assertTrue(any("Индексатор «%s»: найдено релизов" in msg for msg in info_messages))
             self.assertTrue(any("Ручной поиск завершён" in msg for msg in info_messages))
 
+    def test_search_failure_log_redacts_indexer_api_key(self):
+        if not HAS_DEPS:
+            self.skipTest("FastAPI / dependencies not installed in host runner")
+        mock_db = MagicMock()
+        mock_indexer = Indexer(id=1, name="Kinozal", enabled=True, priority=1)
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_indexer]
+        mock_db.get.return_value = None
+        secret = "do-not-leak"
+        mock_client = AsyncMock()
+        mock_client.search.side_effect = RuntimeError(
+            f"Client error for url 'https://indexer.test/api?apikey={secret}&q=test'"
+        )
+
+        with patch("app.api.indexers.get_indexer_client", return_value=mock_client), \
+             patch("app.api.indexers.manual_logger") as mock_logger:
+            results = asyncio.run(search_custom_releases(
+                query="Test",
+                db=mock_db,
+                current_user=MagicMock(spec=User),
+            ))
+
+        self.assertEqual(results, [])
+        warning_args = mock_logger.warning.call_args.args
+        self.assertNotIn(secret, repr(warning_args))
+        self.assertIn("apikey=<redacted>", repr(warning_args))
+
     def test_search_releases_for_show_logs_events(self):
         if not HAS_DEPS:
             self.skipTest("FastAPI / dependencies not installed in host runner")
@@ -165,4 +191,3 @@ class TestManualSearchLogging(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

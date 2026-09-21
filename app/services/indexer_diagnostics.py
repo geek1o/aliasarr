@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import inspect
-import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Optional
@@ -11,6 +10,7 @@ from urllib.parse import urlsplit, urlunsplit
 from xml.etree import ElementTree
 
 from app.services.indexer_adapters import parse_xml_releases
+from app.services.log_safety import redact_sensitive_data
 from app.services.parser import ReleaseKind, parse_episode
 from app.services.torznab import TorznabRelease
 
@@ -46,8 +46,7 @@ def _api_url(indexer: Any) -> str:
 
 def _safe_error(exc: Exception) -> str:
     message = str(exc) or exc.__class__.__name__
-    message = re.sub(r"(?i)(apikey|api_key|passkey)=([^&\s]+)", r"\1=<redacted>", message)
-    return message[:500]
+    return redact_sensitive_data(message, limit=500)
 
 
 def _safe_endpoint(url: str) -> str:
