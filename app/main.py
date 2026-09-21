@@ -57,6 +57,13 @@ from app.services.user_service import ensure_master_admin, get_current_user_opti
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("aliasarr.main")
 
+# httpx logs full request URLs at INFO level. Indexer URLs carry credentials in
+# query parameters (for example ``apikey``), so those transport-level messages
+# must never reach the console or the database log handler. Aliasarr services
+# log their own credential-free request outcomes instead.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
 try:
     os.umask(int(os.getenv("UMASK", "0022").strip(), 8))
 except Exception:

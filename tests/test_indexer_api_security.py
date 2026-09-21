@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import unittest
 from unittest.mock import MagicMock
 
@@ -38,6 +39,12 @@ class IndexerApiSecurityTests(unittest.TestCase):
         self.assertTrue(payload["has_api_key"])
         self.assertNotIn("api_key", payload)
         self.assertNotIn("secret-value", repr(payload))
+
+    def test_http_transport_info_logs_are_suppressed(self):
+        import app.main  # noqa: F401
+
+        self.assertGreaterEqual(logging.getLogger("httpx").getEffectiveLevel(), logging.WARNING)
+        self.assertGreaterEqual(logging.getLogger("httpcore").getEffectiveLevel(), logging.WARNING)
 
     def test_blank_key_on_update_preserves_stored_secret(self):
         indexer = Indexer(
