@@ -5342,19 +5342,32 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
 .btn-icon-only.btn-small { width: 26px; height: 26px; min-height: 26px; }
 
 #poster-options-btn,
-#collections-poster-options-btn {
+#collections-poster-options-btn,
+#card-style-btn,
+#collections-card-style-btn {
   width: 38px;
   height: 38px;
   min-height: 38px;
   border-radius: var(--radius-sm, 8px);
   color: var(--text);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 #poster-options-btn svg,
 #poster-options-btn i,
 #poster-options-btn .lucide,
 #collections-poster-options-btn svg,
 #collections-poster-options-btn i,
-#collections-poster-options-btn .lucide {
+#collections-poster-options-btn .lucide,
+#card-style-btn svg,
+#card-style-btn i,
+#card-style-btn .lucide,
+#collections-card-style-btn svg,
+#collections-card-style-btn i,
+#collections-card-style-btn .lucide {
   width: 20px !important;
   height: 20px !important;
   stroke-width: 2.2px;
@@ -6441,6 +6454,7 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
 #category-switcher {
   display: flex;
 }
+.card-style-btn-label,
 .poster-options-btn-label {
   display: none;
 }
@@ -6769,7 +6783,7 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
   flex-wrap: nowrap;
 }
@@ -6784,7 +6798,7 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   align-items: center;
   gap: 8px;
   margin-left: auto;
-  flex-shrink: 0;
+  flex: 0 0 auto;
   flex-wrap: nowrap;
 }
 
