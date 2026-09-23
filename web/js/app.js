@@ -24908,6 +24908,7 @@ const SERVARR_RELOCATE = [
   { panel: "tab-backup", selector: ".backup-actions-row", target: "toolbar", cls: "servarr-adopted-toolbar" },
   { panel: "tab-calendar", selector: ".calendar-toolbar-group:first-child", target: "#calendar-body", cls: "servarr-calendar-nav", wrap: "servarr-calendar-header" },
   { panel: "tab-calendar", selector: "#calendar-view-select", target: "#calendar-body", cls: "servarr-calendar-view", wrap: "servarr-calendar-header" },
+  { panel: "tab-library", selector: ".library-search-wrap", target: "#tab-library #category-switcher", cls: "servarr-library-search" },
 ];
 
 function servarrAdoptToolbars(active) {

@@ -899,14 +899,30 @@
 
 /* Поиск внутри панели — в стиле поиска шапки Sonarr */
 [data-design="servarr"] .content .panel-sticky-header .library-search-wrap,
+[data-design="servarr"] .content .panel-sticky-header .library-spotlight-search,
+[data-design="servarr"] .content .panel-sticky-header .servarr-library-search,
 [data-design="servarr"] .content .panel-sticky-header .blocklist-search-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
   flex: 0 1 240px;
   min-width: 140px;
   max-width: 240px;
+  height: 35px !important;
+  border-radius: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
   margin: 0 10px 0 0;
+}
+[data-design="servarr"] .content .panel-sticky-header .library-spotlight-search:hover,
+[data-design="servarr"] .content .panel-sticky-header .library-spotlight-search:focus-within,
+[data-design="servarr"] .content .panel-sticky-header .servarr-library-search:hover,
+[data-design="servarr"] .content .panel-sticky-header .servarr-library-search:focus-within {
+  border-radius: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 [data-design="servarr"] .content .panel-sticky-header .library-search-icon,
 [data-design="servarr"] .content .panel-sticky-header .blocklist-search-icon {
@@ -2963,8 +2979,15 @@ html[data-design="servarr"] .settings-field-group > .switch-toggle:first-child >
     width: auto !important;
     margin: 0 !important;
   }
-  [data-design="servarr"] .content .panel-sticky-header #library-category-btns { display: none !important; }
+  [data-design="servarr"] .content .panel-sticky-header #library-category-btns,
+  [data-design="servarr"] .content .panel-sticky-header #library-view-segmented,
+  [data-design="servarr"] .search-kbd-badge,
+  [data-design="servarr"] .library-header-count-badge {
+    display: none !important;
+  }
   [data-design="servarr"] .content .panel-sticky-header .library-search-wrap,
+  [data-design="servarr"] .content .panel-sticky-header .library-spotlight-search,
+  [data-design="servarr"] .content .panel-sticky-header .servarr-library-search,
   [data-design="servarr"] .content .panel-sticky-header .blocklist-search-wrap {
     flex: 0 0 150px !important;
     width: 150px !important;

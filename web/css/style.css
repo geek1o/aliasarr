@@ -6807,24 +6807,26 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   flex-shrink: 0;
 }
 
-#library-sort-switcher-label {
-  max-width: 135px;
+.library-panel-header .subtitle {
+  max-width: 320px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  display: inline-block;
-  vertical-align: middle;
+}
+
+.library-panel-header .header-actions {
+  flex-shrink: 0;
 }
 
 @media (min-width: 1025px) {
-  #tab-library #category-switcher,
-  #tab-library #view-switcher {
+  body:not([data-design="servarr"]) #tab-library #category-switcher,
+  body:not([data-design="servarr"]) #tab-library #view-switcher {
     display: none !important;
   }
-  #tab-library #library-category-btns {
+  body:not([data-design="servarr"]) #tab-library #library-category-btns {
     display: inline-flex !important;
   }
-  #tab-library #library-view-segmented {
+  body:not([data-design="servarr"]) #tab-library #library-view-segmented {
     display: inline-flex !important;
   }
 }
@@ -12165,9 +12167,10 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
 /* 3. Nested Island Buttons & Micro-Physics (scale 0.98 on active) */
 [data-design="vanguard"] .btn {
   border-radius: 9999px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  padding: 8px 18px;
+  font-weight: 500;
+  font-size: 13.5px;
+  letter-spacing: 0;
+  padding: 0 14px;
   height: 38px;
   min-height: 38px;
   box-sizing: border-box;
@@ -12250,7 +12253,7 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   background: linear-gradient(135deg, var(--teal, #00F0FF) 0%, #0284c7 60%, var(--violet, #8B5CF6) 100%);
   color: #05070e;
   border: none;
-  font-weight: 700;
+  font-weight: 600;
   box-shadow: 
     0 4px 20px rgba(0, 240, 255, 0.3),
     inset 0 1px 1px rgba(255, 255, 255, 0.5);
