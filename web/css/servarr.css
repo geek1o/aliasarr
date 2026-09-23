@@ -19,6 +19,29 @@
 .servarr-theme-note { display: none; }
 :root:not([data-design="servarr"]) .servarr-only { display: none !important; }
 
+/* Изоляция элементов Command Bar и гарантированное включение Sonarr-дропдаунов */
+:root[data-design="servarr"] #library-category-btns,
+:root[data-design="servarr"] #library-view-segmented,
+:root[data-design="servarr"] .search-kbd-badge,
+:root[data-design="servarr"] .library-header-count-badge,
+[data-design="servarr"] #library-category-btns,
+[data-design="servarr"] #library-view-segmented,
+[data-design="servarr"] .search-kbd-badge,
+[data-design="servarr"] .library-header-count-badge {
+  display: none !important;
+}
+
+:root[data-design="servarr"] #tab-library #category-switcher,
+:root[data-design="servarr"] #tab-library #view-switcher,
+:root[data-design="servarr"] #tab-library #monitor-switcher,
+:root[data-design="servarr"] #tab-library #library-sort-switcher,
+[data-design="servarr"] #tab-library #category-switcher,
+[data-design="servarr"] #tab-library #view-switcher,
+[data-design="servarr"] #tab-library #monitor-switcher,
+[data-design="servarr"] #tab-library #library-sort-switcher {
+  display: flex !important;
+}
+
 /* ---------------------------------------------------------------------------
    1. Палитра (аналог Styles/Themes/light.js)
    --------------------------------------------------------------------------- */

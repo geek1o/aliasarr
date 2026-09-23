@@ -6819,14 +6819,14 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
 }
 
 @media (min-width: 1025px) {
-  body:not([data-design="servarr"]) #tab-library #category-switcher,
-  body:not([data-design="servarr"]) #tab-library #view-switcher {
+  :root:not([data-design="servarr"]) #tab-library #category-switcher,
+  :root:not([data-design="servarr"]) #tab-library #view-switcher {
     display: none !important;
   }
-  body:not([data-design="servarr"]) #tab-library #library-category-btns {
+  :root:not([data-design="servarr"]) #tab-library #library-category-btns {
     display: inline-flex !important;
   }
-  body:not([data-design="servarr"]) #tab-library #library-view-segmented {
+  :root:not([data-design="servarr"]) #tab-library #library-view-segmented {
     display: inline-flex !important;
   }
 }
