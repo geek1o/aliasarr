@@ -486,6 +486,7 @@
             </div>
 
             <div class="header-actions" style="display:flex;gap:8px;">
+              <button id="btn-header-spotlight-action" class="btn btn-secondary header-spotlight-action-btn" onclick="openSpotlightCommandPalette()" title="Быстрый поиск (⌘K или Ctrl+K)" data-i18n-title="search_layout.search_action_title" style="display:none;"><i data-lucide="search" class="ico-sm text-teal"></i> <span data-i18n="search_layout.search_action_label">Поиск</span> <kbd class="search-kbd-badge" style="margin-left:4px; font-size:10px; padding:1px 5px;">⌘K</kbd></button>
               <button id="btn-library-bulk-toggle" class="btn btn-secondary" onclick="toggleLibraryBulkMode()" title="Выбрать тайтлы и массово редактировать" data-i18n-title="library.bulk_btn_title"><i data-lucide="check-square" class="ico-sm"></i> <span data-i18n="library.bulk_btn">Выбрать тайтлы</span></button>
               <button id="btn-library-import" class="btn btn-secondary" onclick="openLibraryImportModal()" title="Массовый импорт тайтлов из существующих папок на диске" data-i18n-title="lib_import.btn_title"><i data-lucide="folder-symlink" class="ico-sm"></i> <span data-i18n="lib_import.btn">Импорт из папки</span></button>
               <button class="btn btn-primary servarr-hide" onclick="openAddShowWizard()" data-i18n="nav.add_video">+ Добавить видео</button>
@@ -5039,14 +5040,14 @@
     </div>
 
     <div class="card-styles-grid search-layout-styles-grid">
-      <!-- 1. Spotlight Command Palette -->
-      <div class="card-style-option" id="search-layout-opt-spotlight" onclick="setSearchLayoutStyle('spotlight')">
+      <!-- 1. Central Spotlight Bar -->
+      <div class="card-style-option" id="search-layout-opt-spotlight_bar" onclick="setSearchLayoutStyle('spotlight_bar')">
         <div class="card-style-badge-recommended" data-i18n="card_style.recommended">Флагман</div>
         <div class="card-style-preview card-style-preview-layout">
           <div class="preview-layout-box">
             <div class="preview-spotlight-pill">
               <i data-lucide="search" class="ico-xxs text-teal"></i>
-              <span class="preview-text">Поиск...</span>
+              <span class="preview-text">Быстрый поиск...</span>
               <span class="preview-kbd">⌘K</span>
             </div>
           </div>
@@ -5054,33 +5055,34 @@
         <div class="card-style-meta">
           <div class="card-style-name">
             <span class="card-style-radio"></span>
-            <span data-i18n="search_layout.spotlight_title">Spotlight Command Palette</span>
+            <span data-i18n="search_layout.spotlight_bar_title">Центральный Spotlight Bar</span>
           </div>
-          <p class="card-style-desc" data-i18n="search_layout.spotlight_desc">Компактная кнопка-пилл в шапке и всплывающее парящее окно по центру экрана (Raycast/Linear) по ⌘K / Ctrl+K с быстрым доступом ко всем тайтлам.</p>
+          <p class="card-style-desc" data-i18n="search_layout.spotlight_bar_desc">Гармоничная стеклянная капсула по центру шапки со свободным размещением шортката и открытием парящего поиска.</p>
         </div>
       </div>
 
-      <!-- 2. Floating Omni-Search -->
-      <div class="card-style-option" id="search-layout-opt-omni" onclick="setSearchLayoutStyle('omni')">
+      <!-- 2. Action Button in Header -->
+      <div class="card-style-option" id="search-layout-opt-action_btn" onclick="setSearchLayoutStyle('action_btn')">
         <div class="card-style-preview card-style-preview-layout">
-          <div class="preview-layout-box">
-            <div class="preview-omni-bar">
-              <i data-lucide="search" class="ico-xxs text-muted"></i>
-              <span class="preview-text">Поиск по названию</span>
+          <div class="preview-layout-box" style="justify-content: flex-end; padding-right: 8px;">
+            <div class="preview-action-btn">
+              <i data-lucide="search" class="ico-xxs text-teal"></i>
+              <span class="preview-text">Поиск</span>
+              <span class="preview-kbd">⌘K</span>
             </div>
           </div>
         </div>
         <div class="card-style-meta">
           <div class="card-style-name">
             <span class="card-style-radio"></span>
-            <span data-i18n="search_layout.omni_title">Плавающий Omni-Search</span>
+            <span data-i18n="search_layout.action_btn_title">Кнопка в блоке действий</span>
           </div>
-          <p class="card-style-desc" data-i18n="search_layout.omni_desc">Компактная строка в шапке, плавно увеличивающаяся и парящая по центру при фокусе с эффектом неонового свечения.</p>
+          <p class="card-style-desc" data-i18n="search_layout.action_btn_desc">Чистый центр шапки и стильная кнопка быстрого поиска справа рядом с добавлением видео.</p>
         </div>
       </div>
 
-      <!-- 3. Classic Header Bar -->
-      <div class="card-style-option" id="search-layout-opt-classic" onclick="setSearchLayoutStyle('classic')">
+      <!-- 3. Classic Full-Width Bar -->
+      <div class="card-style-option" id="search-layout-opt-classic_full" onclick="setSearchLayoutStyle('classic_full')">
         <div class="card-style-preview card-style-preview-layout">
           <div class="preview-layout-box">
             <div class="preview-classic-search">
@@ -5093,9 +5095,9 @@
         <div class="card-style-meta">
           <div class="card-style-name">
             <span class="card-style-radio"></span>
-            <span data-i18n="search_layout.classic_title">Классическая строка поиска</span>
+            <span data-i18n="search_layout.classic_full_title">Классическая широкая строка</span>
           </div>
-          <p class="card-style-desc" data-i18n="search_layout.classic_desc">Полноразмерная фиксированная поисковая строка прямо в шапке библиотеки с мгновенной фильтрацией на месте.</p>
+          <p class="card-style-desc" data-i18n="search_layout.classic_full_desc">Полноразмерная встроенная строка поиска прямо в шапке библиотеки с мгновенной фильтрацией на месте.</p>
         </div>
       </div>
     </div>

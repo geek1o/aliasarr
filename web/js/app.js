@@ -580,12 +580,14 @@ const TRANSLATIONS = {
     // Search Layout & Mode Style
     "search_layout.section_title": "Стиль и режим строки поиска",
     "search_layout.section_subtitle": "Выберите расположение и формат взаимодействия с поисковой строкой",
-    "search_layout.spotlight_title": "Spotlight Command Palette",
-    "search_layout.spotlight_desc": "Компактная кнопка-пилл в шапке и всплывающее парящее окно по центру экрана (Raycast/Linear) по ⌘K / Ctrl+K с быстрым доступом ко всем тайтлам.",
-    "search_layout.omni_title": "Плавающий Omni-Search",
-    "search_layout.omni_desc": "Компактная строка в шапке, плавно увеличивающаяся и парящая по центру при фокусе с эффектом неонового свечения.",
-    "search_layout.classic_title": "Классическая строка поиска",
-    "search_layout.classic_desc": "Полноразмерная фиксированная поисковая строка прямо в шапке библиотеки с мгновенной фильтрацией на месте.",
+    "search_layout.spotlight_bar_title": "Центральный Spotlight Bar",
+    "search_layout.spotlight_bar_desc": "Гармоничная стеклянная капсула по центру шапки со свободным размещением шортката и открытием парящего поиска.",
+    "search_layout.action_btn_title": "Кнопка в блоке действий",
+    "search_layout.action_btn_desc": "Чистый центр шапки и стильная кнопка быстрого поиска справа рядом с добавлением видео.",
+    "search_layout.classic_full_title": "Классическая широкая строка",
+    "search_layout.classic_full_desc": "Полноразмерная встроенная строка поиска прямо в шапке библиотеки с мгновенной фильтрацией на месте.",
+    "search_layout.search_action_label": "Поиск",
+    "search_layout.search_action_title": "Быстрый поиск (⌘K или Ctrl+K)",
 
     // Spotlight Modal
     "spotlight.placeholder": "Поиск фильма, сериала, аниме или саги...",
@@ -2144,12 +2146,14 @@ const TRANSLATIONS = {
     // Search Layout & Mode Style
     "search_layout.section_title": "Search Bar & Experience Style",
     "search_layout.section_subtitle": "Choose the layout and interaction model for library search",
-    "search_layout.spotlight_title": "Spotlight Command Palette",
-    "search_layout.spotlight_desc": "Compact trigger pill in the header and centered floating command palette (Raycast/Linear style) with ⌘K / Ctrl+K and instant title access.",
-    "search_layout.omni_title": "Floating Omni-Search",
-    "search_layout.omni_desc": "Compact bar in the header expanding and floating in the center upon focus with neon glow effects.",
-    "search_layout.classic_title": "Classic Header Search Bar",
-    "search_layout.classic_desc": "Full-width embedded search bar directly in the library header with instant in-place filtering.",
+    "search_layout.spotlight_bar_title": "Centered Spotlight Bar",
+    "search_layout.spotlight_bar_desc": "Harmonious frosted glass capsule in the header center with ample room for shortcuts and quick search popup.",
+    "search_layout.action_btn_title": "Action Button in Header",
+    "search_layout.action_btn_desc": "Clean header center with a dedicated quick search action button alongside add video.",
+    "search_layout.classic_full_title": "Classic Full-Width Bar",
+    "search_layout.classic_full_desc": "Full-width embedded search bar directly in the library header with instant in-place filtering.",
+    "search_layout.search_action_label": "Search",
+    "search_layout.search_action_title": "Quick Search (⌘K or Ctrl+K)",
 
     // Spotlight Modal
     "spotlight.placeholder": "Search movie, series, anime or collection...",
@@ -6685,7 +6689,10 @@ function updateLibraryFilterButtons() {
 
 let CURRENT_CARD_STYLE = localStorage.getItem("aliasarr_card_style") || "neoglass";
 let CURRENT_SEARCH_PROGRESS_STYLE = localStorage.getItem("aliasarr_search_progress_style") || "micropill";
-let CURRENT_SEARCH_LAYOUT_STYLE = localStorage.getItem("aliasarr_search_layout_style") || "spotlight";
+let savedSearchStyle = localStorage.getItem("aliasarr_search_layout_style") || "spotlight_bar";
+if (savedSearchStyle === "spotlight" || savedSearchStyle === "omni") savedSearchStyle = "spotlight_bar";
+if (savedSearchStyle === "classic") savedSearchStyle = "classic_full";
+let CURRENT_SEARCH_LAYOUT_STYLE = savedSearchStyle;
 
 function openCardStyleModal() {
   const cardOptions = document.querySelectorAll("#card-style-modal .card-poster-styles-grid .card-style-option");
@@ -6748,7 +6755,7 @@ function setSearchProgressStyle(style) {
 }
 
 function setSearchLayoutStyle(style) {
-  if (!["spotlight", "omni", "classic"].includes(style)) return;
+  if (!["spotlight_bar", "action_btn", "classic_full"].includes(style)) return;
   CURRENT_SEARCH_LAYOUT_STYLE = style;
   try { localStorage.setItem("aliasarr_search_layout_style", style); } catch (e) {}
 
@@ -6766,6 +6773,7 @@ function applySearchLayoutStyle() {
   const colWrap = document.getElementById("collections-search-wrap");
   const libInput = document.getElementById("library-search");
   const colInput = document.getElementById("collections-search");
+  const actionBtn = document.getElementById("btn-header-spotlight-action");
 
   if (libWrap) {
     libWrap.setAttribute("data-search-mode", CURRENT_SEARCH_LAYOUT_STYLE);
@@ -6774,26 +6782,20 @@ function applySearchLayoutStyle() {
     colWrap.setAttribute("data-search-mode", CURRENT_SEARCH_LAYOUT_STYLE);
   }
 
-  if (CURRENT_SEARCH_LAYOUT_STYLE === "spotlight") {
+  if (CURRENT_SEARCH_LAYOUT_STYLE === "spotlight_bar") {
     if (libInput) {
       libInput.setAttribute("readonly", "readonly");
-      libInput.placeholder = CURRENT_LANG === "en" ? "Search..." : "Поиск...";
+      libInput.placeholder = CURRENT_LANG === "en" ? "Quick search..." : "Быстрый поиск...";
     }
     if (colInput) {
       colInput.setAttribute("readonly", "readonly");
-      colInput.placeholder = CURRENT_LANG === "en" ? "Search..." : "Поиск...";
+      colInput.placeholder = CURRENT_LANG === "en" ? "Quick search..." : "Быстрый поиск...";
     }
-  } else if (CURRENT_SEARCH_LAYOUT_STYLE === "omni") {
-    if (libInput) {
-      libInput.removeAttribute("readonly");
-      libInput.placeholder = CURRENT_LANG === "en" ? "Search" : "Поиск";
-    }
-    if (colInput) {
-      colInput.removeAttribute("readonly");
-      colInput.placeholder = CURRENT_LANG === "en" ? "Search" : "Поиск";
-    }
+    if (actionBtn) actionBtn.style.display = "none";
+  } else if (CURRENT_SEARCH_LAYOUT_STYLE === "action_btn") {
+    if (actionBtn) actionBtn.style.display = "inline-flex";
   } else {
-    // classic
+    // classic_full
     if (libInput) {
       libInput.removeAttribute("readonly");
       libInput.placeholder = CURRENT_LANG === "en" ? "Search by title or alias" : "Поиск по названию или алиасу";
@@ -6802,6 +6804,7 @@ function applySearchLayoutStyle() {
       colInput.removeAttribute("readonly");
       colInput.placeholder = CURRENT_LANG === "en" ? "Find collection…" : "Найти коллекцию…";
     }
+    if (actionBtn) actionBtn.style.display = "none";
   }
 
   document.documentElement.setAttribute("data-search-layout", CURRENT_SEARCH_LAYOUT_STYLE);
@@ -6811,7 +6814,7 @@ function onLibrarySearchWrapClick(e) {
   const design = document.documentElement.getAttribute("data-design");
   if (design === "servarr") return;
 
-  if (CURRENT_SEARCH_LAYOUT_STYLE === "spotlight") {
+  if (CURRENT_SEARCH_LAYOUT_STYLE === "spotlight_bar") {
     if (e.target.closest(".library-search-clear-btn")) return;
     e.preventDefault();
     openSpotlightCommandPalette();
@@ -6822,7 +6825,7 @@ function onCollectionsSearchWrapClick(e) {
   const design = document.documentElement.getAttribute("data-design");
   if (design === "servarr") return;
 
-  if (CURRENT_SEARCH_LAYOUT_STYLE === "spotlight") {
+  if (CURRENT_SEARCH_LAYOUT_STYLE === "spotlight_bar") {
     if (e.target.closest(".library-search-clear-btn")) return;
     e.preventDefault();
     openSpotlightCommandPalette();
@@ -24097,7 +24100,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && (e.code === "KeyK" || e.key === "k" || e.key === "K" || e.key === "л" || e.key === "Л")) {
     const isServarr = document.documentElement.getAttribute("data-design") === "servarr";
-    if (!isServarr && CURRENT_SEARCH_LAYOUT_STYLE === "spotlight") {
+    if (!isServarr && (CURRENT_SEARCH_LAYOUT_STYLE === "spotlight_bar" || CURRENT_SEARCH_LAYOUT_STYLE === "action_btn" || CURRENT_SEARCH_LAYOUT_STYLE === "spotlight")) {
       e.preventDefault();
       const spotlightModal = document.getElementById("spotlight-modal");
       if (spotlightModal && spotlightModal.classList.contains("open")) {

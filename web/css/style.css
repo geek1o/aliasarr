@@ -7642,61 +7642,96 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
 }
 
 /* Search Modes in Header */
+/* Mode 1: Central Spotlight Bar (260-320px) */
+:root:not([data-design="servarr"]) .library-search-wrap[data-search-mode="spotlight_bar"],
 :root:not([data-design="servarr"]) .library-search-wrap[data-search-mode="spotlight"] {
-  flex: 0 0 auto !important;
-  width: 175px !important;
-  min-width: 175px !important;
-  max-width: 175px !important;
+  display: flex !important;
+  flex: 0 1 290px !important;
+  min-width: 250px !important;
+  max-width: 320px !important;
+  height: 38px;
   cursor: pointer;
   background: var(--input-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border);
   border-radius: 9999px;
   user-select: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
+:root:not([data-design="servarr"]) .library-search-wrap[data-search-mode="spotlight_bar"]:hover,
 :root:not([data-design="servarr"]) .library-search-wrap[data-search-mode="spotlight"]:hover {
   background: rgba(20, 184, 166, 0.12);
   border-color: var(--teal);
   transform: translateY(-1px);
 }
+:root:not([data-design="servarr"]) .library-search-wrap[data-search-mode="spotlight_bar"] .library-search-input,
 :root:not([data-design="servarr"]) .library-search-wrap[data-search-mode="spotlight"] .library-search-input {
   cursor: pointer;
   pointer-events: none;
   padding-left: 36px;
-  padding-right: 46px;
+  padding-right: 56px;
   font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-:root:not([data-design="servarr"]) .library-search-wrap[data-search-mode="omni"] {
-  flex: 0 0 auto !important;
-  width: 140px !important;
-  min-width: 140px !important;
-  max-width: 140px !important;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  background: var(--input-bg, rgba(255, 255, 255, 0.04));
-  border-radius: 9999px;
+/* Mode 2: Action Button in Header Actions */
+:root:not([data-design="servarr"]) .library-search-wrap[data-search-mode="action_btn"] {
+  display: none !important;
 }
-:root:not([data-design="servarr"]) .library-search-wrap[data-search-mode="omni"] .library-search-input {
-  font-size: 13px;
-  padding-left: 36px;
-  padding-right: 44px;
+:root:not([data-design="servarr"]) [data-search-layout="action_btn"] #btn-header-spotlight-action {
+  display: inline-flex !important;
 }
-:root:not([data-design="servarr"]) .library-search-wrap[data-search-mode="omni"]:hover {
-  border-color: rgba(20, 184, 166, 0.4);
-  background: rgba(255, 255, 255, 0.06);
+.header-spotlight-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
 }
-:root:not([data-design="servarr"]) .library-search-wrap[data-search-mode="omni"]:focus-within {
-  width: 480px !important;
-  min-width: 320px !important;
-  max-width: 540px !important;
-  flex: 1 1 480px !important;
-  box-shadow: 0 8px 28px rgba(0, 240, 255, 0.22), 0 0 0 2px var(--teal);
-  border-color: var(--teal);
-  background: var(--panel);
+.header-spotlight-action-btn .search-kbd-badge {
+  position: static;
+  transform: none;
+  font-size: 10px;
+  padding: 1px 5px;
+  margin-left: 2px;
 }
 
+/* Mode 3: Classic Full-Width Bar */
+:root:not([data-design="servarr"]) .library-search-wrap[data-search-mode="classic_full"],
 :root:not([data-design="servarr"]) .library-search-wrap[data-search-mode="classic"] {
+  display: flex !important;
   flex: 1 1 360px !important;
   min-width: 290px !important;
   max-width: 540px !important;
+  height: 40px;
+}
+:root:not([data-design="servarr"]) .library-search-wrap[data-search-mode="classic_full"] .library-search-input,
+:root:not([data-design="servarr"]) .library-search-wrap[data-search-mode="classic"] .library-search-input {
+  padding-left: 38px;
+  padding-right: 56px;
+  font-size: 13.5px;
+}
+
+.preview-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text);
+}
+.preview-action-btn .preview-kbd {
+  font-family: monospace;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
 }
 
 /* ---------- SPOTLIGHT COMMAND PALETTE MODAL ---------- */
