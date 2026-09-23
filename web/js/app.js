@@ -346,7 +346,7 @@ const TRANSLATIONS = {
 
     // Subtitles
     "subtitle.dashboard": "Общая картина и мониторинг библиотеки",
-    "subtitle.library": "Все ваши фильмы, сериалы и аниме, с алиасами на всех языках",
+    "subtitle.library": "Все ваши фильмы, сериалы и аниме",
     "subtitle.activity": "Текущие загрузки во всех download clients",
     "subtitle.calendar": "Даты выхода серий и премьер фильмов",
     "subtitle.history": "Журнал захваченных релизов",
@@ -1892,7 +1892,7 @@ const TRANSLATIONS = {
 
     // Subtitles
     "subtitle.dashboard": "Overview and monitoring of your library",
-    "subtitle.library": "All your movies, series, and anime with aliases in every language",
+    "subtitle.library": "All your movies, series, and anime",
     "subtitle.activity": "Current downloads across all download clients",
     "subtitle.calendar": "Air dates for episodes and movie premieres",
     "subtitle.history": "Log of grabbed releases",

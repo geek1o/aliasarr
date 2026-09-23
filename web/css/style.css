@@ -6512,9 +6512,9 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   position: relative;
   display: flex;
   align-items: center;
-  flex: 0 1 440px;
-  min-width: 240px;
-  max-width: 480px;
+  flex: 1 1 360px;
+  min-width: 290px;
+  max-width: 540px;
   height: 40px;
   background: var(--input-bg, rgba(255, 255, 255, 0.04));
   border: 1px solid var(--border);
@@ -6570,7 +6570,7 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
 .library-spotlight-search .library-search-input {
   width: 100%;
   height: 100%;
-  padding: 0 68px 0 38px;
+  padding: 0 46px 0 38px;
   background: transparent !important;
   border: none !important;
   color: var(--text);
@@ -6808,7 +6808,7 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
 }
 
 .library-panel-header .subtitle {
-  max-width: 320px;
+  max-width: 280px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
