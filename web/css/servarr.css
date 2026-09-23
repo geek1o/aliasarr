@@ -708,7 +708,9 @@
 }
 [data-design="servarr"] .content .panel-sticky-header .panel-header { order: 2; margin-left: auto; }
 [data-design="servarr"] .content .panel-sticky-header .panel-header:not(:has(.header-actions > *)) { display: none; }
-[data-design="servarr"] .content .panel-sticky-header .header-row > div:first-child:not(.header-actions) { display: none; }
+[data-design="servarr"] .content .panel-sticky-header .library-header-title-block,
+[data-design="servarr"] .content .panel-sticky-header .header-row > .library-header-title-block,
+[data-design="servarr"] .content .panel-sticky-header .header-row > div:first-child:not(.header-actions) { display: none !important; }
 [data-design="servarr"] .content .panel-sticky-header .header-actions {
   display: flex !important;
   align-items: stretch;
@@ -716,6 +718,9 @@
   margin: 0;
 }
 [data-design="servarr"] .content .panel-sticky-header .header-actions > * { margin: 0 !important; }
+[data-design="servarr"] .content .panel-sticky-header .toolbar-controls-group {
+  display: contents !important;
+}
 [data-design="servarr"] .content .panel-sticky-header > .toolbar,
 [data-design="servarr"] .content .panel-sticky-header > .settings-tabs,
 [data-design="servarr"] .content .panel-sticky-header > .logs-tabs,
@@ -769,19 +774,21 @@
   stroke-width: 2;
 }
 [data-design="servarr"] .content .panel-sticky-header .btn > span,
+[data-design="servarr"] .content .panel-sticky-header .card-style-btn-label,
+[data-design="servarr"] .content .panel-sticky-header .poster-options-btn-label,
 [data-design="servarr"] .content .panel-sticky-header .settings-tab-btn > span,
 [data-design="servarr"] .content .panel-sticky-header .logs-tab-btn > span {
-  display: -webkit-box;
+  display: -webkit-box !important;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
   max-width: 100%;
   max-height: 24px;
   padding: 0 3px;
-  color: var(--sv-toolbar-label);
-  font-size: 11px;
-  font-weight: normal;
-  line-height: 12px;
+  color: var(--sv-toolbar-label) !important;
+  font-size: 11px !important;
+  font-weight: normal !important;
+  line-height: 12px !important;
   text-overflow: ellipsis;
 }
 [data-design="servarr"] .content .panel-sticky-header .btn:hover,
@@ -2929,6 +2936,7 @@ html[data-design="servarr"] .settings-field-group > .switch-toggle:first-child >
   }
   [data-design="servarr"] .content .panel-sticky-header > * { flex: 0 0 auto !important; }
   [data-design="servarr"] .content .panel-sticky-header .btn,
+  [data-design="servarr"] .content .panel-sticky-header .btn-icon-only,
   [data-design="servarr"] #tab-library .panel-sticky-header .header-actions .btn,
   [data-design="servarr"] #tab-collections .panel-sticky-header .header-actions .btn,
   [data-design="servarr"] #tab-settings .panel-sticky-header .settings-tab-btn,
@@ -2937,6 +2945,7 @@ html[data-design="servarr"] .settings-field-group > .switch-toggle:first-child >
   [data-design="servarr"] .content .panel-sticky-header .logs-tab-btn,
   [data-design="servarr"] .content .panel-sticky-header .view-switcher-btn,
   [data-design="servarr"] .content .panel-sticky-header #poster-options-btn,
+  [data-design="servarr"] .content .panel-sticky-header #card-style-btn,
   [data-design="servarr"] .content .panel-sticky-header #collections-poster-options-btn {
     display: inline-flex !important;
     flex-direction: column !important;
@@ -2962,6 +2971,7 @@ html[data-design="servarr"] .settings-field-group > .switch-toggle:first-child >
   [data-design="servarr"] .content .panel-sticky-header .btn > span,
   [data-design="servarr"] .content .panel-sticky-header .settings-tab-btn > span,
   [data-design="servarr"] .content .panel-sticky-header .logs-tab-btn > span,
+  [data-design="servarr"] .content .panel-sticky-header .card-style-btn-label,
   [data-design="servarr"] .content .panel-sticky-header .poster-options-btn-label {
     display: -webkit-box !important;
     color: var(--sv-toolbar-label) !important;
