@@ -6606,6 +6606,14 @@ function updateLibraryFilterButtons() {
   document.querySelectorAll("#library-monitor-btns button").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.monitor === LIBRARY_MONITOR_FILTER);
   });
+  document.querySelectorAll("#category-switcher-menu button").forEach(btn => {
+    const isMatch = btn.getAttribute("onclick")?.includes(`'${LIBRARY_CATEGORY_FILTER}'`);
+    btn.classList.toggle("active", !!isMatch);
+  });
+  document.querySelectorAll("#monitor-switcher-menu button").forEach(btn => {
+    const isMatch = btn.getAttribute("onclick")?.includes(`'${LIBRARY_MONITOR_FILTER}'`);
+    btn.classList.toggle("active", !!isMatch);
+  });
   const catLabel = document.getElementById("category-switcher-label");
   if (catLabel) catLabel.textContent = t(CATEGORY_FILTER_LABELS[LIBRARY_CATEGORY_FILTER] || "library.filter_all");
   const monLabel = document.getElementById("monitor-switcher-label");
@@ -7025,7 +7033,9 @@ function renderLibrarySortMenu() {
   const selected = LIBRARY_SORT_OPTIONS.find(option => option.key === LIBRARY_SORT_KEY) || LIBRARY_SORT_OPTIONS[1];
   const optionLabel = CURRENT_LANG === "en" ? selected.en : selected.ru;
   const directionLabel = LIBRARY_SORT_DIRECTION === "asc" ? (CURRENT_LANG === "en" ? "ascending" : "по возрастанию") : (CURRENT_LANG === "en" ? "descending" : "по убыванию");
-  if (label) label.textContent = `${optionLabel} (${directionLabel})`;
+  const fullText = `${optionLabel} (${directionLabel})`;
+  if (label) label.textContent = fullText;
+  document.getElementById("library-sort-switcher-btn")?.setAttribute("title", fullText);
   if (!menu) return;
   menu.innerHTML = LIBRARY_SORT_OPTIONS.map(option => {
     const active = option.key === LIBRARY_SORT_KEY;

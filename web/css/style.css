@@ -6439,7 +6439,7 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   border-radius: 6px; cursor: pointer; font-size: 13px; font-family: var(--font-body);
 }
 #category-switcher {
-  display: none;
+  display: flex;
 }
 .poster-options-btn-label {
   display: none;
@@ -6450,7 +6450,7 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
   width: 100%;
 }
@@ -6458,22 +6458,19 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
 .library-toolbar .toolbar-left {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex: 1;
+  gap: 8px;
+  flex: 1 1 auto;
   min-width: 0;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
 .library-toolbar .library-search-wrap {
-  flex: 1 1 200px;
+  flex: 1 1 180px;
   min-width: 120px;
-  max-width: 280px;
+  max-width: 260px;
 }
 
-.library-toolbar .btn-group {
-  flex-shrink: 0;
-}
-
+.library-toolbar #category-switcher,
 .library-toolbar #monitor-switcher {
   flex-shrink: 0;
 }
@@ -6483,6 +6480,16 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+#library-sort-switcher-label {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 /* ---------- COLLECTIONS TOOLBAR ---------- */
