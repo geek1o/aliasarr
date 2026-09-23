@@ -6445,12 +6445,12 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   display: none;
 }
 
-/* Library Toolbar Zoned Layout */
+/* Library Toolbar Zoned Layout (Variant 2: Expanded Search + Grouped Toolbar Cluster) */
 .library-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   flex-wrap: nowrap;
   width: 100%;
 }
@@ -6458,22 +6458,15 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
 .library-toolbar .toolbar-left {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-  min-width: 0;
-  flex-wrap: nowrap;
+  flex: 1 1 280px;
+  min-width: 180px;
+  max-width: 440px;
 }
 
 .library-toolbar .library-search-wrap {
-  flex: 0 0 220px;
-  width: 220px;
-  min-width: 160px;
-  max-width: 280px;
-}
-
-.library-toolbar #category-switcher,
-.library-toolbar #monitor-switcher {
-  flex-shrink: 0;
+  width: 100%;
+  max-width: 100%;
+  flex: 1 1 auto;
 }
 
 .library-toolbar .toolbar-right {
@@ -6485,8 +6478,15 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   flex-wrap: nowrap;
 }
 
+.library-toolbar #category-switcher,
+.library-toolbar #monitor-switcher,
+.library-toolbar #library-sort-switcher,
+.library-toolbar #view-switcher {
+  flex-shrink: 0;
+}
+
 #library-sort-switcher-label {
-  max-width: 150px;
+  max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -10146,8 +10146,10 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
     width: 100% !important;
     box-sizing: border-box !important;
   }
-  .library-toolbar .toolbar-right #view-switcher,
-  .library-toolbar .toolbar-right #library-sort-switcher {
+  .library-toolbar .toolbar-right #category-switcher,
+  .library-toolbar .toolbar-right #monitor-switcher,
+  .library-toolbar .toolbar-right #library-sort-switcher,
+  .library-toolbar .toolbar-right #view-switcher {
     grid-column: 1 / -1 !important;
     width: 100% !important;
     margin: 0 !important;
@@ -12639,8 +12641,10 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
     gap: 8px !important;
     width: 100% !important;
   }
-  [data-design="vanguard"] .toolbar-right #view-switcher,
-  [data-design="vanguard"] .toolbar-right #library-sort-switcher {
+  [data-design="vanguard"] .toolbar-right #category-switcher,
+  [data-design="vanguard"] .toolbar-right #monitor-switcher,
+  [data-design="vanguard"] .toolbar-right #library-sort-switcher,
+  [data-design="vanguard"] .toolbar-right #view-switcher {
     grid-column: 1 / -1 !important;
     width: 100% !important;
   }
