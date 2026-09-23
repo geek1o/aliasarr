@@ -465,12 +465,26 @@
     <!-- БИБЛИОТЕКА -->
     <section id="tab-library" class="tab-panel">
       <div class="panel-sticky-header">
-        <header class="panel-header">
+        <header class="panel-header library-panel-header">
           <div class="header-row">
-            <div>
-              <h1 data-i18n="tab.library">Библиотека</h1>
+            <div class="library-header-title-block">
+              <div class="library-title-row">
+                <h1 data-i18n="tab.library">Библиотека</h1>
+                <span class="library-header-count-badge" id="library-total-count">0</span>
+              </div>
               <p class="subtitle" data-i18n="subtitle.library">Все ваши фильмы, сериалы и аниме, с алиасами на всех языках</p>
             </div>
+
+            <!-- Spotlight Search Command Bar for Desktop Header -->
+            <div class="library-search-wrap library-spotlight-search">
+              <i data-lucide="search" class="library-search-icon"></i>
+              <input id="library-search" class="input library-search-input" type="text" placeholder="Поиск по названию или алиасу…" data-i18n-placeholder="library.search_placeholder" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="onLibrarySearchInput()" onkeydown="onLibrarySearchKeyDown(event)">
+              <kbd class="search-kbd-badge" title="Шорткат: ⌘K или Ctrl+K">⌘K</kbd>
+              <button id="library-search-clear" class="library-search-clear-btn" onclick="clearLibrarySearch()" style="display:none;" title="Очистить поиск" aria-label="Очистить поиск">
+                <i data-lucide="x"></i>
+              </button>
+            </div>
+
             <div class="header-actions" style="display:flex;gap:8px;">
               <button id="btn-library-bulk-toggle" class="btn btn-secondary" onclick="toggleLibraryBulkMode()" title="Выбрать тайтлы и массово редактировать" data-i18n-title="library.bulk_btn_title"><i data-lucide="check-square" class="ico-sm"></i> <span data-i18n="library.bulk_btn">Выбрать тайтлы</span></button>
               <button id="btn-library-import" class="btn btn-secondary" onclick="openLibraryImportModal()" title="Массовый импорт тайтлов из существующих папок на диске" data-i18n-title="lib_import.btn_title"><i data-lucide="folder-symlink" class="ico-sm"></i> <span data-i18n="lib_import.btn">Импорт из папки</span></button>
@@ -482,14 +496,30 @@
 
         <div class="toolbar library-toolbar">
           <div class="toolbar-left">
-            <div class="library-search-wrap">
-              <i data-lucide="search" class="library-search-icon"></i>
-              <input id="library-search" class="input library-search-input" type="text" placeholder="Найти в библиотеке…" data-i18n-placeholder="library.search_placeholder" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="onLibrarySearchInput()" onkeydown="onLibrarySearchKeyDown(event)">
-              <button id="library-search-clear" class="library-search-clear-btn" onclick="clearLibrarySearch()" style="display:none;" title="Очистить поиск" aria-label="Очистить поиск">
-                <i data-lucide="x"></i>
+            <!-- Desktop Segmented Glass Capsule for Categories (Classic & Vanguard) -->
+            <div class="glass-segmented-control" id="library-category-btns">
+              <button class="segmented-capsule-btn active" data-category="all" onclick="selectLibraryCategory('all')">
+                <span data-i18n="library.filter_all">Все</span>
+                <span class="segmented-count-badge" id="cat-count-all">0</span>
+              </button>
+              <button class="segmented-capsule-btn" data-category="movie" onclick="selectLibraryCategory('movie')">
+                <span class="nav-ico"><i data-lucide="film" class="ico-xs"></i></span>
+                <span data-i18n="library.filter_movies">Фильмы</span>
+                <span class="segmented-count-badge" id="cat-count-movie">0</span>
+              </button>
+              <button class="segmented-capsule-btn" data-category="series" onclick="selectLibraryCategory('series')">
+                <span class="nav-ico"><i data-lucide="tv" class="ico-xs"></i></span>
+                <span data-i18n="library.filter_series">Сериалы</span>
+                <span class="segmented-count-badge" id="cat-count-series">0</span>
+              </button>
+              <button class="segmented-capsule-btn" data-category="anime" onclick="selectLibraryCategory('anime')">
+                <span class="nav-ico"><i data-lucide="sparkles" class="ico-xs"></i></span>
+                <span data-i18n="library.filter_anime">Аниме</span>
+                <span class="segmented-count-badge" id="cat-count-anime">0</span>
               </button>
             </div>
 
+            <!-- Mobile / Servarr Dropdown Category Switcher -->
             <div class="view-switcher" id="category-switcher">
               <button class="btn btn-secondary view-switcher-btn" id="category-switcher-btn" onclick="toggleCategoryMenu()">
                 <span class="nav-ico" style="margin-right:4px; display:inline-flex; align-items:center;"><i data-lucide="film" class="ico-xs"></i></span><span data-i18n="library.content_label">Контент:</span> <span id="category-switcher-label" data-i18n="library.filter_all">Все</span> ▾
@@ -501,7 +531,9 @@
                 <button onclick="selectLibraryCategory('anime')" data-i18n="library.filter_anime">Аниме</button>
               </div>
             </div>
+          </div>
 
+          <div class="toolbar-right toolbar-display-group">
             <div class="view-switcher" id="monitor-switcher">
               <button class="btn btn-secondary view-switcher-btn" id="monitor-switcher-btn" onclick="toggleMonitorMenu()">
                 <span class="nav-ico" style="margin-right:4px; display:inline-flex; align-items:center;"><i data-lucide="bookmark-check" class="ico-xs"></i></span><span data-i18n="library.monitor_label">Мониторинг:</span> <span id="monitor-switcher-label" data-i18n="library.filter_all">Все</span> ▾
@@ -514,15 +546,28 @@
                 <button onclick="selectLibraryMonitor('downloading')" data-i18n="library.filter_downloading">Скачиваются</button>
               </div>
             </div>
-          </div>
 
-          <div class="toolbar-right toolbar-display-group">
             <div class="view-switcher" id="library-sort-switcher">
               <button class="btn btn-secondary view-switcher-btn" id="library-sort-switcher-btn" onclick="toggleLibrarySortMenu()" aria-haspopup="true" aria-expanded="false">
                 <span class="nav-ico" style="margin-right:4px; display:inline-flex; align-items:center;"><i data-lucide="arrow-up-down" class="ico-xs"></i></span><span id="library-sort-switcher-label">Тайтл (А–Я)</span> ▾
               </button>
               <div class="view-switcher-menu library-sort-menu" id="library-sort-switcher-menu"></div>
             </div>
+
+            <!-- Desktop Segmented View Mode Switcher -->
+            <div class="glass-segmented-control view-segmented-control" id="library-view-segmented">
+              <button class="segmented-icon-btn active" data-view="posters" onclick="setLibraryView('posters')" title="Постеры" data-i18n-title="library.view_posters">
+                <i data-lucide="layout-grid" class="ico-xs"></i>
+              </button>
+              <button class="segmented-icon-btn" data-view="table" onclick="setLibraryView('table')" title="Таблица" data-i18n-title="library.view_table">
+                <i data-lucide="table" class="ico-xs"></i>
+              </button>
+              <button class="segmented-icon-btn" data-view="overview" onclick="setLibraryView('overview')" title="Обзор" data-i18n-title="library.view_overview">
+                <i data-lucide="align-left" class="ico-xs"></i>
+              </button>
+            </div>
+
+            <!-- Mobile / Servarr Dropdown View Switcher -->
             <div class="view-switcher" id="view-switcher">
               <button class="btn btn-secondary view-switcher-btn" id="view-switcher-btn" onclick="toggleViewMenu()">
                 <span class="nav-ico" style="margin-right:4px; display:inline-flex; align-items:center;"><i data-lucide="layout-grid" class="ico-xs"></i></span><span data-i18n="library.view_label">Просмотр:</span> <span id="view-switcher-label" data-i18n="library.view_posters">Постеры</span> ▾
@@ -533,14 +578,17 @@
                 <button onclick="setLibraryView('overview')" data-i18n="library.view_overview">Обзор</button>
               </div>
             </div>
-            <button class="btn btn-secondary card-style-btn" id="card-style-btn" onclick="openCardStyleModal()" title="Настройка стиля" data-i18n-title="card_style.btn_title">
-              <i data-lucide="palette" class="ico-xs text-teal"></i>
-              <span class="card-style-btn-label" data-i18n="card_style.btn_title">Настройка стиля</span>
-            </button>
-            <button class="btn btn-secondary btn-icon-only" id="poster-options-btn" onclick="openPosterOptionsModal()" title="Опции постера" data-i18n-title="poster_opt.btn_title">
-              <i data-lucide="sliders-horizontal"></i>
-              <span class="poster-options-btn-label" data-i18n="poster_opt.btn_title">Опции постера</span>
-            </button>
+
+            <div class="toolbar-controls-group">
+              <button class="btn btn-secondary card-style-btn" id="card-style-btn" onclick="openCardStyleModal()" title="Настройка стиля" data-i18n-title="card_style.btn_title">
+                <i data-lucide="palette" class="ico-xs text-teal"></i>
+                <span class="card-style-btn-label" data-i18n="card_style.btn_title">Настройка стиля</span>
+              </button>
+              <button class="btn btn-secondary btn-icon-only" id="poster-options-btn" onclick="openPosterOptionsModal()" title="Опции постера" data-i18n-title="poster_opt.btn_title">
+                <i data-lucide="sliders-horizontal"></i>
+                <span class="poster-options-btn-label" data-i18n="poster_opt.btn_title">Опции постера</span>
+              </button>
+            </div>
           </div>
         </div>
 

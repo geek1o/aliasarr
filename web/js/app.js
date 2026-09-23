@@ -501,7 +501,7 @@ const TRANSLATIONS = {
     "dash.no_grabs": "Пока ничего не захвачено",
 
     // Library
-    "library.search_placeholder": "Найти в библиотеке…",
+    "library.search_placeholder": "Поиск по названию или алиасу…",
     "library.filter_all": "Все",
     "library.filter_movies": "Фильмы",
     "library.filter_series": "Сериалы",
@@ -2047,7 +2047,7 @@ const TRANSLATIONS = {
     "dash.no_grabs": "No releases grabbed yet",
 
     // Library
-    "library.search_placeholder": "Search library…",
+    "library.search_placeholder": "Search by title or alias…",
     "library.filter_all": "All",
     "library.filter_movies": "Movies",
     "library.filter_series": "Series",
@@ -6603,6 +6603,9 @@ function updateLibraryFilterButtons() {
   document.querySelectorAll("#library-category-btns button").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.category === LIBRARY_CATEGORY_FILTER);
   });
+  document.querySelectorAll("#library-view-segmented button").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.view === LIBRARY_VIEW_MODE);
+  });
   document.querySelectorAll("#library-monitor-btns button").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.monitor === LIBRARY_MONITOR_FILTER);
   });
@@ -6618,6 +6621,19 @@ function updateLibraryFilterButtons() {
   if (catLabel) catLabel.textContent = t(CATEGORY_FILTER_LABELS[LIBRARY_CATEGORY_FILTER] || "library.filter_all");
   const monLabel = document.getElementById("monitor-switcher-label");
   if (monLabel) monLabel.textContent = t(MONITOR_FILTER_LABELS[LIBRARY_MONITOR_FILTER] || "library.filter_all");
+
+  const allShows = CACHED_SHOWS || [];
+  const elAll = document.getElementById("cat-count-all");
+  if (elAll) elAll.textContent = allShows.length;
+  const elMovie = document.getElementById("cat-count-movie");
+  if (elMovie) elMovie.textContent = allShows.filter(s => s.content_type === "movie").length;
+  const elSeries = document.getElementById("cat-count-series");
+  if (elSeries) elSeries.textContent = allShows.filter(s => (s.content_type || "series") === "series").length;
+  const elAnime = document.getElementById("cat-count-anime");
+  if (elAnime) elAnime.textContent = allShows.filter(s => s.content_type === "anime").length;
+
+  const totalBadge = document.getElementById("library-total-count");
+  if (totalBadge) totalBadge.textContent = allShows.length;
 }
 
 let CURRENT_CARD_STYLE = localStorage.getItem("aliasarr_card_style") || "neoglass";
@@ -7105,8 +7121,12 @@ function selectLibraryMonitor(mon) {
 function setLibraryView(mode) {
   LIBRARY_VIEW_MODE = mode;
   localStorage.setItem("aliasarr_library_view", mode);
-  document.getElementById("view-switcher-label").textContent = t(VIEW_MODE_LABELS[mode]);
-  document.getElementById("view-switcher-menu").classList.remove("open");
+  const viewLabel = document.getElementById("view-switcher-label");
+  if (viewLabel) viewLabel.textContent = t(VIEW_MODE_LABELS[mode]);
+  document.getElementById("view-switcher-menu")?.classList.remove("open");
+  document.querySelectorAll("#library-view-segmented button").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.view === mode);
+  });
   renderLibrary();
 }
 
@@ -23664,6 +23684,17 @@ document.addEventListener("click", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K" || e.key === "л" || e.key === "Л")) {
+    const libTab = document.getElementById("tab-library");
+    if (libTab && libTab.classList.contains("active")) {
+      e.preventDefault();
+      const searchInput = document.getElementById("library-search");
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.select();
+      }
+    }
+  }
   if (e.key === "Escape") {
     document.querySelectorAll(".show-links-popover.is-open").forEach(pop => pop.classList.remove("is-open"));
     const drawer = document.getElementById("release-history-drawer");
