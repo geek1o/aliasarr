@@ -6774,6 +6774,7 @@ function applySearchLayoutStyle() {
   const libInput = document.getElementById("library-search");
   const colInput = document.getElementById("collections-search");
   const actionBtn = document.getElementById("btn-header-spotlight-action");
+  const colActionBtn = document.getElementById("btn-collections-spotlight-action");
 
   if (libWrap) {
     libWrap.setAttribute("data-search-mode", CURRENT_SEARCH_LAYOUT_STYLE);
@@ -6792,8 +6793,10 @@ function applySearchLayoutStyle() {
       colInput.placeholder = CURRENT_LANG === "en" ? "Quick search..." : "Быстрый поиск...";
     }
     if (actionBtn) actionBtn.style.display = "none";
+    if (colActionBtn) colActionBtn.style.display = "none";
   } else if (CURRENT_SEARCH_LAYOUT_STYLE === "action_btn") {
     if (actionBtn) actionBtn.style.display = "inline-flex";
+    if (colActionBtn) colActionBtn.style.display = "inline-flex";
   } else {
     // classic_full
     if (libInput) {
@@ -6805,6 +6808,7 @@ function applySearchLayoutStyle() {
       colInput.placeholder = CURRENT_LANG === "en" ? "Find collection…" : "Найти коллекцию…";
     }
     if (actionBtn) actionBtn.style.display = "none";
+    if (colActionBtn) colActionBtn.style.display = "none";
   }
 
   document.documentElement.setAttribute("data-search-layout", CURRENT_SEARCH_LAYOUT_STYLE);

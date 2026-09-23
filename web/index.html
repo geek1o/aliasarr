@@ -707,7 +707,7 @@
 
         <div class="toolbar collections-toolbar">
           <div class="toolbar-left">
-            <div class="library-search-wrap" id="collections-search-wrap" onclick="onCollectionsSearchWrapClick(event)">
+            <div class="library-search-wrap library-spotlight-search" id="collections-search-wrap" onclick="onCollectionsSearchWrapClick(event)">
               <i data-lucide="search" class="library-search-icon"></i>
               <input id="collections-search" class="input library-search-input" type="text" placeholder="Найти коллекцию…" data-i18n-placeholder="collections.search_placeholder" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="onCollectionsSearchInput()">
               <kbd class="search-kbd-badge" title="Шорткат: ⌘K или Ctrl+K">⌘K</kbd>
@@ -717,6 +717,7 @@
             </div>
           </div>
           <div class="toolbar-right">
+            <button id="btn-collections-spotlight-action" class="btn btn-secondary header-spotlight-action-btn" onclick="openSpotlightCommandPalette()" title="Быстрый поиск (⌘K или Ctrl+K)" data-i18n-title="search_layout.search_action_title" style="display:none;"><i data-lucide="search" class="ico-sm text-teal"></i> <span data-i18n="search_layout.search_action_label">Поиск</span> <kbd class="search-kbd-badge" style="margin-left:4px; font-size:10px; padding:1px 5px;">⌘K</kbd></button>
             <div class="collections-title-lang-wrap" style="display: inline-flex; align-items: center; gap: 6px;">
               <select id="collections-title-lang-select" class="input input-small" style="max-width: 155px; height: 32px; font-size: 12px;" onchange="onCollectionsTitleLangChange(this.value)" title="Язык названий коллекций" data-i18n-title="collections.title_lang_tooltip">
                 <option value="ru" data-i18n="library.bulk_title_lang_ru">Русский (RU)</option>
