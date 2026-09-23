@@ -577,6 +577,24 @@ const TRANSLATIONS = {
     "search_style.vanguard_title": "Vanguard Tag Capsule",
     "search_style.vanguard_desc": "Hi-Tech капсула с акцентным чипом состояния LIVE и счетчиком этапов поиска.",
 
+    // Search Layout & Mode Style
+    "search_layout.section_title": "Стиль и режим строки поиска",
+    "search_layout.section_subtitle": "Выберите расположение и формат взаимодействия с поисковой строкой",
+    "search_layout.spotlight_title": "Spotlight Command Palette",
+    "search_layout.spotlight_desc": "Компактная кнопка-пилл в шапке и всплывающее парящее окно по центру экрана (Raycast/Linear) по ⌘K / Ctrl+K с быстрым доступом ко всем тайтлам.",
+    "search_layout.omni_title": "Плавающий Omni-Search",
+    "search_layout.omni_desc": "Компактная строка в шапке, плавно увеличивающаяся и парящая по центру при фокусе с эффектом неонового свечения.",
+    "search_layout.classic_title": "Классическая строка поиска",
+    "search_layout.classic_desc": "Полноразмерная фиксированная поисковая строка прямо в шапке библиотеки с мгновенной фильтрацией на месте.",
+
+    // Spotlight Modal
+    "spotlight.placeholder": "Поиск фильма, сериала, аниме или саги...",
+    "spotlight.no_results": "Ничего не найдено",
+    "spotlight.no_results_sub": "Попробуйте изменить поисковый запрос или проверить опечатки",
+    "spotlight.hint_navigate": "Навигация",
+    "spotlight.hint_select": "Выбрать",
+    "spotlight.hint_close": "Закрыть",
+
     // Collections Card Options & Styles
     "collections_poster_opt.title": "Опции карточек коллекций",
     "collections_poster_opt.subtitle": "Настройка масштаба и информационных бейджей франшиз",
@@ -2123,6 +2141,24 @@ const TRANSLATIONS = {
     "search_style.vanguard_title": "Vanguard Tag Capsule",
     "search_style.vanguard_desc": "Hi-Tech capsule with live status badge chip and stage step counter.",
 
+    // Search Layout & Mode Style
+    "search_layout.section_title": "Search Bar & Experience Style",
+    "search_layout.section_subtitle": "Choose the layout and interaction model for library search",
+    "search_layout.spotlight_title": "Spotlight Command Palette",
+    "search_layout.spotlight_desc": "Compact trigger pill in the header and centered floating command palette (Raycast/Linear style) with ⌘K / Ctrl+K and instant title access.",
+    "search_layout.omni_title": "Floating Omni-Search",
+    "search_layout.omni_desc": "Compact bar in the header expanding and floating in the center upon focus with neon glow effects.",
+    "search_layout.classic_title": "Classic Header Search Bar",
+    "search_layout.classic_desc": "Full-width embedded search bar directly in the library header with instant in-place filtering.",
+
+    // Spotlight Modal
+    "spotlight.placeholder": "Search movie, series, anime or collection...",
+    "spotlight.no_results": "No results found",
+    "spotlight.no_results_sub": "Try modifying your search query or checking spelling",
+    "spotlight.hint_navigate": "Navigate",
+    "spotlight.hint_select": "Select",
+    "spotlight.hint_close": "Close",
+
     // Collections Card Options & Styles
     "collections_poster_opt.title": "Collection Card Options",
     "collections_poster_opt.subtitle": "Configure scale and metadata badges for franchise collections",
@@ -3427,7 +3463,7 @@ function updatePlatformShortcuts() {
   const isMac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent);
   const kbdText = isMac ? "⌘K" : "Ctrl K";
   const kbdTitle = isMac ? (CURRENT_LANG === "en" ? "Shortcut: ⌘K" : "Шорткат: ⌘K") : (CURRENT_LANG === "en" ? "Shortcut: Ctrl+K" : "Шорткат: Ctrl+K");
-  document.querySelectorAll(".search-kbd-badge").forEach(badge => {
+  document.querySelectorAll(".search-kbd-badge, .preview-kbd").forEach(badge => {
     badge.textContent = kbdText;
     badge.setAttribute("title", kbdTitle);
   });
@@ -6649,21 +6685,29 @@ function updateLibraryFilterButtons() {
 
 let CURRENT_CARD_STYLE = localStorage.getItem("aliasarr_card_style") || "neoglass";
 let CURRENT_SEARCH_PROGRESS_STYLE = localStorage.getItem("aliasarr_search_progress_style") || "micropill";
+let CURRENT_SEARCH_LAYOUT_STYLE = localStorage.getItem("aliasarr_search_layout_style") || "spotlight";
 
 function openCardStyleModal() {
-  const cardOptions = document.querySelectorAll("#card-style-modal .card-styles-grid:not(.search-styles-grid) .card-style-option");
+  const cardOptions = document.querySelectorAll("#card-style-modal .card-poster-styles-grid .card-style-option");
   cardOptions.forEach(opt => {
     const isThis = opt.id === `card-style-opt-${CURRENT_CARD_STYLE}`;
     opt.classList.toggle("active", isThis);
   });
 
-  const searchOptions = document.querySelectorAll("#card-style-modal .search-styles-grid .card-style-option");
+  const searchOptions = document.querySelectorAll("#card-style-modal .search-progress-styles-grid .card-style-option, #card-style-modal .search-styles-grid .card-style-option");
   searchOptions.forEach(opt => {
     const isThis = opt.id === `search-style-opt-${CURRENT_SEARCH_PROGRESS_STYLE}`;
     opt.classList.toggle("active", isThis);
   });
 
+  const layoutOptions = document.querySelectorAll("#card-style-modal .search-layout-styles-grid .card-style-option");
+  layoutOptions.forEach(opt => {
+    const isThis = opt.id === `search-layout-opt-${CURRENT_SEARCH_LAYOUT_STYLE}`;
+    opt.classList.toggle("active", isThis);
+  });
+
   openModal("card-style-modal");
+  updatePlatformShortcuts();
   if (window.lucide) lucide.createIcons();
 }
 
@@ -6672,7 +6716,7 @@ function setCardStyle(style) {
   CURRENT_CARD_STYLE = style;
   localStorage.setItem("aliasarr_card_style", style);
   
-  const options = document.querySelectorAll("#card-style-modal .card-styles-grid:not(.search-styles-grid) .card-style-option");
+  const options = document.querySelectorAll("#card-style-modal .card-poster-styles-grid .card-style-option");
   options.forEach(opt => {
     const isThis = opt.id === `card-style-opt-${CURRENT_CARD_STYLE}`;
     opt.classList.toggle("active", isThis);
@@ -6694,13 +6738,333 @@ function setSearchProgressStyle(style) {
   CURRENT_SEARCH_PROGRESS_STYLE = style;
   try { localStorage.setItem("aliasarr_search_progress_style", style); } catch (e) {}
 
-  const searchOptions = document.querySelectorAll("#card-style-modal .search-styles-grid .card-style-option");
+  const searchOptions = document.querySelectorAll("#card-style-modal .search-progress-styles-grid .card-style-option, #card-style-modal .search-styles-grid .card-style-option");
   searchOptions.forEach(opt => {
     const isThis = opt.id === `search-style-opt-${CURRENT_SEARCH_PROGRESS_STYLE}`;
     opt.classList.toggle("active", isThis);
   });
 
   refreshCurrentModalSearchStatus();
+}
+
+function setSearchLayoutStyle(style) {
+  if (!["spotlight", "omni", "classic"].includes(style)) return;
+  CURRENT_SEARCH_LAYOUT_STYLE = style;
+  try { localStorage.setItem("aliasarr_search_layout_style", style); } catch (e) {}
+
+  const layoutOptions = document.querySelectorAll("#card-style-modal .search-layout-styles-grid .card-style-option");
+  layoutOptions.forEach(opt => {
+    const isThis = opt.id === `search-layout-opt-${CURRENT_SEARCH_LAYOUT_STYLE}`;
+    opt.classList.toggle("active", isThis);
+  });
+
+  applySearchLayoutStyle();
+}
+
+function applySearchLayoutStyle() {
+  const libWrap = document.getElementById("library-search-wrap");
+  const colWrap = document.getElementById("collections-search-wrap");
+  const libInput = document.getElementById("library-search");
+  const colInput = document.getElementById("collections-search");
+
+  if (libWrap) {
+    libWrap.setAttribute("data-search-mode", CURRENT_SEARCH_LAYOUT_STYLE);
+  }
+  if (colWrap) {
+    colWrap.setAttribute("data-search-mode", CURRENT_SEARCH_LAYOUT_STYLE);
+  }
+
+  if (CURRENT_SEARCH_LAYOUT_STYLE === "spotlight") {
+    if (libInput) libInput.setAttribute("readonly", "readonly");
+    if (colInput) colInput.setAttribute("readonly", "readonly");
+  } else {
+    if (libInput) libInput.removeAttribute("readonly");
+    if (colInput) colInput.removeAttribute("readonly");
+  }
+
+  document.documentElement.setAttribute("data-search-layout", CURRENT_SEARCH_LAYOUT_STYLE);
+}
+
+function onLibrarySearchWrapClick(e) {
+  const design = document.documentElement.getAttribute("data-design");
+  if (design === "servarr") return;
+
+  if (CURRENT_SEARCH_LAYOUT_STYLE === "spotlight") {
+    if (e.target.closest(".library-search-clear-btn")) return;
+    e.preventDefault();
+    openSpotlightCommandPalette();
+  }
+}
+
+function onCollectionsSearchWrapClick(e) {
+  const design = document.documentElement.getAttribute("data-design");
+  if (design === "servarr") return;
+
+  if (CURRENT_SEARCH_LAYOUT_STYLE === "spotlight") {
+    if (e.target.closest(".library-search-clear-btn")) return;
+    e.preventDefault();
+    openSpotlightCommandPalette();
+  }
+}
+
+// ---------- SPOTLIGHT COMMAND PALETTE LOGIC ----------
+let SPOTLIGHT_SELECTED_INDEX = -1;
+let SPOTLIGHT_RESULTS = [];
+
+function openSpotlightCommandPalette() {
+  const modal = document.getElementById("spotlight-modal");
+  if (!modal) return;
+
+  modal.classList.add("open");
+  const input = document.getElementById("spotlight-search-input");
+  if (input) {
+    input.value = "";
+    const clearBtn = document.getElementById("spotlight-search-clear");
+    if (clearBtn) clearBtn.style.display = "none";
+    setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 50);
+  }
+
+  SPOTLIGHT_SELECTED_INDEX = -1;
+  renderSpotlightInitialOrFiltered();
+  updatePlatformShortcuts();
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeSpotlightCommandPalette() {
+  const modal = document.getElementById("spotlight-modal");
+  if (modal) {
+    modal.classList.remove("open");
+  }
+}
+
+function onSpotlightBackdropClick(e) {
+  if (e.target.id === "spotlight-modal" || e.target.classList.contains("spotlight-modal-overlay")) {
+    closeSpotlightCommandPalette();
+  }
+}
+
+function clearSpotlightSearch() {
+  const input = document.getElementById("spotlight-search-input");
+  if (input) {
+    input.value = "";
+    input.focus();
+  }
+  const clearBtn = document.getElementById("spotlight-search-clear");
+  if (clearBtn) clearBtn.style.display = "none";
+  renderSpotlightInitialOrFiltered();
+}
+
+function onSpotlightSearchInput() {
+  const input = document.getElementById("spotlight-search-input");
+  const q = (input ? input.value : "").trim().toLowerCase();
+  const clearBtn = document.getElementById("spotlight-search-clear");
+  if (clearBtn) {
+    clearBtn.style.display = q.length > 0 ? "flex" : "none";
+  }
+  renderSpotlightInitialOrFiltered(q);
+}
+
+function renderSpotlightInitialOrFiltered(query = "") {
+  const q = (query || "").trim().toLowerCase();
+  const listEl = document.getElementById("spotlight-results-list");
+  const emptyEl = document.getElementById("spotlight-empty-state");
+  const countEl = document.getElementById("spotlight-results-count");
+  if (!listEl) return;
+
+  let items = [];
+  const shows = Array.isArray(allShows) ? allShows : [];
+
+  if (!q) {
+    items = shows.slice(0, 10).map(s => ({ type: "show", data: s }));
+  } else {
+    for (const s of shows) {
+      let matched = false;
+      let matchedAlias = null;
+
+      const title = (s.title || "").toLowerCase();
+      const orig = (s.original_title || "").toLowerCase();
+
+      if (title.includes(q)) {
+        matched = true;
+      } else if (orig.includes(q)) {
+        matched = true;
+      } else if (Array.isArray(s.aliases)) {
+        for (const al of s.aliases) {
+          const alName = (typeof al === "string" ? al : (al.alias || al.title || "")).toLowerCase();
+          if (alName.includes(q)) {
+            matched = true;
+            matchedAlias = typeof al === "string" ? al : (al.alias || al.title);
+            break;
+          }
+        }
+      }
+
+      if (matched) {
+        items.push({ type: "show", data: s, matchedAlias });
+      }
+    }
+
+    if (typeof allCollections !== "undefined" && Array.isArray(allCollections)) {
+      for (const c of allCollections) {
+        const cTitle = (c.name || c.title || "").toLowerCase();
+        if (cTitle.includes(q)) {
+          items.push({ type: "collection", data: c });
+        }
+      }
+    }
+  }
+
+  SPOTLIGHT_RESULTS = items;
+  SPOTLIGHT_SELECTED_INDEX = items.length > 0 ? 0 : -1;
+
+  if (countEl) {
+    if (!q) {
+      countEl.textContent = (CURRENT_LANG === "en" ? "Library: " : "В библиотеке: ") + shows.length;
+    } else {
+      countEl.textContent = (CURRENT_LANG === "en" ? "Found: " : "Найдено: ") + items.length;
+    }
+  }
+
+  if (items.length === 0) {
+    listEl.innerHTML = "";
+    if (emptyEl) emptyEl.style.display = "flex";
+    return;
+  }
+
+  if (emptyEl) emptyEl.style.display = "none";
+
+  let html = "";
+  items.slice(0, 40).forEach((item, idx) => {
+    const isSelected = idx === SPOTLIGHT_SELECTED_INDEX;
+    if (item.type === "show") {
+      const s = item.data;
+      const title = escapeHtml(s.title || "Без названия");
+      const origTitle = s.original_title ? escapeHtml(s.original_title) : "";
+      const year = s.year ? `(${s.year})` : "";
+      const contentType = s.content_type || "series";
+      let typeBadge = "";
+      if (contentType === "movie") {
+        typeBadge = `<span class="category-badge-chip category-badge-movies">${CURRENT_LANG === "en" ? "Movie" : "Фильм"}</span>`;
+      } else if (contentType === "anime") {
+        typeBadge = `<span class="category-badge-chip category-badge-anime">${CURRENT_LANG === "en" ? "Anime" : "Аниме"}</span>`;
+      } else {
+        typeBadge = `<span class="category-badge-chip category-badge-series">${CURRENT_LANG === "en" ? "Series" : "Сериал"}</span>`;
+      }
+
+      const posterUrl = s.poster_url || s.poster || "/static/img/no-poster.png";
+      const quality = s.quality_profile || s.quality || "";
+
+      let matchedTag = "";
+      if (item.matchedAlias) {
+        matchedTag = `<span class="spotlight-alias-match"><i data-lucide="sparkles" class="ico-xxs"></i> ${escapeHtml(item.matchedAlias)}</span>`;
+      }
+
+      html += `
+        <div class="spotlight-result-item ${isSelected ? 'active' : ''}" data-index="${idx}" onclick="selectSpotlightItem(${idx})">
+          <div class="spotlight-item-poster-wrap">
+            <img class="spotlight-item-poster" src="${escapeHtml(posterUrl)}" alt="${title}" loading="lazy" onerror="this.onerror=null; this.src='/static/img/no-poster.png';">
+          </div>
+          <div class="spotlight-item-info">
+            <div class="spotlight-item-title-row">
+              <span class="spotlight-item-title">${title}</span>
+              <span class="spotlight-item-year">${year}</span>
+              ${typeBadge}
+            </div>
+            <div class="spotlight-item-meta-row">
+              ${origTitle ? `<span class="spotlight-item-orig">${origTitle}</span>` : ''}
+              ${quality ? `<span class="badge badge-secondary badge-xs">${escapeHtml(quality)}</span>` : ''}
+              ${matchedTag}
+            </div>
+          </div>
+          <div class="spotlight-item-action">
+            <span class="spotlight-action-enter"><kbd>↵</kbd></span>
+          </div>
+        </div>
+      `;
+    } else if (item.type === "collection") {
+      const c = item.data;
+      const title = escapeHtml(c.name || c.title || "Коллекция");
+      const posterUrl = c.poster_url || c.poster || "/static/img/no-poster.png";
+      const parts = c.total_parts || c.parts_count || (c.parts ? c.parts.length : 0);
+
+      html += `
+        <div class="spotlight-result-item ${isSelected ? 'active' : ''}" data-index="${idx}" onclick="selectSpotlightItem(${idx})">
+          <div class="spotlight-item-poster-wrap">
+            <img class="spotlight-item-poster" src="${escapeHtml(posterUrl)}" alt="${title}" loading="lazy" onerror="this.onerror=null; this.src='/static/img/no-poster.png';">
+          </div>
+          <div class="spotlight-item-info">
+            <div class="spotlight-item-title-row">
+              <span class="spotlight-item-title">${title}</span>
+              <span class="category-badge-chip" style="background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.3);">${CURRENT_LANG === "en" ? "Collection" : "Коллекция"}</span>
+            </div>
+            <div class="spotlight-item-meta-row">
+              <span class="spotlight-item-orig">${parts} ${CURRENT_LANG === "en" ? "parts" : "фильмов"}</span>
+            </div>
+          </div>
+          <div class="spotlight-item-action">
+            <span class="spotlight-action-enter"><kbd>↵</kbd></span>
+          </div>
+        </div>
+      `;
+    }
+  });
+
+  listEl.innerHTML = html;
+  if (window.lucide) lucide.createIcons();
+}
+
+function onSpotlightKeyDown(e) {
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    if (SPOTLIGHT_RESULTS.length > 0) {
+      SPOTLIGHT_SELECTED_INDEX = (SPOTLIGHT_SELECTED_INDEX + 1) % SPOTLIGHT_RESULTS.length;
+      updateSpotlightSelection();
+    }
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    if (SPOTLIGHT_RESULTS.length > 0) {
+      SPOTLIGHT_SELECTED_INDEX = (SPOTLIGHT_SELECTED_INDEX - 1 + SPOTLIGHT_RESULTS.length) % SPOTLIGHT_RESULTS.length;
+      updateSpotlightSelection();
+    }
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    if (SPOTLIGHT_SELECTED_INDEX >= 0 && SPOTLIGHT_SELECTED_INDEX < SPOTLIGHT_RESULTS.length) {
+      selectSpotlightItem(SPOTLIGHT_SELECTED_INDEX);
+    }
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    closeSpotlightCommandPalette();
+  }
+}
+
+function updateSpotlightSelection() {
+  const items = document.querySelectorAll("#spotlight-results-list .spotlight-result-item");
+  items.forEach((item, idx) => {
+    const isSelected = idx === SPOTLIGHT_SELECTED_INDEX;
+    item.classList.toggle("active", isSelected);
+    if (isSelected) {
+      item.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  });
+}
+
+function selectSpotlightItem(idx) {
+  if (idx < 0 || idx >= SPOTLIGHT_RESULTS.length) return;
+  const item = SPOTLIGHT_RESULTS[idx];
+  closeSpotlightCommandPalette();
+
+  if (item.type === "show") {
+    if (typeof openShowModal === "function") {
+      openShowModal(item.data.id);
+    }
+  } else if (item.type === "collection") {
+    if (typeof openCollectionModal === "function") {
+      openCollectionModal(item.data.id);
+    }
+  }
 }
 
 let POSTER_OPTIONS = {
@@ -23696,6 +24060,18 @@ document.addEventListener("click", (e) => {
 
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && (e.code === "KeyK" || e.key === "k" || e.key === "K" || e.key === "л" || e.key === "Л")) {
+    const isServarr = document.documentElement.getAttribute("data-design") === "servarr";
+    if (!isServarr && CURRENT_SEARCH_LAYOUT_STYLE === "spotlight") {
+      e.preventDefault();
+      const spotlightModal = document.getElementById("spotlight-modal");
+      if (spotlightModal && spotlightModal.classList.contains("open")) {
+        closeSpotlightCommandPalette();
+      } else {
+        openSpotlightCommandPalette();
+      }
+      return;
+    }
+
     const libTab = document.getElementById("tab-library");
     const colTab = document.getElementById("tab-collections");
     if (libTab && libTab.classList.contains("active")) {
@@ -23715,6 +24091,10 @@ document.addEventListener("keydown", (e) => {
     }
   }
   if (e.key === "Escape") {
+    const spotlightModal = document.getElementById("spotlight-modal");
+    if (spotlightModal && spotlightModal.classList.contains("open")) {
+      closeSpotlightCommandPalette();
+    }
     document.querySelectorAll(".show-links-popover.is-open").forEach(pop => pop.classList.remove("is-open"));
     const drawer = document.getElementById("release-history-drawer");
     if (drawer && drawer.classList.contains("open")) {
@@ -23732,6 +24112,8 @@ document.querySelectorAll(".modal-overlay").forEach(overlay => {
 
 async function startApp() {
   updateMobileState();
+  applySearchLayoutStyle();
+  updatePlatformShortcuts();
   checkConnection();
   loadTasksStatus();
   restartTasksPolling(3500);

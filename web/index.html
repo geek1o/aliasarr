@@ -476,7 +476,7 @@
             </div>
 
             <!-- Spotlight Search Command Bar for Desktop Header -->
-            <div class="library-search-wrap library-spotlight-search">
+            <div class="library-search-wrap library-spotlight-search" id="library-search-wrap" onclick="onLibrarySearchWrapClick(event)">
               <i data-lucide="search" class="library-search-icon"></i>
               <input id="library-search" class="input library-search-input" type="text" placeholder="Поиск по названию или алиасу" data-i18n-placeholder="library.search_placeholder" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="onLibrarySearchInput()" onkeydown="onLibrarySearchKeyDown(event)">
               <kbd class="search-kbd-badge" title="Шорткат: ⌘K или Ctrl+K">⌘K</kbd>
@@ -706,7 +706,7 @@
 
         <div class="toolbar collections-toolbar">
           <div class="toolbar-left">
-            <div class="library-search-wrap">
+            <div class="library-search-wrap" id="collections-search-wrap" onclick="onCollectionsSearchWrapClick(event)">
               <i data-lucide="search" class="library-search-icon"></i>
               <input id="collections-search" class="input library-search-input" type="text" placeholder="Найти коллекцию…" data-i18n-placeholder="collections.search_placeholder" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="onCollectionsSearchInput()">
               <kbd class="search-kbd-badge" title="Шорткат: ⌘K или Ctrl+K">⌘K</kbd>
@@ -4867,7 +4867,7 @@
       </div>
     </div>
 
-    <div class="card-styles-grid">
+    <div class="card-styles-grid card-poster-styles-grid">
       <!-- Стиль 1: Neo-Glass -->
       <div class="card-style-option" id="card-style-opt-neoglass" onclick="setCardStyle('neoglass')">
         <div class="card-style-badge-recommended" data-i18n="card_style.recommended">Флагман</div>
@@ -5025,8 +5025,119 @@
       </div>
     </div>
 
+    <!-- Секция 3: Стиль и режим строки поиска -->
+    <div class="settings-card-header" style="margin-top: 24px; margin-bottom: 14px; border-top: 1px solid var(--border); padding-top: 20px;">
+      <div class="settings-card-header-left">
+        <div class="settings-card-icon-badge">
+          <i data-lucide="command"></i>
+        </div>
+        <div class="settings-card-title-wrap">
+          <h3 data-i18n="search_layout.section_title">Стиль и режим строки поиска</h3>
+          <p class="subtitle" data-i18n="search_layout.section_subtitle">Выберите расположение и формат взаимодействия с поисковой строкой</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-styles-grid search-layout-styles-grid">
+      <!-- 1. Spotlight Command Palette -->
+      <div class="card-style-option" id="search-layout-opt-spotlight" onclick="setSearchLayoutStyle('spotlight')">
+        <div class="card-style-badge-recommended" data-i18n="card_style.recommended">Флагман</div>
+        <div class="card-style-preview card-style-preview-layout">
+          <div class="preview-layout-box">
+            <div class="preview-spotlight-pill">
+              <i data-lucide="search" class="ico-xxs text-teal"></i>
+              <span class="preview-text">Поиск...</span>
+              <span class="preview-kbd">⌘K</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-style-meta">
+          <div class="card-style-name">
+            <span class="card-style-radio"></span>
+            <span data-i18n="search_layout.spotlight_title">Spotlight Command Palette</span>
+          </div>
+          <p class="card-style-desc" data-i18n="search_layout.spotlight_desc">Компактная кнопка-пилл в шапке и всплывающее парящее окно по центру экрана (Raycast/Linear) по ⌘K / Ctrl+K с быстрым доступом ко всем тайтлам.</p>
+        </div>
+      </div>
+
+      <!-- 2. Floating Omni-Search -->
+      <div class="card-style-option" id="search-layout-opt-omni" onclick="setSearchLayoutStyle('omni')">
+        <div class="card-style-preview card-style-preview-layout">
+          <div class="preview-layout-box">
+            <div class="preview-omni-bar">
+              <i data-lucide="search" class="ico-xxs text-muted"></i>
+              <span class="preview-text">Поиск по названию</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-style-meta">
+          <div class="card-style-name">
+            <span class="card-style-radio"></span>
+            <span data-i18n="search_layout.omni_title">Плавающий Omni-Search</span>
+          </div>
+          <p class="card-style-desc" data-i18n="search_layout.omni_desc">Компактная строка в шапке, плавно увеличивающаяся и парящая по центру при фокусе с эффектом неонового свечения.</p>
+        </div>
+      </div>
+
+      <!-- 3. Classic Header Bar -->
+      <div class="card-style-option" id="search-layout-opt-classic" onclick="setSearchLayoutStyle('classic')">
+        <div class="card-style-preview card-style-preview-layout">
+          <div class="preview-layout-box">
+            <div class="preview-classic-search">
+              <i data-lucide="search" class="ico-xxs text-muted"></i>
+              <span class="preview-text">Поиск по названию или алиасу</span>
+              <span class="preview-kbd">⌘K</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-style-meta">
+          <div class="card-style-name">
+            <span class="card-style-radio"></span>
+            <span data-i18n="search_layout.classic_title">Классическая строка поиска</span>
+          </div>
+          <p class="card-style-desc" data-i18n="search_layout.classic_desc">Полноразмерная фиксированная поисковая строка прямо в шапке библиотеки с мгновенной фильтрацией на месте.</p>
+        </div>
+      </div>
+    </div>
+
     <div style="margin-top: 24px; display: flex; justify-content: flex-end; border-top: 1px solid var(--border); padding-top: 16px;">
       <button class="btn btn-secondary" onclick="closeModal('card-style-modal')" data-i18n="common.close">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка парящего Spotlight Command Palette -->
+<div id="spotlight-modal" class="modal-overlay spotlight-modal-overlay" onclick="onSpotlightBackdropClick(event)">
+  <div class="spotlight-card" role="dialog" aria-modal="true" aria-label="Быстрый поиск">
+    <div class="spotlight-header">
+      <div class="spotlight-search-icon-wrap">
+        <i data-lucide="search" class="spotlight-search-icon"></i>
+      </div>
+      <input id="spotlight-search-input" class="spotlight-input" type="text" placeholder="Поиск фильма, сериала, аниме или саги..." data-i18n-placeholder="spotlight.placeholder" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="onSpotlightSearchInput()" onkeydown="onSpotlightKeyDown(event)">
+      <div class="spotlight-header-actions">
+        <button id="spotlight-search-clear" class="spotlight-clear-btn" onclick="clearSpotlightSearch()" style="display:none;" title="Очистить" aria-label="Очистить">
+          <i data-lucide="x"></i>
+        </button>
+        <kbd class="spotlight-kbd-badge" onclick="closeSpotlightCommandPalette()" title="Закрыть">Esc</kbd>
+      </div>
+    </div>
+    
+    <div class="spotlight-body" id="spotlight-body">
+      <div class="spotlight-results-list" id="spotlight-results-list"></div>
+      <div class="spotlight-empty-state" id="spotlight-empty-state" style="display:none;">
+        <i data-lucide="search-x" class="ico-lg text-muted"></i>
+        <p class="spotlight-empty-title" data-i18n="spotlight.no_results">Ничего не найдено</p>
+        <p class="spotlight-empty-sub" data-i18n="spotlight.no_results_sub">Попробуйте изменить поисковый запрос или проверить опечатки</p>
+      </div>
+    </div>
+    
+    <div class="spotlight-footer">
+      <div class="spotlight-shortcuts-hints">
+        <span class="spotlight-hint-item"><kbd>↑</kbd><kbd>↓</kbd> <span data-i18n="spotlight.hint_navigate">Навигация</span></span>
+        <span class="spotlight-hint-item"><kbd>↵</kbd> <span data-i18n="spotlight.hint_select">Выбрать</span></span>
+        <span class="spotlight-hint-item"><kbd>Esc</kbd> <span data-i18n="spotlight.hint_close">Закрыть</span></span>
+      </div>
+      <div class="spotlight-results-count" id="spotlight-results-count">0 тайтлов</div>
     </div>
   </div>
 </div>
