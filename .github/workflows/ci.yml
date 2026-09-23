@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ "main", "sqlite-upgrade" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "main", "sqlite-upgrade" ]
+    branches: [ "main" ]
 
 jobs:
   test:

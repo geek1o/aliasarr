@@ -2,7 +2,7 @@ name: Docker Publish
 
 on:
   push:
-    branches: [ "main", "sqlite-upgrade" ]
+    branches: [ "main" ]
     tags: [ "v*.*.*" ]
   workflow_dispatch:
 
