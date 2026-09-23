@@ -6775,11 +6775,33 @@ function applySearchLayoutStyle() {
   }
 
   if (CURRENT_SEARCH_LAYOUT_STYLE === "spotlight") {
-    if (libInput) libInput.setAttribute("readonly", "readonly");
-    if (colInput) colInput.setAttribute("readonly", "readonly");
+    if (libInput) {
+      libInput.setAttribute("readonly", "readonly");
+      libInput.placeholder = CURRENT_LANG === "en" ? "Search..." : "Поиск...";
+    }
+    if (colInput) {
+      colInput.setAttribute("readonly", "readonly");
+      colInput.placeholder = CURRENT_LANG === "en" ? "Search..." : "Поиск...";
+    }
+  } else if (CURRENT_SEARCH_LAYOUT_STYLE === "omni") {
+    if (libInput) {
+      libInput.removeAttribute("readonly");
+      libInput.placeholder = CURRENT_LANG === "en" ? "Search" : "Поиск";
+    }
+    if (colInput) {
+      colInput.removeAttribute("readonly");
+      colInput.placeholder = CURRENT_LANG === "en" ? "Search" : "Поиск";
+    }
   } else {
-    if (libInput) libInput.removeAttribute("readonly");
-    if (colInput) colInput.removeAttribute("readonly");
+    // classic
+    if (libInput) {
+      libInput.removeAttribute("readonly");
+      libInput.placeholder = CURRENT_LANG === "en" ? "Search by title or alias" : "Поиск по названию или алиасу";
+    }
+    if (colInput) {
+      colInput.removeAttribute("readonly");
+      colInput.placeholder = CURRENT_LANG === "en" ? "Find collection…" : "Найти коллекцию…";
+    }
   }
 
   document.documentElement.setAttribute("data-search-layout", CURRENT_SEARCH_LAYOUT_STYLE);
@@ -6829,6 +6851,20 @@ function openSpotlightCommandPalette() {
 
   SPOTLIGHT_SELECTED_INDEX = -1;
   renderSpotlightInitialOrFiltered();
+
+  // If CACHED_SHOWS is empty, fetch immediately in background and re-render
+  if (!CACHED_SHOWS || !CACHED_SHOWS.length) {
+    loadShows(true).then(() => {
+      renderSpotlightInitialOrFiltered(input ? input.value : "");
+    }).catch(() => {});
+  }
+  if (!CACHED_COLLECTIONS || !CACHED_COLLECTIONS.length) {
+    api("/api/v1/collections").then(res => {
+      CACHED_COLLECTIONS = res || [];
+      renderSpotlightInitialOrFiltered(input ? input.value : "");
+    }).catch(() => {});
+  }
+
   updatePlatformShortcuts();
   if (window.lucide) lucide.createIcons();
 }
@@ -6875,10 +6911,11 @@ function renderSpotlightInitialOrFiltered(query = "") {
   if (!listEl) return;
 
   let items = [];
-  const shows = Array.isArray(allShows) ? allShows : [];
+  const shows = Array.isArray(CACHED_SHOWS) ? CACHED_SHOWS : [];
+  const colls = Array.isArray(CACHED_COLLECTIONS) ? CACHED_COLLECTIONS : [];
 
   if (!q) {
-    items = shows.slice(0, 10).map(s => ({ type: "show", data: s }));
+    items = shows.map(s => ({ type: "show", data: s }));
   } else {
     for (const s of shows) {
       let matched = false;
@@ -6886,10 +6923,9 @@ function renderSpotlightInitialOrFiltered(query = "") {
 
       const title = (s.title || "").toLowerCase();
       const orig = (s.original_title || "").toLowerCase();
+      const rus = (s.russian_title || "").toLowerCase();
 
-      if (title.includes(q)) {
-        matched = true;
-      } else if (orig.includes(q)) {
+      if (title.includes(q) || orig.includes(q) || rus.includes(q)) {
         matched = true;
       } else if (Array.isArray(s.aliases)) {
         for (const al of s.aliases) {
@@ -6907,12 +6943,11 @@ function renderSpotlightInitialOrFiltered(query = "") {
       }
     }
 
-    if (typeof allCollections !== "undefined" && Array.isArray(allCollections)) {
-      for (const c of allCollections) {
-        const cTitle = (c.name || c.title || "").toLowerCase();
-        if (cTitle.includes(q)) {
-          items.push({ type: "collection", data: c });
-        }
+    for (const c of colls) {
+      const cTitle = (c.name || c.title || "").toLowerCase();
+      const cOrig = (c.original_title || "").toLowerCase();
+      if (cTitle.includes(q) || cOrig.includes(q)) {
+        items.push({ type: "collection", data: c });
       }
     }
   }
@@ -6922,7 +6957,7 @@ function renderSpotlightInitialOrFiltered(query = "") {
 
   if (countEl) {
     if (!q) {
-      countEl.textContent = (CURRENT_LANG === "en" ? "Library: " : "В библиотеке: ") + shows.length;
+      countEl.textContent = (CURRENT_LANG === "en" ? "In Library: " : "В библиотеке: ") + shows.length;
     } else {
       countEl.textContent = (CURRENT_LANG === "en" ? "Found: " : "Найдено: ") + items.length;
     }
@@ -6937,7 +6972,7 @@ function renderSpotlightInitialOrFiltered(query = "") {
   if (emptyEl) emptyEl.style.display = "none";
 
   let html = "";
-  items.slice(0, 40).forEach((item, idx) => {
+  items.slice(0, 50).forEach((item, idx) => {
     const isSelected = idx === SPOTLIGHT_SELECTED_INDEX;
     if (item.type === "show") {
       const s = item.data;
@@ -6955,7 +6990,8 @@ function renderSpotlightInitialOrFiltered(query = "") {
       }
 
       const posterUrl = s.poster_url || s.poster || "/static/img/no-poster.png";
-      const quality = s.quality_profile || s.quality || "";
+      const qpId = s.quality_profile_id;
+      const quality = qualityProfileName(qpId) || s.quality_profile || s.quality || "";
 
       let matchedTag = "";
       if (item.matchedAlias) {
@@ -7001,7 +7037,7 @@ function renderSpotlightInitialOrFiltered(query = "") {
               <span class="category-badge-chip" style="background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.3);">${CURRENT_LANG === "en" ? "Collection" : "Коллекция"}</span>
             </div>
             <div class="spotlight-item-meta-row">
-              <span class="spotlight-item-orig">${parts} ${CURRENT_LANG === "en" ? "parts" : "фильмов"}</span>
+              <span class="spotlight-item-orig">${parts} ${CURRENT_LANG === "en" ? "movies" : "фильмов"}</span>
             </div>
           </div>
           <div class="spotlight-item-action">
