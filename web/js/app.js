@@ -6491,12 +6491,12 @@ async function loadHealthCheck() {
           let itemsHtml = "";
           if (items.length > 0) {
             itemsHtml = `
-              <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+              <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; max-width:100%; min-width:0;">
                 ${items.filter(m => m.enabled).map(m => `
-                  <span class="badge badge-secondary" style="display:inline-flex; align-items:center; gap:6px; padding:4px 8px; font-size:12px;">
-                    <i data-lucide="database" class="ico-xs" style="color:var(--teal)"></i>
-                    <strong>${escapeHtml(m.name)}</strong>
-                    <span class="badge badge-teal mono" style="font-size:10px; padding:1px 5px;">${escapeHtml(getMetadataTypeDisplay(m.type_display || m.type))}</span>
+                  <span class="badge badge-secondary" style="display:inline-flex; flex-wrap:wrap; align-items:center; gap:6px; padding:4px 8px; font-size:12px; max-width:100%; word-break:break-word; white-space:normal;">
+                    <i data-lucide="database" class="ico-xs" style="color:var(--teal); flex-shrink:0;"></i>
+                    <strong style="word-break:break-word; white-space:normal;">${escapeHtml(m.name)}</strong>
+                    <span class="badge badge-teal mono" style="font-size:10px; padding:1px 5px; flex-shrink:0;">${escapeHtml(getMetadataTypeDisplay(m.type_display || m.type))}</span>
                   </span>
                 `).join("")}
               </div>
@@ -6775,6 +6775,7 @@ function applySearchLayoutStyle() {
   const colInput = document.getElementById("collections-search");
   const actionBtn = document.getElementById("btn-header-spotlight-action");
   const colActionBtn = document.getElementById("btn-collections-spotlight-action");
+  const isMobile = window.innerWidth <= 768;
 
   if (libWrap) {
     libWrap.setAttribute("data-search-mode", CURRENT_SEARCH_LAYOUT_STYLE);
@@ -6785,18 +6786,36 @@ function applySearchLayoutStyle() {
 
   if (CURRENT_SEARCH_LAYOUT_STYLE === "spotlight_bar") {
     if (libInput) {
-      libInput.setAttribute("readonly", "readonly");
-      libInput.placeholder = CURRENT_LANG === "en" ? "Quick search..." : "Быстрый поиск...";
+      if (isMobile) {
+        libInput.removeAttribute("readonly");
+        libInput.placeholder = CURRENT_LANG === "en" ? "Search by title..." : "Поиск по названию...";
+      } else {
+        libInput.setAttribute("readonly", "readonly");
+        libInput.placeholder = CURRENT_LANG === "en" ? "Quick search..." : "Быстрый поиск...";
+      }
     }
     if (colInput) {
-      colInput.setAttribute("readonly", "readonly");
-      colInput.placeholder = CURRENT_LANG === "en" ? "Quick search..." : "Быстрый поиск...";
+      if (isMobile) {
+        colInput.removeAttribute("readonly");
+        colInput.placeholder = CURRENT_LANG === "en" ? "Search collection..." : "Поиск коллекции...";
+      } else {
+        colInput.setAttribute("readonly", "readonly");
+        colInput.placeholder = CURRENT_LANG === "en" ? "Quick search..." : "Быстрый поиск...";
+      }
     }
     if (actionBtn) actionBtn.style.display = "none";
     if (colActionBtn) colActionBtn.style.display = "none";
   } else if (CURRENT_SEARCH_LAYOUT_STYLE === "action_btn") {
-    if (actionBtn) actionBtn.style.display = "inline-flex";
-    if (colActionBtn) colActionBtn.style.display = "inline-flex";
+    if (libInput) {
+      libInput.removeAttribute("readonly");
+      libInput.placeholder = CURRENT_LANG === "en" ? "Search by title or alias" : "Поиск по названию или алиасу";
+    }
+    if (colInput) {
+      colInput.removeAttribute("readonly");
+      colInput.placeholder = CURRENT_LANG === "en" ? "Find collection…" : "Найти коллекцию…";
+    }
+    if (actionBtn) actionBtn.style.display = isMobile ? "none" : "inline-flex";
+    if (colActionBtn) colActionBtn.style.display = isMobile ? "none" : "inline-flex";
   } else {
     // classic_full
     if (libInput) {
@@ -6817,6 +6836,7 @@ function applySearchLayoutStyle() {
 function onLibrarySearchWrapClick(e) {
   const design = document.documentElement.getAttribute("data-design");
   if (design === "servarr") return;
+  if (window.innerWidth <= 768) return;
 
   if (CURRENT_SEARCH_LAYOUT_STYLE === "spotlight_bar") {
     if (e.target.closest(".library-search-clear-btn")) return;
@@ -6828,6 +6848,7 @@ function onLibrarySearchWrapClick(e) {
 function onCollectionsSearchWrapClick(e) {
   const design = document.documentElement.getAttribute("data-design");
   if (design === "servarr") return;
+  if (window.innerWidth <= 768) return;
 
   if (CURRENT_SEARCH_LAYOUT_STYLE === "spotlight_bar") {
     if (e.target.closest(".library-search-clear-btn")) return;

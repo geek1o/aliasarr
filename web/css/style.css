@@ -7652,6 +7652,11 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   color: var(--text-muted);
 }
 
+/* Servarr elements isolation */
+:root:not([data-design="servarr"]) .servarr-only {
+  display: none !important;
+}
+
 /* Search Modes in Header */
 /* Mode 1: Central Spotlight Bar (260-320px) */
 :root:not([data-design="servarr"]) .library-search-wrap[data-search-mode="spotlight_bar"],
@@ -10979,8 +10984,14 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   #tab-library .header-actions {
     order: 2 !important;
   }
-  .library-spotlight-search {
+  .header-spotlight-action-btn {
+    display: none !important;
+  }
+  .library-spotlight-search,
+  .library-search-wrap,
+  [data-design="vanguard"] .library-search-wrap {
     order: 3 !important;
+    display: flex !important;
     width: 100% !important;
     max-width: 100% !important;
     min-width: 0 !important;
@@ -10990,8 +11001,11 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
     margin: 0 !important;
     box-sizing: border-box !important;
     position: relative !important;
+    pointer-events: auto !important;
   }
-  .library-spotlight-search .library-search-input {
+  .library-spotlight-search .library-search-input,
+  .library-search-wrap .library-search-input,
+  [data-design="vanguard"] .library-search-wrap .library-search-input {
     width: 100% !important;
     max-width: 100% !important;
     height: 42px !important;
@@ -11000,8 +11014,12 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
     padding: 0 40px 0 38px !important;
     border-radius: var(--radius, 10px) !important;
     box-sizing: border-box !important;
+    pointer-events: auto !important;
+    cursor: text !important;
   }
-  .library-spotlight-search .library-search-icon {
+  .library-spotlight-search .library-search-icon,
+  .library-search-wrap .library-search-icon,
+  [data-design="vanguard"] .library-search-wrap .library-search-icon {
     position: absolute !important;
     left: 12px !important;
     top: 50% !important;
@@ -13572,25 +13590,37 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
     transform: translateY(-50%) !important;
   }
   [data-design="vanguard"] .toolbar-right {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
+    display: flex !important;
+    flex-direction: column !important;
     gap: 8px !important;
     width: 100% !important;
     margin-left: 0 !important;
     box-sizing: border-box !important;
   }
+  [data-design="vanguard"] .toolbar-right #monitor-switcher,
   [data-design="vanguard"] .toolbar-right #library-sort-switcher,
   [data-design="vanguard"] .toolbar-right #view-switcher {
-    grid-column: 1 / -1 !important;
     width: 100% !important;
+    display: block !important;
+    margin: 0 !important;
+  }
+  [data-design="vanguard"] .toolbar-controls-group {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
   }
   [data-design="vanguard"] .toolbar-right #card-style-btn,
   [data-design="vanguard"] .toolbar-right #poster-options-btn,
   [data-design="vanguard"] .toolbar-right #collections-card-style-btn,
-  [data-design="vanguard"] .toolbar-right #collections-poster-options-btn {
+  [data-design="vanguard"] .toolbar-right #collections-poster-options-btn,
+  [data-design="vanguard"] .toolbar-controls-group #card-style-btn,
+  [data-design="vanguard"] .toolbar-controls-group #poster-options-btn {
     width: 100% !important;
     min-width: 0 !important;
     margin: 0 !important;
+    box-sizing: border-box !important;
   }
   [data-design="vanguard"] .toolbar > input,
   [data-design="vanguard"] .toolbar .input {
