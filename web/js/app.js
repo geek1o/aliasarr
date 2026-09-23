@@ -346,7 +346,7 @@ const TRANSLATIONS = {
 
     // Subtitles
     "subtitle.dashboard": "Общая картина и мониторинг библиотеки",
-    "subtitle.library": "Все ваши фильмы, сериалы и аниме",
+    "subtitle.library": "Все ваши фильмы, сериалы и аниме.",
     "subtitle.activity": "Текущие загрузки во всех download clients",
     "subtitle.calendar": "Даты выхода серий и премьер фильмов",
     "subtitle.history": "Журнал захваченных релизов",
@@ -501,7 +501,7 @@ const TRANSLATIONS = {
     "dash.no_grabs": "Пока ничего не захвачено",
 
     // Library
-    "library.search_placeholder": "Поиск по названию или алиасу…",
+    "library.search_placeholder": "Поиск по названию или алиасу",
     "library.filter_all": "Все",
     "library.filter_movies": "Фильмы",
     "library.filter_series": "Сериалы",
@@ -1892,7 +1892,7 @@ const TRANSLATIONS = {
 
     // Subtitles
     "subtitle.dashboard": "Overview and monitoring of your library",
-    "subtitle.library": "All your movies, series, and anime",
+    "subtitle.library": "All your movies, series, and anime.",
     "subtitle.activity": "Current downloads across all download clients",
     "subtitle.calendar": "Air dates for episodes and movie premieres",
     "subtitle.history": "Log of grabbed releases",
@@ -2047,7 +2047,7 @@ const TRANSLATIONS = {
     "dash.no_grabs": "No releases grabbed yet",
 
     // Library
-    "library.search_placeholder": "Search by title or alias…",
+    "library.search_placeholder": "Search by title or alias",
     "library.filter_all": "All",
     "library.filter_movies": "Movies",
     "library.filter_series": "Series",
