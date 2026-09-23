@@ -6581,7 +6581,8 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   box-sizing: border-box;
 }
 
-.library-spotlight-search .search-kbd-badge {
+.library-spotlight-search .search-kbd-badge,
+.library-search-wrap .search-kbd-badge {
   position: absolute;
   right: 12px;
   top: 50%;
@@ -6598,7 +6599,8 @@ textarea.input { font-family: var(--font-mono); font-size: 13.5px; padding: 10px
   line-height: 1.2;
 }
 
-[data-theme="light"] .library-spotlight-search .search-kbd-badge {
+[data-theme="light"] .library-spotlight-search .search-kbd-badge,
+[data-theme="light"] .library-search-wrap .search-kbd-badge {
   background: #f1f5f9;
   border-color: #cbd5e1;
   color: #64748b;

@@ -3419,7 +3419,18 @@ function applyLanguage(lang) {
   }
 
   servarrSyncSubnav();
+  updatePlatformShortcuts();
   checkConnection();
+}
+
+function updatePlatformShortcuts() {
+  const isMac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent);
+  const kbdText = isMac ? "⌘K" : "Ctrl K";
+  const kbdTitle = isMac ? (CURRENT_LANG === "en" ? "Shortcut: ⌘K" : "Шорткат: ⌘K") : (CURRENT_LANG === "en" ? "Shortcut: Ctrl+K" : "Шорткат: Ctrl+K");
+  document.querySelectorAll(".search-kbd-badge").forEach(badge => {
+    badge.textContent = kbdText;
+    badge.setAttribute("title", kbdTitle);
+  });
 }
 
 // ---------- API helper ----------
@@ -23684,14 +23695,22 @@ document.addEventListener("click", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
-  if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K" || e.key === "л" || e.key === "Л")) {
+  if ((e.metaKey || e.ctrlKey) && (e.code === "KeyK" || e.key === "k" || e.key === "K" || e.key === "л" || e.key === "Л")) {
     const libTab = document.getElementById("tab-library");
+    const colTab = document.getElementById("tab-collections");
     if (libTab && libTab.classList.contains("active")) {
       e.preventDefault();
       const searchInput = document.getElementById("library-search");
       if (searchInput) {
         searchInput.focus();
         searchInput.select();
+      }
+    } else if (colTab && colTab.classList.contains("active")) {
+      e.preventDefault();
+      const colSearchInput = document.getElementById("collections-search");
+      if (colSearchInput) {
+        colSearchInput.focus();
+        colSearchInput.select();
       }
     }
   }
