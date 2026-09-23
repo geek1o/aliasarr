@@ -6491,14 +6491,18 @@ async function loadHealthCheck() {
           let itemsHtml = "";
           if (items.length > 0) {
             itemsHtml = `
-              <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; max-width:100%; min-width:0;">
-                ${items.filter(m => m.enabled).map(m => `
-                  <span class="badge badge-secondary" style="display:inline-flex; flex-wrap:wrap; align-items:center; gap:6px; padding:4px 8px; font-size:12px; max-width:100%; word-break:break-word; white-space:normal;">
-                    <i data-lucide="database" class="ico-xs" style="color:var(--teal); flex-shrink:0;"></i>
-                    <strong style="word-break:break-word; white-space:normal;">${escapeHtml(m.name)}</strong>
-                    <span class="badge badge-teal mono" style="font-size:10px; padding:1px 5px; flex-shrink:0;">${escapeHtml(getMetadataTypeDisplay(m.type_display || m.type))}</span>
-                  </span>
-                `).join("")}
+              <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; max-width:100%; min-width:0; overflow-wrap:anywhere;">
+                ${items.filter(m => m.enabled).map(m => {
+                  const typeLabel = getMetadataTypeDisplay(m.type_display || m.type);
+                  const showTypeBadge = typeLabel && !m.name.toLowerCase().includes(typeLabel.toLowerCase());
+                  return `
+                    <span class="badge badge-secondary" style="display:inline-flex; flex-wrap:wrap; align-items:center; gap:6px; padding:4px 8px; font-size:12px; max-width:100%; word-break:break-word; overflow-wrap:anywhere; white-space:normal;">
+                      <i data-lucide="database" class="ico-xs" style="color:var(--teal); flex-shrink:0;"></i>
+                      <strong style="word-break:break-word; overflow-wrap:anywhere; white-space:normal;">${escapeHtml(m.name)}</strong>
+                      ${showTypeBadge ? `<span class="badge badge-teal mono" style="font-size:10px; padding:1px 5px; flex-shrink:0;">${escapeHtml(typeLabel)}</span>` : ''}
+                    </span>
+                  `;
+                }).join("")}
               </div>
             `;
           }
@@ -7490,7 +7494,11 @@ function renderLibrarySortMenu() {
   const directionLabel = LIBRARY_SORT_DIRECTION === "asc" ? (CURRENT_LANG === "en" ? "ascending" : "по возрастанию") : (CURRENT_LANG === "en" ? "descending" : "по убыванию");
   const fullText = `${optionLabel} (${directionLabel})`;
   if (label) label.textContent = fullText;
-  document.getElementById("library-sort-switcher-btn")?.setAttribute("title", fullText);
+  if (window.innerWidth > 768) {
+    document.getElementById("library-sort-switcher-btn")?.setAttribute("title", fullText);
+  } else {
+    document.getElementById("library-sort-switcher-btn")?.removeAttribute("title");
+  }
   if (!menu) return;
   menu.innerHTML = LIBRARY_SORT_OPTIONS.map(option => {
     const active = option.key === LIBRARY_SORT_KEY;
