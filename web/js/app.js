@@ -77,6 +77,7 @@ function applyDesign(design, isUserAction = false) {
   applyTheme(USER_THEME);
   updateDesignSettingsUI(d);
   servarrAdoptToolbars(d === "servarr");
+  applySearchLayoutStyle();
   if (d === "servarr") servarrSyncSubnav();
   // Карточки библиотеки у Servarr Classic строятся по-своему — перерисовываем при смене дизайна
   if (changed && typeof renderLibrary === "function" && CACHED_SHOWS && CACHED_SHOWS.length) {
@@ -6780,6 +6781,7 @@ function applySearchLayoutStyle() {
   const actionBtn = document.getElementById("btn-header-spotlight-action");
   const colActionBtn = document.getElementById("btn-collections-spotlight-action");
   const isMobile = window.innerWidth <= 768;
+  const isDirectSearch = isMobile || isServarrDesign();
 
   if (libWrap) {
     libWrap.setAttribute("data-search-mode", CURRENT_SEARCH_LAYOUT_STYLE);
@@ -6790,7 +6792,7 @@ function applySearchLayoutStyle() {
 
   if (CURRENT_SEARCH_LAYOUT_STYLE === "spotlight_bar") {
     if (libInput) {
-      if (isMobile) {
+      if (isDirectSearch) {
         libInput.removeAttribute("readonly");
         libInput.placeholder = CURRENT_LANG === "en" ? "Search by title..." : "Поиск по названию...";
       } else {
@@ -6799,7 +6801,7 @@ function applySearchLayoutStyle() {
       }
     }
     if (colInput) {
-      if (isMobile) {
+      if (isDirectSearch) {
         colInput.removeAttribute("readonly");
         colInput.placeholder = CURRENT_LANG === "en" ? "Search collection..." : "Поиск коллекции...";
       } else {
